@@ -1,4 +1,6 @@
 import os
+import ctypes
+import struct
 from pathlib import Path
 import tempfile
 import time
@@ -50,6 +52,66 @@ class AppTests(unittest.TestCase):
         self.assertIsNone(self.app.process);self.assertIsNotNone(self.app.result_folder)
         with pdf.open(next(Path(self.app.result_folder).glob('*.pdf'))) as doc:
             self.assertEqual(doc[0].rotation,90);self.assertEqual(doc[1].rotation,0)
+
+    def test_d_drop_multiple_unicode_files_and_deduplicate(self):
+        second=self.folder/'공백 {있는} 두 번째.PDF';second.write_bytes(self.source.read_bytes())
+        self.app.tool='merge';self.app.configure_form();self.app.clear_files()
+        self.app.on_files_drop([str(self.source),str(second),str(self.source)])
+        self.assertEqual(self.app.files,[str(self.source.resolve()),str(second.resolve())])
+        self.assertIn('중복 1개',self.app.status.get())
+        self.assertIsNotNone(self.app.preview_rect)
+
+    def test_e_drop_unsupported_files_folder_and_cloud(self):
+        blocked=self.folder/'OneDrive'/'private.pdf';blocked.parent.mkdir(exist_ok=True);blocked.write_bytes(self.source.read_bytes())
+        self.app.tool='merge';self.app.configure_form();self.app.clear_files()
+        self.app.on_files_drop([str(self.folder),str(self.folder/'unknown.txt'),str(blocked),str(self.source)])
+        self.assertEqual(self.app.files,[str(self.source.resolve())])
+        self.assertIn('지원하지 않는 항목 2개',self.app.status.get());self.assertIn('경로 1개 제외',self.app.status.get())
+
+    def test_f_drop_image_for_image_tool(self):
+        image=self.folder/'사진 한 장.png'
+        with pdf.open(self.source) as source:source[0].get_pixmap().save(image)
+        self.app.tool='images_pdf';self.app.configure_form();self.app.clear_files()
+        self.app.on_files_drop([str(image),str(self.source)])
+        self.assertEqual(self.app.files,[str(image.resolve())])
+        self.assertIn('JPG·PNG',self.app.status.get())
+
+    def test_g_drop_while_busy(self):
+        self.app.tool='merge';self.app.configure_form();self.app.clear_files()
+        with patch.object(self.app,'busy',return_value=True):self.app.on_files_drop([str(self.source)])
+        self.assertFalse(self.app.files);self.assertIn('작업 중에는',self.app.status.get())
+
+    @unittest.skipUnless(os.name=='nt','Windows Shell integration test')
+    def test_h_native_windows_drop_message(self):
+        from ctypes import wintypes as w
+        from offline_pdf.windows_drop import WM_DROPFILES
+        self.assertTrue(self.app.file_drop.enabled)
+        self.app.tool='merge';self.app.configure_form();self.app.clear_files()
+        second=self.folder/'탐색기 공백 {문서}.PDF';second.write_bytes(self.source.read_bytes())
+        paths=[str(self.source.resolve()),str(second.resolve())]
+        payload=('\0'.join(paths)+'\0\0').encode('utf-16-le')
+        # DROPFILES: DWORD pFiles; POINT pt; BOOL fNC; BOOL fWide.
+        content=struct.pack('<IiiII',20,0,0,0,1)+payload
+        kernel=ctypes.WinDLL('kernel32',use_last_error=True)
+        kernel.GlobalAlloc.argtypes=[w.UINT,ctypes.c_size_t];kernel.GlobalAlloc.restype=w.HGLOBAL
+        kernel.GlobalLock.argtypes=[w.HGLOBAL];kernel.GlobalLock.restype=ctypes.c_void_p
+        kernel.GlobalUnlock.argtypes=[w.HGLOBAL];kernel.GlobalUnlock.restype=w.BOOL
+        kernel.GlobalFree.argtypes=[w.HGLOBAL];kernel.GlobalFree.restype=w.HGLOBAL
+        user=ctypes.WinDLL('user32',use_last_error=True)
+        user.PostMessageW.argtypes=[w.HWND,w.UINT,ctypes.c_size_t,ctypes.c_ssize_t];user.PostMessageW.restype=w.BOOL
+        handle=kernel.GlobalAlloc(0x42,len(content));self.assertTrue(handle)
+        address=kernel.GlobalLock(handle)
+        if not address:
+            kernel.GlobalFree(handle);self.fail('Cannot lock test drop payload')
+        ctypes.memmove(address,content,len(content));kernel.GlobalUnlock(handle)
+        hwnd=self.app.file_list.winfo_id()
+        if not user.PostMessageW(hwnd,WM_DROPFILES,handle,0):
+            kernel.GlobalFree(handle);self.fail('Cannot post WM_DROPFILES')
+        # The native handler owns the payload after the successful post.
+        deadline=time.monotonic()+3
+        while len(self.app.files)<2 and time.monotonic()<deadline:
+            self.root.update();time.sleep(.01)
+        self.assertEqual(self.app.files,paths)
 
 
 if __name__=='__main__':unittest.main()

@@ -17,6 +17,7 @@ from tkinter import filedialog, messagebox, ttk
 import pymupdf as pdf
 from .engine import UserError, check_local_path, disable_network, open_pdf, worker
 from . import __version__
+from .windows_drop import NativeFileDrop
 
 
 TOOLS = {
@@ -110,6 +111,15 @@ class App:
         bottom.columnconfigure(0,weight=1)
         self.progress=ttk.Progressbar(outer,mode='determinate');self.progress.pack(fill='x',pady=(10,4))
         self.status=tk.StringVar(value='파일을 추가하고 실행하세요.');ttk.Label(outer,textvariable=self.status,wraplength=1120).pack(anchor='w')
+        self.drop_hint=ttk.Label(center,text='',foreground='#275b46')
+        self.drop_hint.pack(before=listframe,anchor='w',pady=(4,0))
+        self.file_drop=None
+        try:
+            self.file_drop=NativeFileDrop(root,self.on_files_drop,(self.file_list,self.canvas))
+            if self.file_drop.enabled:
+                self.drop_hint.config(text='파일을 이 창으로 끌어놓으세요. 여러 파일을 한 번에 추가할 수 있습니다.')
+        except (OSError,AttributeError):
+            self.drop_hint.config(text='파일 추가 버튼으로 파일을 선택하세요.')
         root.protocol('WM_DELETE_WINDOW',self.close)
         self.configure_form();root.after(150,self.poll)
 
@@ -169,9 +179,44 @@ class App:
         if self.busy():return
         image=self.tool=='images_pdf'
         paths=filedialog.askopenfilenames(parent=self.root,title='처리할 파일을 선택하세요',filetypes=[('이미지','*.jpg *.jpeg *.png')] if image else [('PDF 문서','*.pdf')])
+        if paths:self.add_paths(paths)
+
+    def on_files_drop(self, paths):
+        self.add_paths(paths)
+
+    def add_paths(self, paths):
+        if self.busy():
+            self.status.set('작업 중에는 파일을 추가할 수 없습니다. 완료 후 다시 끌어놓으세요.')
+            return
+        extensions={'.jpg','.jpeg','.png'} if self.tool=='images_pdf' else {'.pdf'}
+        expected='JPG·PNG' if self.tool=='images_pdf' else 'PDF'
+        known={os.path.normcase(str(Path(path).resolve())) for path in self.files}
+        added=duplicates=unsupported=blocked=0
         for path in paths:
-            if path not in self.files:self.files.append(path)
-        self.sync_list();self.refresh_preview(reset=True)
+            candidate=Path(path)
+            if candidate.suffix.lower() not in extensions:
+                unsupported+=1
+                continue
+            try:
+                candidate=check_local_path(candidate)
+                if not candidate.is_file():
+                    blocked+=1
+                    continue
+            except (UserError,OSError,RuntimeError):
+                blocked+=1
+                continue
+            key=os.path.normcase(str(candidate))
+            if key in known:
+                duplicates+=1
+                continue
+            known.add(key);self.files.append(str(candidate));added+=1
+        if added:
+            self.sync_list();self.refresh_preview(reset=True)
+        details=[f'{added}개 추가',f'전체 {len(self.files)}개']
+        if duplicates:details.append(f'중복 {duplicates}개 제외')
+        if unsupported:details.append(f'지원하지 않는 항목 {unsupported}개 제외 ({expected} 파일만 추가 가능)')
+        if blocked:details.append(f'접근 불가·동기화·네트워크 경로 {blocked}개 제외')
+        self.status.set(' · '.join(details))
 
     def sync_list(self):
         self.file_list.delete(0,'end')
@@ -209,7 +254,9 @@ class App:
         if reset:self.page_index=0
         path=self.selected_file()
         if not path:
-            self.canvas.create_text(15,25,anchor='nw',text='파일을 추가하면 여기에서 미리 볼 수 있습니다.')
+            text='파일을 추가하면 여기에서 미리 볼 수 있습니다.'
+            if self.file_drop and self.file_drop.enabled:text='파일을 여기에 끌어놓거나\n파일 추가 버튼으로 선택하세요.'
+            self.canvas.create_text(15,25,anchor='nw',text=text)
             self.page_label.config(text='미리보기');return
         try:
             check_local_path(path)
@@ -370,11 +417,15 @@ class App:
             self.cancel.set();self.process.join(timeout=.5)
             if self.process.is_alive():self.process.terminate();self.process.join(timeout=2)
             self.cleanup_stage()
+        if self.file_drop:self.file_drop.close()
         self.root.destroy()
 
     def help(self):
         messagebox.showinfo('사용 안내',
             '① 작업 선택 → ② 파일 추가 → ③ 설정 → ④ 실행\n\n'
+            'Windows 탐색기에서 파일을 창 안으로 끌어놓아 추가할 수 있습니다.\n'
+            '여러 파일을 한 번에 추가할 수 있으며 중복은 제외합니다.\n'
+            '이미지를 추가할 때는 먼저 “이미지 → PDF”를 선택하세요.\n'
             '페이지 공란은 전체 페이지입니다. 예: 1-3,5 / 역순: 3-1\n'
             '합치기는 목록 순서입니다. 파일을 선택하고 위로·아래로 이동하세요.\n'
             '결과는 선택한 폴더 안에 새 PDF결과 폴더로 저장됩니다.\n'
