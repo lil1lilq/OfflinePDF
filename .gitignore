@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.venv/
+build/
+dist/
+release/
+*.spec
+.offline-pdf-*/
+PDF결과_*/
+*.pdf
+dependency-sources/

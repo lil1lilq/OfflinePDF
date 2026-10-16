@@ -1,0 +1,40 @@
+name: Build Windows x64
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+      - name: Locate or install Inno Setup
+        shell: pwsh
+        run: |
+          if (!(Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed' }
+          }
+      - name: Test and build
+        shell: pwsh
+        run: ./packaging/build_windows.ps1
+      - name: Require expected outputs
+        shell: pwsh
+        run: |
+          @('release/OfflinePDF-Setup-Windows-x64.exe','release/OfflinePDF-Windows-x64-portable.zip','release/SHA256SUMS.txt') | ForEach-Object {
+            if (!(Test-Path $_)) { throw "Missing artifact: $_" }
+          }
+      - name: Upload installer and portable bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: OfflinePDF-Windows-x64
+          path: release/*
+          if-no-files-found: error
+          retention-days: 30
