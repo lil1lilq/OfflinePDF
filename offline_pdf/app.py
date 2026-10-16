@@ -18,15 +18,16 @@ import pymupdf as pdf
 from .engine import UserError, check_local_path, disable_network, open_pdf, worker
 from . import __version__
 from .windows_drop import NativeFileDrop
+from .ui import CARD_TEXT, POPULAR, PANEL, MUTED, icon
 
 
 TOOLS = {
     'merge': ('PDF 합치기', '파일 목록 순서대로 모든 페이지를 한 PDF로 합칩니다.'),
-    'split': ('한 쪽씩 나누기', '선택한 페이지마다 별도 PDF를 만듭니다.'),
-    'extract': ('페이지 추출·순서 변경', '입력한 순서로 추출합니다. 예: 3,1,2 또는 1-3,5'),
+    'split': ('PDF 나누기', '선택한 페이지마다 별도 PDF를 만듭니다.'),
+    'extract': ('페이지 정리', '입력한 순서로 추출합니다. 예: 3,1,2 또는 1-3,5'),
     'delete': ('페이지 삭제', '입력한 페이지를 삭제합니다. 원본은 그대로 보관합니다.'),
     'rotate': ('페이지 회전', '선택한 페이지를 시계 방향으로 회전합니다.'),
-    'compress': ('PDF 용량 줄이기', '무손실 정리·압축입니다. 파일에 따라 용량이 늘 수도 있습니다.'),
+    'compress': ('용량 줄이기', '무손실 정리·압축입니다. 파일에 따라 용량이 늘 수도 있습니다.'),
     'pdf_images': ('PDF → 이미지', '페이지를 JPG·PNG로 저장합니다. 암호 보호는 이미지에 적용되지 않습니다.'),
     'images_pdf': ('이미지 → PDF', 'JPG·PNG 파일을 목록 순서대로 A4 PDF로 만듭니다.'),
     'protect': ('암호 설정', '파일을 열 때 필요한 암호를 AES-256 방식으로 설정합니다.'),
@@ -48,108 +49,92 @@ class App:
         self.page_index=0; self.preview_scale=1; self.preview_rect=None; self.preview_photo=None
         self.process=None; self.events=None; self.cancel=None; self.cancel_at=None; self.stage=None
         self.result_folder=None; self.drag_start=None; self.drag_id=None; self.options={}
-        root.title(f'오프라인 PDF 업무도구 {__version__}')
-        root.geometry('1180x830');root.minsize(1020,760)
-        root.option_add('*Font', ('맑은 고딕' if os.name=='nt' else 'sans',10))
-        style=ttk.Style(root);style.theme_use('clam')
-        style.configure('TButton',padding=(10,7))
-        style.configure('Title.TLabel',font=('맑은 고딕' if os.name=='nt' else 'sans',19,'bold'))
-        style.configure('Run.TButton',font=('맑은 고딕' if os.name=='nt' else 'sans',12,'bold'),padding=12)
-        outer=ttk.Frame(root,padding=14);outer.pack(fill='both',expand=True)
-        header=ttk.Frame(outer);header.pack(fill='x')
-        ttk.Label(header,text='오프라인 PDF 업무도구',style='Title.TLabel').pack(side='left')
-        ttk.Button(header,text='사용 안내',command=self.help).pack(side='right')
-        ttk.Label(outer,text='파일은 이 PC에서 처리합니다 · 인터넷 연결·로그인 불필요 · 원본 별도 보관',foreground='#275b46').pack(anchor='w',pady=(5,12))
-        body=ttk.Frame(outer);body.pack(fill='both',expand=True)
-        sidebar=ttk.Frame(body,width=190);sidebar.pack(side='left',fill='y',padx=(0,14));sidebar.pack_propagate(False)
-        ttk.Label(sidebar,text='1  작업 선택').pack(anchor='w',pady=(0,6))
-        side_scroll=ttk.Scrollbar(sidebar,orient='vertical');side_scroll.pack(side='right',fill='y')
-        self.tool_list=tk.Listbox(sidebar,exportselection=False,activestyle='none',height=22,yscrollcommand=side_scroll.set,borderwidth=0,highlightthickness=1)
-        self.tool_list.pack(fill='both',expand=True);side_scroll.config(command=self.tool_list.yview)
-        for key,(title,_) in TOOLS.items():self.tool_list.insert('end',title)
-        self.tool_list.selection_set(0);self.tool_list.bind('<<ListboxSelect>>',self.change_tool)
-        center=ttk.Frame(body);center.pack(side='left',fill='both',expand=True)
-        self.title=ttk.Label(center,text='',font=('',14,'bold'));self.title.pack(anchor='w')
-        self.description=ttk.Label(center,text='',wraplength=840);self.description.pack(fill='x',pady=(4,10))
-        row=ttk.Frame(center);row.pack(fill='x')
-        ttk.Label(row,text='2  파일 추가').pack(side='left')
-        for title,cmd in [('파일 추가',self.add_files),('선택 삭제',self.remove_files),('모두 비우기',self.clear_files),('위로',lambda:self.move(-1)),('아래로',lambda:self.move(1))]:
-            ttk.Button(row,text=title,command=cmd).pack(side='left',padx=3)
-        listframe=ttk.Frame(center);listframe.pack(fill='x',pady=5)
-        self.file_list=tk.Listbox(listframe,height=4,selectmode='extended',exportselection=False)
-        self.file_list.pack(side='left',fill='x',expand=True)
-        fs=ttk.Scrollbar(listframe,command=self.file_list.yview);fs.pack(side='right',fill='y');self.file_list.config(yscrollcommand=fs.set)
-        self.file_list.bind('<<ListboxSelect>>',lambda event:self.refresh_preview(reset=True))
-        self.file_list.bind('<Delete>',lambda event:self.remove_files())
-        content=ttk.Frame(center);content.pack(fill='both',expand=True,pady=7)
-        left=ttk.Frame(content,width=340);left.pack(side='left',fill='y',padx=(0,12));left.pack_propagate(False)
-        ttk.Label(left,text='3  작업 설정').pack(anchor='w',pady=(0,6))
-        self.form=ttk.Frame(left);self.form.pack(fill='x')
-        self.form.columnconfigure(1,weight=1)
-        self.security=ttk.Label(left,text='암호화 PDF는 입력 암호를 넣으세요.\n암호 해제 외에는 결과 PDF도 암호화합니다.\n문자·이미지 출력은 암호화되지 않습니다.',wraplength=330,foreground='#555555');self.security.pack(anchor='w',pady=10)
-        self.region_controls=ttk.Frame(left)
-        ttk.Button(self.region_controls,text='현재 페이지 삭제 영역 지우기',command=self.clear_regions).pack(fill='x')
-        self.region_status=ttk.Label(self.region_controls,text='삭제 영역 0개',wraplength=330);self.region_status.pack(anchor='w',pady=4)
-        preview=ttk.Frame(content);preview.pack(side='left',fill='both',expand=True)
-        nav=ttk.Frame(preview);nav.pack(fill='x')
-        ttk.Button(nav,text='이전',command=lambda:self.turn(-1)).pack(side='left')
-        self.page_label=ttk.Label(nav,text='미리보기');self.page_label.pack(side='left',padx=6)
-        ttk.Button(nav,text='다음',command=lambda:self.turn(1)).pack(side='left')
-        self.canvas=tk.Canvas(preview,background='#e7ebef',highlightthickness=0,height=330)
-        self.canvas.pack(fill='both',expand=True,pady=6)
-        self.canvas.bind('<Configure>',lambda event:self.schedule_preview())
-        self.canvas.bind('<ButtonPress-1>',self.draw_start);self.canvas.bind('<B1-Motion>',self.draw_move);self.canvas.bind('<ButtonRelease-1>',self.draw_end)
-        self.preview_timer=None
-        bottom=ttk.Frame(outer);bottom.pack(fill='x',pady=(10,0))
-        ttk.Label(bottom,text='4  결과 저장 폴더').grid(row=0,column=0,sticky='w')
-        home=Path.home(); default=home/'Documents' if (home/'Documents').is_dir() else home
-        self.output=tk.StringVar(value=str(default));ttk.Entry(bottom,textvariable=self.output).grid(row=1,column=0,sticky='ew',padx=(0,8))
-        ttk.Button(bottom,text='폴더 선택',command=self.choose_output).grid(row=1,column=1)
-        self.run_button=ttk.Button(bottom,text='실행',command=self.run,style='Run.TButton');self.run_button.grid(row=1,column=2,padx=8)
-        self.cancel_button=ttk.Button(bottom,text='취소',command=self.cancel_job,state='disabled');self.cancel_button.grid(row=1,column=3)
-        self.open_button=ttk.Button(bottom,text='결과 폴더 열기',command=self.open_result,state='disabled');self.open_button.grid(row=1,column=4,padx=(8,0))
-        bottom.columnconfigure(0,weight=1)
-        self.progress=ttk.Progressbar(outer,mode='determinate');self.progress.pack(fill='x',pady=(10,4))
-        self.status=tk.StringVar(value='파일을 추가하고 실행하세요.');ttk.Label(outer,textvariable=self.status,wraplength=1120).pack(anchor='w')
-        self.drop_hint=ttk.Label(center,text='',foreground='#275b46')
-        self.drop_hint.pack(before=listframe,anchor='w',pady=(4,0))
+        from .layout import build
+        build(self)
         self.file_drop=None
         try:
-            self.file_drop=NativeFileDrop(root,self.on_files_drop,(self.file_list,self.canvas))
-            if self.file_drop.enabled:
-                self.drop_hint.config(text='파일을 이 창으로 끌어놓으세요. 여러 파일을 한 번에 추가할 수 있습니다.')
+            self.file_drop=NativeFileDrop(root,self.on_files_drop,
+                (self.file_list,self.canvas,self.drop_area,self.drop_title,self.add_button))
         except (OSError,AttributeError):
-            self.drop_hint.config(text='파일 추가 버튼으로 파일을 선택하세요.')
+            self.drop_title.config(text='파일 추가 버튼으로 파일을 선택하세요')
         root.protocol('WM_DELETE_WINDOW',self.close)
         self.configure_form();root.after(150,self.poll)
 
     def busy(self):return self.process is not None
 
-    def change_tool(self,event=None):
-        if self.busy():
-            self.tool_list.selection_clear(0,'end');self.tool_list.selection_set(list(TOOLS).index(self.tool));return
-        selection=self.tool_list.curselection()
-        if selection:
-            self.tool=list(TOOLS)[selection[0]];self.configure_form();self.refresh_preview()
+    def arrange_cards(self,width,force=False):
+        columns=3 if width>=850 else 2 if width>=550 else 1
+        if columns==self.card_columns and not force:return
+        self.card_columns=columns
+        keys=list(POPULAR)+[key for key in CARD_TEXT if key not in POPULAR] if self.show_all_tools else POPULAR
+        for card in self.cards.values():card.grid_forget()
+        for col in range(3):self.cards_frame.columnconfigure(col,weight=1 if col<columns else 0,uniform='cards' if col<columns else '')
+        for index,key in enumerate(keys):
+            self.cards[key].grid(row=index//columns,column=index%columns,sticky='ew',padx=6,pady=(0,12))
+
+    def toggle_tools(self):
+        self.show_all_tools=not self.show_all_tools
+        self.all_tools_button.config(text='접기  ⌃' if self.show_all_tools else '전체 도구 보기  ⌄')
+        self.home_section.config(text='전체 도구' if self.show_all_tools else '자주 쓰는 도구')
+        self.arrange_cards(self.cards_frame.winfo_width(),force=True)
+
+    def select_tool(self,key):
+        if self.busy() or key not in TOOLS:return
+        previous=self.tool
+        self.tool=key
+        if (previous=='images_pdf') != (key=='images_pdf'):
+            self.files=[];self.regions={};self.sync_list()
+        if previous!=key:self.regions={}
+        self.home.pack_forget();self.work.pack(fill='both',expand=True)
+        self.configure_form();self.work_scroll.canvas.yview_moveto(0)
+        self.root.after_idle(lambda:self.refresh_preview(reset=True))
+
+    def show_home(self):
+        if self.busy():return
+        self.work.pack_forget();self.home.pack(fill='both',expand=True)
+
+    def toggle_preview(self):
+        if self.tool=='redact':return
+        if self.preview_panel.winfo_manager():
+            self.preview_panel.pack_forget();self.preview_button.config(text='미리보기 펼치기')
+        else:
+            self.preview_panel.pack(fill='both',expand=True,pady=(16,0));self.preview_button.config(text='미리보기 접기')
+            self.schedule_preview()
+
+    def change_save_mode(self,event=None):
+        if self.busy():return
+        if self.save_mode.get()=='원본 파일과 같은 폴더' and self.files:
+            self.output.set(str(Path(self.files[0]).parent))
+        elif self.save_mode.get()=='지정한 폴더':self.choose_output()
 
     def field(self,label,key,default='',choices=None,secret=False,browse=None):
-        row=len(self.options);var=tk.StringVar(value=default);self.options[key]=var
-        ttk.Label(self.form,text=label).grid(row=row,column=0,sticky='w',padx=(0,6),pady=4)
+        row=2*len(self.options);var=tk.StringVar(value=default);self.options[key]=var
+        ttk.Label(self.form,text=label,style='Panel.TLabel').grid(row=row,column=0,columnspan=2,sticky='w',pady=(8,5))
         if choices:
             widget=ttk.Combobox(self.form,textvariable=var,values=choices,state='readonly',width=18)
         else:
             widget=ttk.Entry(self.form,textvariable=var,width=20,show='●' if secret else '')
-        widget.grid(row=row,column=1,sticky='ew',pady=4)
+        widget.grid(row=row+1,column=0,sticky='ew')
         if key=='input_password':widget.bind('<FocusOut>',lambda e:self.refresh_preview())
         if browse:
             def pick():
                 path=filedialog.askdirectory(parent=self.root) if browse=='dir' else filedialog.askopenfilename(parent=self.root,filetypes=[('이미지','*.png *.jpg *.jpeg')])
                 if path:var.set(path)
-            ttk.Button(self.form,text='선택',command=pick).grid(row=row,column=2,padx=3)
+            ttk.Button(self.form,text='선택',command=pick).grid(row=row+1,column=1,padx=(5,0))
 
     def configure_form(self):
         for w in self.form.winfo_children():w.destroy()
         self.options={};title,desc=TOOLS[self.tool];self.title.config(text=title);self.description.config(text=desc)
+        self.task_icon.delete('all');icon(self.task_icon,self.tool,12,12)
+        self.run_button.config(text=CARD_TEXT[self.tool][0]+'  →')
+        self.drop_hint.config(text='JPG·PNG 이미지' if self.tool=='images_pdf' else 'PDF 파일')
+        if self.tool=='redact':
+            self.preview_panel.pack(fill='both',expand=True,pady=(16,0));self.preview_button.config(text='영역 선택용 미리보기',state='disabled')
+        else:
+            self.preview_panel.pack_forget();self.preview_button.config(text='미리보기 펼치기',state='normal')
+        self.output_name.set('합친문서.pdf' if self.tool=='merge' else '이미지문서.pdf')
+        if self.tool in ('merge','images_pdf'):self.name_frame.pack(fill='x',pady=(13,0),before=self.name_frame.master.winfo_children()[-1])
+        else:self.name_frame.pack_forget()
         if self.tool=='redact':self.region_controls.pack(fill='x')
         else:self.region_controls.pack_forget()
         if self.tool not in ('merge','images_pdf','unlock','protect','compress','clean','redact'):
@@ -169,10 +154,10 @@ class App:
         if self.tool=='ocr':
             root=Path(getattr(sys,'_MEIPASS',Path(__file__).resolve().parents[1]))
             self.field('언어자료 폴더','tessdata',str(root/'tessdata'),browse='dir');self.field('문서 언어','language','kor+eng',['kor+eng','kor','eng'])
-        self.field('페이지 공란','hint','전체 페이지')
-        # This read-only hint is never used by the PDF processor.
-        last=self.form.grid_slaves(row=len(self.options)-1,column=1)
-        if last:last[0].configure(state='readonly')
+        self.security.config(text='페이지를 비워 두면 전체 페이지를 처리합니다.' if 'pages' in self.options else '')
+        if 'pages' in self.options:self.security.pack(anchor='w',pady=(12,0))
+        else:self.security.pack_forget()
+        self.update_file_summary()
         self.update_region_status()
 
     def add_files(self):
@@ -182,6 +167,7 @@ class App:
         if paths:self.add_paths(paths)
 
     def on_files_drop(self, paths):
+        if not self.busy() and self.home.winfo_ismapped():self.select_tool(self.tool)
         self.add_paths(paths)
 
     def add_paths(self, paths):
@@ -222,7 +208,14 @@ class App:
         self.file_list.delete(0,'end')
         for i,path in enumerate(self.files):self.file_list.insert('end',f'{i+1:02d}  {Path(path).name}')
         if self.files:self.file_list.selection_set(0)
+        self.update_file_summary()
         self.status.set(f'{len(self.files)}개 파일 · 목록의 위에서 아래 순서로 처리합니다.')
+
+    def update_file_summary(self):
+        self.file_count.config(text=f'선택한 파일  {len(self.files)}개')
+        self.summary.set(f'파일 {len(self.files)}개 선택됨' if self.files else '파일을 추가해 주세요.')
+        self.run_button.config(state='disabled' if self.busy() or not self.files else 'normal')
+        if self.files and self.save_mode.get()=='원본 파일과 같은 폴더':self.output.set(str(Path(self.files[0]).parent))
 
     def remove_files(self):
         if self.busy():return
@@ -314,7 +307,7 @@ class App:
     def choose_output(self):
         if self.busy():return
         path=filedialog.askdirectory(parent=self.root,title='승인된 로컬 저장 폴더를 선택하세요')
-        if path:self.output.set(path)
+        if path:self.output.set(path);self.save_mode.set('지정한 폴더')
 
     def run(self):
         if self.busy():return
@@ -344,6 +337,7 @@ class App:
                     if signed and not messagebox.askokcancel('전자서명 문서','수정하면 기존 전자서명 검증 상태가 달라질 수 있습니다. 원본은 보존됩니다. 계속하시겠습니까?',parent=self.root):return
         except UserError as exc:messagebox.showerror('파일 확인',str(exc),parent=self.root);return
         job={'tool':self.tool,'files':list(self.files),'output':self.output.get(),'options':{k:v.get() for k,v in self.options.items() if k!='hint'}}
+        if self.tool in ('merge','images_pdf'):job['options']['output_name']=self.output_name.get()
         if self.tool=='redact':job['options']['regions']=self.regions.get(self.files[0],{})
         job['stage_id']=uuid.uuid4().hex
         ctx=mp.get_context('spawn');self.events=ctx.Queue();self.cancel=ctx.Event();self.cancel_at=None
@@ -357,6 +351,7 @@ class App:
         for key in ('input_password','output_password'):
             if key in self.options:self.options[key].set('')
         self.run_button.config(state='disabled');self.cancel_button.config(state='normal');self.open_button.config(state='disabled')
+        self.back_button.config(state='disabled');self.save_mode_combo.config(state='disabled')
         self.status.set('처리 중입니다. 원본 파일은 변경하지 않습니다.');self.progress['value']=0
 
     def cancel_job(self):
@@ -378,7 +373,8 @@ class App:
             if self.process.is_alive():self.process.terminate();self.process.join(timeout=2)
         self.process=None;self.cancel_at=None;clean=self.cleanup_stage()
         if self.events:self.events.close();self.events=None
-        self.run_button.config(state='normal');self.cancel_button.config(state='disabled')
+        self.update_file_summary();self.cancel_button.config(state='disabled')
+        self.back_button.config(state='normal');self.save_mode_combo.config(state='readonly')
         self.status.set(message if clean else message+' 임시자료가 남았습니다. 저장 폴더의 .offline-pdf- 폴더를 확인하세요.')
 
     def poll(self):
@@ -390,7 +386,9 @@ class App:
                     elif kind=='progress':
                         self.progress['value']=100*event['current']/max(1,event['total']);self.status.set(event['label'])
                     elif kind=='done':
-                        self.result_folder=event['folder'];self.finish('완료했습니다. “결과 폴더 열기”에서 확인하세요.');self.progress['value']=100;self.open_button.config(state='normal');break
+                        self.result_folder=event['folder'];self.finish('완료했습니다. “결과 폴더 열기”에서 확인하세요.');self.progress['value']=100;self.open_button.config(state='normal')
+                        if self.auto_open.get():self.open_result()
+                        break
                     elif kind=='cancelled':self.finish('작업을 취소했습니다. 원본은 그대로 보관됩니다.');break
                     elif kind=='error':
                         self.finish('작업을 완료하지 못했습니다. 원본은 그대로 보관됩니다.');messagebox.showerror('처리 결과',event['message'],parent=self.root);break
@@ -407,9 +405,11 @@ class App:
 
     def open_result(self):
         if not self.result_folder:return
-        if os.name=='nt':os.startfile(self.result_folder)
-        elif sys.platform=='darwin':subprocess.Popen(['open',self.result_folder])
-        else:subprocess.Popen(['xdg-open',self.result_folder])
+        try:
+            if os.name=='nt':os.startfile(self.result_folder)
+            elif sys.platform=='darwin':subprocess.Popen(['open',self.result_folder])
+            else:subprocess.Popen(['xdg-open',self.result_folder])
+        except OSError:self.status.set('저장은 완료했습니다. 파일 탐색기에서 결과 폴더를 확인하세요.')
 
     def close(self):
         if self.process:

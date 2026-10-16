@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import ctypes
 import sys
+from collections import deque
 
 WM_DROPFILES = 0x0233
 WM_NCDESTROY = 0x0082
@@ -39,7 +40,8 @@ class NativeFileDrop:
         self.enabled = False
         self.handles = set()
         self._closing = False
-        self._pending = set()
+        self._pending = deque()
+        self._timer_id = None
         if sys.platform != 'win32':
             return
 
@@ -83,19 +85,30 @@ class NativeFileDrop:
                 self.handles.add(hwnd)
                 self._shell.DragAcceptFiles(hwnd, True)
             self.enabled = bool(self.handles)
+            if self.enabled:
+                self._timer_id = self.root.after(75, self._poll_files)
         except BaseException:
             self.close()
             raise
 
     def _queue_files(self, paths):
-        # Return to Tk before opening PDFs or changing widgets.
-        token = None
-        def deliver():
-            self._pending.discard(token)
+        # A ctypes Windows callback must NEVER call Tk, including after_idle().
+        # _tkinter may already have released its Tcl thread state while it is
+        # dispatching this Windows message. Queue Python values only, then return.
+        self._pending.append(tuple(paths))
+
+    def _poll_files(self):
+        # This function is entered by Tk's own scheduled callback, not WndProc.
+        self._timer_id = None
+        if self._closing:
+            return
+        try:
+            # One batch per tick keeps the UI responsive during repeated drops.
+            if self._pending:
+                self.on_files(list(self._pending.popleft()))
+        finally:
             if not self._closing:
-                self.on_files(paths)
-        token = self.root.after_idle(deliver)
-        self._pending.add(token)
+                self._timer_id = self.root.after(75, self._poll_files)
 
     def _window_proc(self, hwnd, message, wparam, lparam, subclass_id, ref_data):
         if message == WM_DROPFILES:
@@ -118,11 +131,12 @@ class NativeFileDrop:
         if self._closing:
             return
         self._closing = True
-        for token in tuple(self._pending):
+        if self._timer_id is not None:
             try:
-                self.root.after_cancel(token)
+                self.root.after_cancel(self._timer_id)
             except Exception:
                 pass
+            self._timer_id = None
         self._pending.clear()
         for hwnd in tuple(self.handles):
             self._shell.DragAcceptFiles(hwnd, False)

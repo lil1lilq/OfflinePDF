@@ -39,6 +39,13 @@ class EngineTests(unittest.TestCase):
         folder=self.run_tool('merge',[str(self.source),str(self.source)])
         with pdf.open(self.output_pdf(folder)) as doc:self.assertEqual(len(doc),6)
 
+    def test_merge_custom_name_and_invalid_paths(self):
+        folder=self.run_tool('merge',output_name='합친 문서')
+        self.assertTrue((folder/'합친 문서.pdf').is_file())
+        for name in ('../escape.pdf','sub/escape.pdf','C:\\escape.pdf','CON.pdf','a?.pdf','...pdf'):
+            with self.assertRaises(UserError):self.run_tool('merge',output_name=name)
+            self.assertFalse(list(self.root.glob('.offline-pdf-*')))
+
     def test_extract_order_duplicates(self):
         folder=self.run_tool('extract',pages='3,1,1')
         with pdf.open(self.output_pdf(folder)) as doc:

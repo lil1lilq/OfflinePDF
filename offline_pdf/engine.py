@@ -174,6 +174,13 @@ def _process(job, paths, stage, emit, cancel):
     if tool == 'protect' and not output_password:
         raise UserError('설정할 새 암호를 입력하세요.')
     if tool in ('merge', 'images_pdf'):
+        name=opt.get('output_name','').strip() or ('병합.pdf' if tool=='merge' else '이미지모음.pdf')
+        if not name.lower().endswith('.pdf'):name+='.pdf'
+        stem=name[:-4]
+        if (not stem.strip() or len(name)>120 or re.search(r'[<>:"/\\|?*\x00-\x1f]',name)
+                or stem.endswith((' ','.')) or stem.split('.')[0].upper() in
+                {'CON','PRN','AUX','NUL',*[f'COM{i}' for i in range(1,10)],*[f'LPT{i}' for i in range(1,10)]}):
+            raise UserError('저장 파일 이름을 확인하세요. 경로·특수문자·Windows 예약 이름은 사용할 수 없습니다.')
         result = pdf.open()
         encrypted_any = False
         try:
@@ -205,7 +212,7 @@ def _process(job, paths, stage, emit, cancel):
                         raise
                     except Exception:
                         raise UserError('이미지를 읽지 못했습니다. JPG·PNG 파일인지 확인하세요.') from None
-            save_pdf(result, stage / ('병합.pdf' if tool == 'merge' else '이미지모음.pdf'),
+            save_pdf(result, stage / name,
                      output_password or (password if encrypted_any else ''))
         finally:
             result.close()

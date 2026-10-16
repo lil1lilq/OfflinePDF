@@ -17,7 +17,7 @@ class AppTests(unittest.TestCase):
     def setUpClass(cls):
         try:cls.root=tk.Tk()
         except tk.TclError:raise unittest.SkipTest('GUI requires an available Windows desktop or X display.')
-        cls.app=App(cls.root);cls.root.update()
+        cls.app=App(cls.root);cls.app.auto_open.set(False);cls.root.update()
         cls.temp=tempfile.TemporaryDirectory();cls.folder=Path(cls.temp.name)
         cls.source=cls.folder/'한글 파일.pdf'
         with pdf.open() as doc:
@@ -80,6 +80,66 @@ class AppTests(unittest.TestCase):
         self.app.tool='merge';self.app.configure_form();self.app.clear_files()
         with patch.object(self.app,'busy',return_value=True):self.app.on_files_drop([str(self.source)])
         self.assertFalse(self.app.files);self.assertIn('작업 중에는',self.app.status.get())
+
+    def test_i_card_home_expand_and_task_navigation(self):
+        self.app.show_home();self.root.update()
+        self.assertTrue(self.app.home.winfo_ismapped())
+        self.assertEqual(sum(card.winfo_ismapped() for card in self.app.cards.values()),6)
+        self.app.all_tools_button.invoke();self.root.update()
+        self.assertEqual(sum(card.winfo_ismapped() for card in self.app.cards.values()),18)
+        sizes={(card.winfo_width(),card.winfo_height()) for card in self.app.cards.values()}
+        # One-pixel rounding across equal grid columns is normal.
+        self.assertLessEqual(max(w for w,h in sizes)-min(w for w,h in sizes),1)
+        self.assertEqual({h for w,h in sizes},{168})
+        self.app.select_tool('redact');self.root.update()
+        self.assertTrue(self.app.work.winfo_ismapped());self.assertFalse(self.app.home.winfo_ismapped())
+        self.assertTrue(self.app.region_controls.winfo_ismapped())
+        with patch.object(self.app,'busy',return_value=True):
+            self.app.show_home();self.app.select_tool('merge')
+        self.assertEqual(self.app.tool,'redact');self.assertTrue(self.app.work.winfo_ismapped())
+        self.app.back_button.invoke();self.root.update();self.assertTrue(self.app.home.winfo_ismapped())
+        self.app.all_tools_button.invoke();self.root.update()
+        self.assertEqual(sum(card.winfo_ismapped() for card in self.app.cards.values()),6)
+
+    def test_j_switch_image_category_clears_incompatible_files(self):
+        self.app.select_tool('merge');self.app.files=[str(self.source)];self.app.sync_list()
+        self.app.select_tool('rotate');self.assertEqual(self.app.files,[str(self.source)])
+        self.app.select_tool('images_pdf');self.assertEqual(self.app.files,[])
+        self.assertEqual(str(self.app.run_button.cget('state')),'disabled')
+
+    def test_k_gui_merge_name_and_auto_open(self):
+        self.app.select_tool('merge');self.app.files=[str(self.source)];self.app.sync_list()
+        self.app.output_name.set('최종 합친문서.pdf');self.app.auto_open.set(True)
+        with patch.object(self.app,'open_result') as opened,patch('offline_pdf.app.messagebox.showerror',side_effect=AssertionError('Unexpected UI error')):
+            self.app.run();deadline=time.monotonic()+20
+            self.assertEqual(str(self.app.back_button.cget('state')),'disabled')
+            while self.app.process is not None and time.monotonic()<deadline:
+                self.root.update();time.sleep(.02)
+            self.assertIsNone(self.app.process)
+            opened.assert_called_once()
+        self.app.auto_open.set(False)
+        self.assertTrue((Path(self.app.result_folder)/'최종 합친문서.pdf').is_file())
+        self.assertEqual(str(self.app.back_button.cget('state')),'normal')
+
+    def test_l_responsive_card_grid_and_scrolling(self):
+        self.app.show_home();self.app.toggle_tools();self.root.geometry('900x650');self.root.update()
+        self.assertEqual(self.app.card_columns,2)
+        self.assertEqual(len(self.app.cards_frame.grid_slaves()),18)
+        self.app.home.canvas.yview_moveto(1);self.root.update()
+        self.assertGreater(self.app.home.canvas.yview()[0],0)
+        self.app.toggle_tools();self.root.geometry('1180x850');self.root.update()
+
+    def test_m_preview_and_always_visible_run_button(self):
+        self.root.geometry('900x650');self.app.select_tool('merge');self.root.update()
+        self.assertFalse(self.app.preview_panel.winfo_ismapped())
+        self.app.preview_button.invoke();self.root.update()
+        self.assertTrue(self.app.preview_panel.winfo_ismapped())
+        self.app.select_tool('redact');self.root.update()
+        self.assertTrue(self.app.preview_panel.winfo_ismapped())
+        self.assertEqual(str(self.app.preview_button.cget('state')),'disabled')
+        button=self.app.run_button
+        self.assertLessEqual(button.winfo_rooty()+button.winfo_height(),self.root.winfo_rooty()+self.root.winfo_height())
+        self.app.select_tool('merge');self.root.geometry('1180x850');self.root.update()
 
     @unittest.skipUnless(os.name=='nt','Windows Shell integration test')
     def test_h_native_windows_drop_message(self):
