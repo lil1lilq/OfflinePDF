@@ -7,10 +7,28 @@ import time
 import tkinter as tk
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pymupdf as pdf
 from offline_pdf.app import App, TOOLS
+
+
+class CardLayoutTests(unittest.TestCase):
+    def test_more_columns_with_more_available_width_without_display_limits(self):
+        # Test available layout space directly. A CI desktop can cap wm_geometry
+        # requests at its physical screen size, regardless of the requested size.
+        state=SimpleNamespace(show_all_tools=True,card_layout=None,card_columns=0,
+                              home=SimpleNamespace(canvas=Mock()),cards_frame=Mock(),
+                              cards={key:Mock() for key in TOOLS})
+        state.home.canvas.winfo_height.return_value=800
+        App.arrange_cards(state,620,force=True);small_columns=state.card_columns
+        App.arrange_cards(state,1660,force=True);large_columns=state.card_columns
+        self.assertGreater(large_columns,small_columns)
+        self.assertEqual(len(state.cards),18)
+        for card in state.cards.values():
+            self.assertEqual(card.grid.call_count,2)
+            compact,height=card.set_compact.call_args.args
+            self.assertTrue(compact);self.assertLessEqual(height,68)
 
 
 class AppTests(unittest.TestCase):
@@ -126,13 +144,20 @@ class AppTests(unittest.TestCase):
     def test_l_responsive_card_grid_and_scrolling(self):
         self.app.show_home()
         if not self.app.show_all_tools:self.app.toggle_tools()
-        columns=[]
+        layouts=[]
         for width,height in [(900,650),(1280,720),(1920,1080)]:
             self.root.geometry(f'{width}x{height}');self.pump(.2)
-            columns.append(self.app.card_columns)
-            self.assertEqual(len(self.app.cards_frame.grid_slaves()),18)
-            self.assertLessEqual(self.app.home.inner.winfo_height(),self.app.home.canvas.winfo_height()+2)
-        self.assertGreater(columns[-1],columns[0])
+            actual=(self.root.winfo_width(),self.root.winfo_height())
+            with self.subTest(requested=(width,height),actual=actual):
+                layouts.append((self.app.cards_frame.winfo_width(),self.app.card_columns))
+                self.assertEqual(len(self.app.cards_frame.grid_slaves()),18)
+                self.assertLessEqual(self.app.home.inner.winfo_height(),self.app.home.canvas.winfo_height()+2)
+                for card in self.app.cards.values():
+                    self.assertLessEqual(card.winfo_x()+card.winfo_width(),self.app.cards_frame.winfo_width()+1)
+        # The live check uses actual space, not an assumption that a Windows
+        # runner really created a 1920px window on a smaller virtual display.
+        layouts.sort()
+        self.assertGreaterEqual(layouts[-1][1],layouts[0][1])
         self.app.toggle_tools();self.root.geometry('1180x850');self.root.update()
 
     def test_m_preview_and_always_visible_run_button(self):
