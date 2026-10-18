@@ -174,7 +174,9 @@ class AppTests(unittest.TestCase):
         with pdf.open(final) as doc:
             self.assertEqual(len(doc),3)
             self.assertEqual([page.get_text().strip() for page in doc],['FIRST','FIRST','SECOND'])
-        for output in (merged,compressed,final):self.assertEqual(Path(output).parent.parent,self.folder)
+        # Windows may use an 8.3 alias (RUNNER~1) for the same physical folder.
+        for output in (merged,compressed,final):
+            self.assertTrue(Path(output).parent.parent.samefile(self.folder))
         self.assertEqual(self.source.read_bytes(),original_bytes)
         self.assertEqual(Path(merged).read_bytes(),merged_bytes)
         self.assertEqual(Path(compressed).read_bytes(),compressed_bytes)
