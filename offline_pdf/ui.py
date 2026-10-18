@@ -193,7 +193,7 @@ class ScrollPane(ttk.Frame):
 
 
 class Tooltip:
-    """Delayed pointer/focus explanation, kept within the current screen."""
+    """Show explanations below the pointer, within the owning app window."""
 
     def __init__(self, widget, text):
         self.widget = widget
@@ -209,12 +209,16 @@ class Tooltip:
         self.timer = None
         if not self.widget.winfo_ismapped():
             return
+        owner = self.widget.winfo_toplevel()
+        left, top = owner.winfo_rootx(), owner.winfo_rooty()
+        right = left + owner.winfo_width()
+        bottom = top + owner.winfo_height()
         self.window = tk.Toplevel(self.widget)
         self.window.wm_overrideredirect(True)
         tk.Label(
             self.window,
             text=self.text,
-            wraplength=330,
+            wraplength=min(330, max(80, owner.winfo_width() - 40)),
             justify="left",
             bg=INK,
             fg=PANEL,
@@ -223,14 +227,33 @@ class Tooltip:
             font=(FONT, 10),
         ).pack()
         self.window.update_idletasks()
-        x = min(
-            self.widget.winfo_rootx() + 12,
-            self.widget.winfo_screenwidth() - self.window.winfo_reqwidth() - 8,
-        )
-        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 3
-        if y + self.window.winfo_reqheight() > self.widget.winfo_screenheight():
-            y = self.widget.winfo_rooty() - self.window.winfo_reqheight() - 3
-        self.window.geometry(f"+{max(0, x)}+{max(0, y)}")
+        pointer_x, pointer_y = self.widget.winfo_pointerxy()
+        if not (
+            self.widget.winfo_rootx()
+            <= pointer_x
+            < self.widget.winfo_rootx() + self.widget.winfo_width()
+            and self.widget.winfo_rooty()
+            <= pointer_y
+            < self.widget.winfo_rooty() + self.widget.winfo_height()
+        ):
+            # Keyboard focus also exposes the explanation without moving the pointer.
+            pointer_x = self.widget.winfo_rootx() + 12
+            pointer_y = self.widget.winfo_rooty() + self.widget.winfo_height()
+        width, height = self.window.winfo_reqwidth(), self.window.winfo_reqheight()
+        x, y = self.position(pointer_x, pointer_y, width, height, (left, top, right, bottom))
+        # A literal '+' before a negative coordinate keeps it an absolute desktop
+        # coordinate. A bare '-' would make Tk measure from the opposite edge.
+        self.window.geometry(f"+{x}+{y}")
+
+    @staticmethod
+    def position(pointer_x, pointer_y, width, height, bounds):
+        left, top, right, bottom = bounds
+        x = max(left + 8, min(pointer_x + 12, right - width - 8))
+        y = pointer_y + 18
+        if y + height > bottom - 8:
+            y = pointer_y - height - 12
+        y = max(top + 8, min(y, bottom - height - 8))
+        return x, y
 
     def hide(self):
         if self.timer:
