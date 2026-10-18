@@ -24,7 +24,7 @@ py -3.12 -m venv .venv
 ```
 
 GUI 검사는 데스크톱 환경이 필요합니다. 탐색기 파일 드롭 통합 검사는 Windows에서 실행합니다.
-초기 검증 범위는 [TEST_REPORT.md](TEST_REPORT.md), 이후 검증 내역은 [CHANGELOG.md](CHANGELOG.md)에 있습니다.
+변경 사항과 검증 내역은 [CHANGELOG.md](CHANGELOG.md)에서 확인할 수 있습니다.
 
 ## Windows 실행파일 생성
 

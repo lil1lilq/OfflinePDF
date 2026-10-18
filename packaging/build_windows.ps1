@@ -26,7 +26,7 @@ Invoke-Checked $Python $bundleArgs
 $destination = 'dist/OfflinePDF'
 Copy-Item 'README.md','USER_GUIDE_KO.txt','LICENSE','THIRD_PARTY_NOTICES.md' $destination
 Copy-Item 'CHANGELOG.md' $destination
-Copy-Item 'BUILDING.md','TEST_REPORT.md' $destination
+Copy-Item 'BUILDING.md' $destination
 Copy-Item 'assets' "$destination/assets" -Recurse -Force
 Copy-Item 'licenses' "$destination/licenses" -Recurse -Force
 Copy-Item 'dependency-sources' "$destination/dependency-sources" -Recurse -Force
