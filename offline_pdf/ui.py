@@ -20,6 +20,7 @@ CARD_TEXT = {
     'split': ('PDF 나누기', '페이지별 또는 N개 파일로 나눕니다'),
     'extract': ('페이지 정리', '필요한 페이지를 고르고 순서를 바꿉니다'),
     'compress': ('용량 줄이기', 'PDF 파일 크기를 줄입니다'),
+    'upscale': ('AI 업스케일', '흐린 스캔 이미지를 확대·보정합니다'),
     'pdf_images': ('PDF → 이미지', '페이지를 이미지 파일로 저장합니다'),
     'redact': ('영역 영구 삭제', '개인정보 삭제 불가'),
     'images_pdf': ('이미지 → PDF', '여러 이미지를 하나의 PDF로 만듭니다'),
@@ -183,7 +184,7 @@ def setup_style(root):
     style.configure('TButton',padding=(12,8),background=PANEL,bordercolor=LINE,lightcolor=LINE,darkcolor=LINE,borderwidth=1,relief='solid')
     style.map('TButton',background=[('active',SOFT)],bordercolor=[('active','#b8c9ed'),('disabled',LINE)],foreground=[('disabled',MUTED)])
     style.configure('Quiet.TButton',background=BG,borderwidth=0,foreground=MUTED)
-    style.configure('Back.TButton',background=PANEL,foreground=INK,font=(FONT,12,'bold'),padding=(20,12),borderwidth=2,bordercolor=LINE,lightcolor=LINE,darkcolor=LINE)
+    style.configure('Back.TButton',background=SOFT,foreground=BLUE,font=(FONT,12,'bold'),padding=(20,12),borderwidth=2,bordercolor='#b7caf7',lightcolor='#b7caf7',darkcolor='#b7caf7')
     style.map('Back.TButton',background=[('active',SOFT)],bordercolor=[('active',BLUE)],foreground=[('active',BLUE)])
     style.configure('Run.TButton',font=(FONT,11,'bold'),padding=(22,12),background=BLUE,foreground=PANEL,bordercolor=BLUE)
     style.map('Run.TButton',background=[('disabled','#ccd5e8'),('active','#1e4fc9')],foreground=[('disabled',MUTED),('!disabled',PANEL)])
@@ -191,5 +192,7 @@ def setup_style(root):
     style.configure('TCombobox',fieldbackground=PANEL,padding=7,bordercolor=LINE,arrowsize=14)
     style.map('TCombobox',fieldbackground=[('readonly',PANEL)],foreground=[('readonly',INK)])
     style.configure('TCheckbutton',background=PANEL)
+    style.configure('Compression.TRadiobutton',background=PANEL,foreground=INK,padding=9,borderwidth=1,relief='solid')
+    style.map('Compression.TRadiobutton',background=[('selected',SOFT),('active',SOFT)],foreground=[('selected',BLUE)])
     style.configure('Horizontal.TProgressbar',background=BLUE,troughcolor=LINE,borderwidth=0)
     return style

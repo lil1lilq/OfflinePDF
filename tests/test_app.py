@@ -24,7 +24,7 @@ class CardLayoutTests(unittest.TestCase):
         App.arrange_cards(state,620,force=True);small_columns=state.card_columns
         App.arrange_cards(state,1660,force=True);large_columns=state.card_columns
         self.assertGreater(large_columns,small_columns)
-        self.assertEqual(len(state.cards),18)
+        self.assertEqual(len(state.cards),19)
         for card in state.cards.values():
             self.assertEqual(card.grid.call_count,2)
             compact,height=card.set_compact.call_args.args
@@ -51,7 +51,7 @@ class AppTests(unittest.TestCase):
     def test_a_all_tool_forms_open(self):
         for tool in TOOLS:
             self.app.tool=tool;self.app.configure_form();self.root.update()
-            self.assertIn('input_password',self.app.options)
+            self.assertNotIn('input_password',self.app.options)
             self.assertEqual(self.app.title.cget('text'),TOOLS[tool][0])
 
     def test_b_preview_and_page_navigation(self):
@@ -105,7 +105,7 @@ class AppTests(unittest.TestCase):
         self.assertTrue(self.app.home.winfo_ismapped())
         self.assertEqual(sum(card.winfo_ismapped() for card in self.app.cards.values()),6)
         self.app.all_tools_button.invoke();self.root.update()
-        self.assertEqual(sum(card.winfo_ismapped() for card in self.app.cards.values()),18)
+        self.assertEqual(sum(card.winfo_ismapped() for card in self.app.cards.values()),19)
         sizes={(card.winfo_width(),card.winfo_height()) for card in self.app.cards.values()}
         # One-pixel rounding across equal grid columns is normal.
         self.assertLessEqual(max(w for w,h in sizes)-min(w for w,h in sizes),1)
@@ -151,7 +151,7 @@ class AppTests(unittest.TestCase):
             actual=(self.root.winfo_width(),self.root.winfo_height())
             with self.subTest(requested=(width,height),actual=actual):
                 layouts.append((self.app.cards_frame.winfo_width(),self.app.card_columns))
-                self.assertEqual(len(self.app.cards_frame.grid_slaves()),18)
+                self.assertEqual(len(self.app.cards_frame.grid_slaves()),19)
                 self.assertLessEqual(self.app.home.inner.winfo_height(),self.app.home.canvas.winfo_height()+2)
                 for card in self.app.cards.values():
                     self.assertLessEqual(card.winfo_x()+card.winfo_width(),self.app.cards_frame.winfo_width()+1)
@@ -354,8 +354,13 @@ class AppTests(unittest.TestCase):
     def test_v_encrypted_organizer_settings_and_source_replacement(self):
         source=self.folder/'암호 페이지.pdf'
         with pdf.open(self.source) as doc:doc.save(source,encryption=pdf.PDF_ENCRYPT_AES_256,user_pw='password',owner_pw='password')
-        self.app.select_tool('extract');self.app.clear_files();self.app.add_paths([str(source)]);self.assertIsNone(self.app.organizer.model)
-        dialog=self.app.organizer_settings();self.app.options['input_password'].set('password')
+        self.app.select_tool('extract');self.app.clear_files()
+        with patch('offline_pdf.passwords.ask_password',return_value=None):self.app.add_paths([str(source)])
+        self.assertIsNone(self.app.organizer.model)
+        with patch('offline_pdf.passwords.ask_password',return_value='password'):
+            from offline_pdf.passwords import ensure_password
+            self.assertTrue(ensure_password(self.app,str(source.resolve())))
+        dialog=self.app.organizer_settings()
         buttons=dialog.winfo_children()[0].winfo_children()
         next(b for b in buttons if isinstance(b,tk.ttk.Button) and b.cget('text')=='확인').invoke()
         self.root.update();self.assertEqual(len(self.app.organizer.model.items),2)
@@ -459,10 +464,71 @@ class AppTests(unittest.TestCase):
         for extension in EXPORT_FORMATS:
             self.assertEqual(self.app.result_input_tools([Path('result.'+extension.lower())]),{'images_pdf'})
 
+    def test_zb_file_password_cache_retry_removal_and_batch(self):
+        from offline_pdf.passwords import cached_password
+        self.app.select_tool('compress');self.app.clear_files();paths=[]
+        for i,password in enumerate(('one-password','two-password')):
+            path=self.folder/f'개별 암호{i}.pdf'
+            with pdf.open(self.source) as doc:doc.save(path,encryption=pdf.PDF_ENCRYPT_AES_256,user_pw=password,owner_pw=password)
+            paths.append(str(path.resolve()))
+        with patch('offline_pdf.passwords.ask_password',side_effect=['one-password','two-password']) as ask:
+            self.app.add_paths(paths);self.assertEqual(ask.call_count,2)
+        self.app.select_tool('rotate');self.app.options['angle'].set('90')
+        self.app.save_mode.set('지정한 폴더');self.app.output.set(str(self.folder))
+        with patch('offline_pdf.passwords.ask_password',side_effect=AssertionError('Cached password prompted again')),patch('offline_pdf.app.messagebox.showerror',side_effect=AssertionError('Unexpected UI error')):
+            self.app.run();self.wait_for_job()
+        for path,password in zip(sorted(self.app.result_files),('one-password','two-password')):
+            with pdf.open(path) as doc:self.assertTrue(doc.authenticate(password));self.assertEqual(doc[0].rotation,90)
+        self.app.file_list.selection_clear(0,'end');self.app.file_list.selection_set(0);self.app.remove_files()
+        self.assertEqual(cached_password(self.app,paths[0]),'');self.assertEqual(cached_password(self.app,paths[1]),'two-password')
+        self.app.clear_files();self.assertFalse(self.app.password_cache)
+
+    def test_zc_real_password_popup_wrong_retry_and_cancel(self):
+        from offline_pdf.passwords import ask_password
+        path=self.folder/'팝업 재시도.pdf'
+        with pdf.open(self.source) as doc:doc.save(path,encryption=pdf.PDF_ENCRYPT_AES_256,user_pw='correct',owner_pw='correct')
+        self.app.select_tool('compress');observed=[]
+        def widgets(widget):
+            result=[]
+            for child in widget.winfo_children():result.append(child);result.extend(widgets(child))
+            return result
+        def enter():
+            dialog=next(w for w in self.root.winfo_children() if isinstance(w,tk.Toplevel))
+            all_widgets=widgets(dialog);entry=next(w for w in all_widgets if isinstance(w,tk.ttk.Entry))
+            observed.append(entry.cget('show'));entry.insert(0,'wrong')
+            next(w for w in all_widgets if isinstance(w,tk.ttk.Button) and w.cget('text')=='문서 열기').invoke()
+            observed.append(any('올바르지' in str(w.cget('text')) for w in all_widgets if isinstance(w,tk.ttk.Label)))
+            entry.delete(0,'end');entry.insert(0,'correct')
+            next(w for w in all_widgets if isinstance(w,tk.ttk.Button) and w.cget('text')=='문서 열기').invoke()
+        self.root.after(30,enter);self.assertEqual(ask_password(self.app,str(path)),'correct');self.assertEqual(observed,['●',True])
+        def cancel():
+            dialog=next(w for w in self.root.winfo_children() if isinstance(w,tk.Toplevel))
+            next(w for w in widgets(dialog) if isinstance(w,tk.ttk.Button) and w.cget('text')=='취소').invoke()
+        self.root.after(30,cancel);self.assertIsNone(ask_password(self.app,str(path)))
+
+    def test_zd_ai_preview_real_worker_back_cleanup_then_save(self):
+        from PIL import Image
+        from io import BytesIO
+        self.app.select_tool('upscale');self.app.clear_files()
+        stream=BytesIO();Image.new('RGB',(32,24),'gray').save(stream,format='PNG')
+        source=self.folder/'AI 한글 스캔.pdf'
+        with pdf.open() as doc:
+            p=doc.new_page();p.insert_image(pdf.Rect(10,10,138,106),stream=stream.getvalue());p.insert_text((10,150),'RETAIN TEXT');doc.save(source)
+        self.app.add_paths([str(source)]);self.app.save_mode.set('지정한 폴더');self.app.output.set(str(self.folder))
+        with patch('offline_pdf.app.messagebox.showerror',side_effect=AssertionError('Unexpected UI error')):
+            self.app.run(preview=True);self.wait_for_job();self.root.update()
+            self.assertEqual(self.app.screen,'comparison');folder=Path(self.app.comparison_folder)
+            self.assertTrue((folder/'after.png').is_file());self.app.home_button.invoke();self.root.update()
+            self.assertEqual(self.app.screen,'work');self.assertFalse(folder.exists())
+            self.app.run();self.wait_for_job()
+        with pdf.open(self.app.result_files[0]) as doc:
+            self.assertIn('RETAIN TEXT',doc[0].get_text());self.assertEqual(doc[0].get_images()[0][2:4],(64,48))
+        self.assertIn('0.8.1',self.root.title())
+
     def test_za_single_sidebar_back_restores_each_screen_and_organizer_scroll(self):
         self.app.cancel_continue();self.app.show_home();self.app.clear_files();self.root.update()
         self.assertEqual(str(self.app.home_button.cget('state')),'disabled')
-        self.app.select_tool('merge');self.app.add_paths([str(self.source)]);self.pump(.15)
+        self.app.select_tool('merge');self.app.add_paths([str(self.source)]);self.app.show_preview();self.pump(.15)
         self.assertEqual(self.app.screen,'preview')
         self.app.home_button.invoke();self.root.update()
         self.assertEqual(self.app.screen,'work');self.assertTrue(self.app.columns.winfo_ismapped())
@@ -491,7 +557,7 @@ class AppTests(unittest.TestCase):
         self.app.home_button.invoke();self.root.update();self.assertEqual(self.app.screen,'home')
         self.app.select_tool('merge');self.app.clear_files();self.app.add_paths([str(self.source)])
         self.app.save_mode.set('지정한 폴더');self.app.output.set(str(self.folder));self.app.auto_open.set(False)
-        self.app.run();self.wait_for_job();self.assertEqual(self.app.screen,'preview')
+        self.app.show_preview();self.app.run();self.wait_for_job();self.assertEqual(self.app.screen,'preview')
         self.app.continue_with_result();self.root.update();self.assertIsNotNone(self.app.pending_results)
         self.app.home_button.invoke();self.root.update()
         self.assertIsNone(self.app.pending_results);self.assertEqual(self.app.screen,'preview')

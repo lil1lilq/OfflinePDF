@@ -4,7 +4,7 @@
 
 - Windows 10·11, x64
 - Python 3.12, x64
-- PyMuPDF·Pillow·pillow-heif 및 PyInstaller: requirements 파일에 고정한 버전
+- PyMuPDF·Pillow·pillow-heif·NumPy·ONNX Runtime 및 PyInstaller: requirements 파일에 고정한 버전
 - 설치파일 생성: Inno Setup 6.x
 
 ## 소스 실행
@@ -20,6 +20,7 @@ py -3.12 -m venv .venv
 ## 자동 검사
 
 ```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-build.txt
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
@@ -48,8 +49,8 @@ Inno Setup이 없으면 포터블 ZIP만 생성합니다. Windows 실행파일�
 | `release/OfflinePDF-Windows-x64-portable.zip` | 압축 실행형 |
 | `release/SHA256SUMS.txt` | 배포 파일의 SHA256 검증값 |
 
-실행파일의 이름은 유지하고 제품 버전 정보에 0.8를 기록합니다.
-Windows의 숫자 버전 정보는 0.8.0.0을 사용합니다. 코드서명 인증서는 포함하지 않습니다.
+실행파일의 이름은 유지하고 제품 버전 정보에 0.8.1을 기록합니다.
+Windows의 숫자 버전 정보는 0.8.1.0을 사용합니다. 코드서명 인증서는 포함하지 않습니다.
 
 ## GitHub Actions
 
@@ -83,3 +84,18 @@ Windows의 한글 언어자료 경로는 `GetShortPathNameW`로 ASCII 축약 경
 
 실행파일에는 애플리케이션의 `CorrespondingSource.zip`과 제3자 라이브러리의 `dependency-sources`를 함께 포함합니다.
 [LICENSE](LICENSE), [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), `licenses`의 고지를 유지해야 합니다.
+
+## AI 모델
+
+`models` 전체를 소스와 함께 유지합니다. ONNX 모델, 원본 학습 가중치, BSD-3-Clause 고지, SHA256 명세를 포함합니다.
+일반 빌드는 `python packaging/prepare_ai_model.py`로 동봉 파일을 검증하며 인터넷에서 모델을 받지 않습니다.
+원본 가중치로 ONNX를 다시 만들려면 빌드 의존성을 설치한 뒤 다음을 실행합니다.
+
+```powershell
+python packaging/prepare_ai_model.py --convert
+```
+
+변환은 NumPy·ONNX만 사용합니다. PyTorch·BasicSR·CUDA는 빌드와 배포본 모두 필요하지 않습니다.
+자동 검사는 NumPy로 독립 계산한 결과와 실제 모델 추론의 일치, 타일 경계, 2배·4배 크기, 텍스트 보존, 비교 미리보기와 취소를 확인합니다.
+ONNX는 변환·검사용 빌드 의존성이며 사용자 실행파일에서는 제외합니다. 런타임에는 ONNX Runtime CPU와 NumPy를 포함합니다.
+AI 텔레메트리는 세션 생성 전에 비활성화하고, 모델은 로컬 동봉 파일만 읽습니다.

@@ -13,6 +13,7 @@ if ($Offline) {
 } else {
     Invoke-Checked $Python @('-m','pip','install','-r','requirements-build.txt')
 }
+Invoke-Checked $Python @('packaging/prepare_ai_model.py')
 Invoke-Checked $Python @('-m','unittest','discover','-s','tests','-v')
 Invoke-Checked $Python @('packaging/collect_licenses.py')
 if ($Offline) { Invoke-Checked $Python @('packaging/prepare_dependency_sources.py','--offline') }
@@ -20,6 +21,10 @@ else { Invoke-Checked $Python @('packaging/prepare_dependency_sources.py') }
 $bundleArgs = @('-m','PyInstaller','--noconfirm','--clean','--onedir','--windowed','--name','OfflinePDF',
     '--version-file','packaging/windows-version.txt',
     '--collect-all','pymupdf','--collect-all','PIL','--collect-all','pillow_heif',
+    '--collect-binaries','onnxruntime','--collect-data','onnxruntime',
+    '--hidden-import','onnxruntime.capi.onnxruntime_pybind11_state','--exclude-module','onnx','--exclude-module','torch',
+    '--exclude-module','onnxruntime.transformers','--exclude-module','onnxruntime.tools','--exclude-module','onnxruntime.quantization',
+    '--add-data','models;models',
     '--additional-hooks-dir','packaging/hooks','--add-data','licenses;licenses','--add-data','LICENSE;.',
     '--add-data','README.md;.','main.py')
 if (Test-Path 'tessdata') { $bundleArgs += @('--add-data','tessdata;tessdata') }

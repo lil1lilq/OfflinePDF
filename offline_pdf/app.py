@@ -19,6 +19,7 @@ import pymupdf as pdf
 from .engine import UserError, check_local_path, disable_network, open_pdf, split_ranges, worker
 from .images import IMAGE_EXTENSIONS, IMAGE_LABEL, IMAGE_PATTERN, EXPORT_FORMATS, open_image_document
 from . import __version__
+from .passwords import ask_password, cached_password, ensure_password, fingerprint
 from .windows_drop import NativeFileDrop
 from .ui import CARD_TEXT, POPULAR, PANEL, MUTED, RED, BLUE, icon
 
@@ -29,7 +30,8 @@ TOOLS = {
     'extract': ('페이지 정리', '페이지를 끌어 순서를 바꾸고, 선택한 페이지를 삭제·회전합니다.'),
     'delete': ('페이지 삭제', '입력한 페이지를 삭제합니다. 원본은 그대로 보관합니다.'),
     'rotate': ('페이지 회전', '선택한 페이지를 시계 방향으로 회전합니다.'),
-    'compress': ('용량 줄이기', '무손실 정리·압축입니다. 파일에 따라 용량이 늘 수도 있습니다.'),
+    'compress': ('용량 줄이기', '압축 수준에 따라 이미지 품질과 용량을 조절합니다.'),
+    'upscale': ('AI 업스케일', '스캔 이미지를 확대·보정합니다. 글자 모양이 달라질 수 있으니 결과를 확인하세요.'),
     'pdf_images': ('PDF → 이미지', '페이지를 선택한 이미지 형식으로 저장합니다. 기본 형식은 JPG입니다. 암호 보호는 이미지에 적용되지 않습니다.'),
     'images_pdf': ('이미지 → PDF', 'JPG·PNG·BMP·GIF·TIFF·WebP·HEIC 등의 이미지를 A4 PDF로 만듭니다.'),
     'protect': ('암호 설정', '파일을 열 때 필요한 암호를 AES-256 방식으로 설정합니다.'),
@@ -54,6 +56,7 @@ class App:
         self.result_files=();self.result_output=None;self.result_tool=None;self.pending_results=None
         self.preview_mode='width';self.preview_zoom=1.;self.organizer_preview_uid=None
         self.metadata_cache={};self.split_updating=False
+        self.password_cache={};self.result_passwords={};self.job_passwords={};self.preview_job=False;self.comparison_folder=None
         self.screen='home';self.preview_origin=None;self.chain_return_screen='work'
         from .layout import build
         build(self)
@@ -73,13 +76,13 @@ class App:
     def arrange_cards(self,width,force=False):
         width=max(160,width)
         columns=max(1,min(6,int(width/(195 if self.show_all_tools else 230))))
-        available=max(200,self.home.canvas.winfo_height()-165)
+        available=max(200,self.home.canvas.winfo_height()-170)
         keys=list(POPULAR)+[key for key in CARD_TEXT if key not in POPULAR] if self.show_all_tools else list(POPULAR)
         if self.show_all_tools:
             while columns<6 and ((len(keys)+columns-1)//columns)*66>available and width/(columns+1)>=170:
                 columns+=1
             rows=(len(keys)+columns-1)//columns
-            height=max(54,min(68,int(available/rows)-6))
+            height=max(46,min(68,int(available/rows)-6))
         else:height=142
         layout=(columns,height,self.show_all_tools)
         if layout==self.card_layout and not force:return
@@ -106,6 +109,7 @@ class App:
 
     def select_tool(self,key):
         if self.busy() or key not in TOOLS:return
+        self.close_ai_comparison()
         pending=self.pending_results
         if pending is not None:
             if key not in self.result_input_tools(pending):return
@@ -116,6 +120,8 @@ class App:
                 messagebox.showinfo('결과 파일 확인',str(exc),parent=self.root);return
             # Replace the inputs, never append results to the original sources.
             self.files=list(pending);self.regions={}
+            for path in pending:
+                if self.result_passwords.get(path):self.password_cache[path]=(fingerprint(path),self.result_passwords[path])
             self.save_mode.set('지정한 폴더');self.output.set(self.result_output)
             self.cancel_continue()
         previous=self.tool
@@ -138,9 +144,11 @@ class App:
     def update_back_state(self):
         enabled=not self.busy() and (self.screen!='home' or self.pending_results is not None)
         self.home_button.config(state='normal' if enabled else 'disabled')
+        self.task_title_row.pack_forget() if self.screen=='home' else self.task_title_row.pack(fill='x')
 
     def go_back(self):
         if self.busy():return
+        if self.screen=='comparison':self.close_ai_comparison();return
         if self.pending_results is not None:
             self.cancel_continue();self.home.pack_forget();self.work.pack(fill='both',expand=True)
             self.screen=self.chain_return_screen;self.update_back_state();return
@@ -236,8 +244,7 @@ class App:
             self.page_index=origin['page'];self.organizer_preview_uid=origin['organizer_uid']
             self.file_list.yview_moveto(origin['file_y'])
             if self.tool=='extract' and origin['organizer_path']:
-                password=self.options.get('input_password')
-                self.organizer.load(self.selected_file(),password.get() if password else '')
+                self.organizer.load(self.selected_file(),cached_password(self,self.selected_file()))
                 if self.organizer.path==origin['organizer_path'] and self.organizer.fingerprint==origin['organizer_fingerprint']:
                     self.organizer.model=origin['organizer_model']
         self.preview_panel.pack_forget();self.preview_button.config(text='크게 미리보기')
@@ -267,9 +274,8 @@ class App:
 
     def refresh_organizer(self):
         if self.tool!='extract':return
-        password=self.options.get('input_password')
         path=self.selected_file()
-        self.organizer.load(path if path and Path(path).suffix.lower()=='.pdf' else None,password.get() if password else '')
+        self.organizer.load(path if path and Path(path).suffix.lower()=='.pdf' else None,cached_password(self,path))
         if not self.preview_panel.winfo_manager():self.hide_preview()
         self.update_file_summary();self.organizer.update_summary()
 
@@ -277,8 +283,7 @@ class App:
         if self.busy():return
         dialog=tk.Toplevel(self.root);dialog.title('페이지 정리 · 파일·저장 설정');dialog.geometry('560x390');dialog.transient(self.root)
         body=ttk.Frame(dialog,padding=24);body.pack(fill='both',expand=True);body.columnconfigure(0,weight=1)
-        ttk.Label(body,text='입력 암호 (암호화된 PDF만)').grid(row=0,column=0,sticky='w')
-        ttk.Entry(body,textvariable=self.options['input_password'],show='●').grid(row=1,column=0,sticky='ew',pady=8)
+        ttk.Button(body,text='선택 문서 암호 입력',command=lambda:ensure_password(self,self.selected_file())).grid(row=0,column=0,sticky='w')
         ttk.Label(body,text='결과 저장 폴더').grid(row=2,column=0,sticky='w',pady=(10,0))
         entry=ttk.Entry(body,textvariable=self.output);entry.grid(row=3,column=0,sticky='ew',pady=8)
         entry.bind('<KeyRelease>',lambda e:self.save_mode.set('지정한 폴더'))
@@ -302,6 +307,11 @@ class App:
         cell=ttk.Frame(self.form,style='Panel.TFrame');self.form_cells.append((key,cell))
         ttk.Label(cell,text=label,style='Panel.TLabel').pack(anchor='w',pady=(0,3))
         controls=ttk.Frame(cell,style='Panel.TFrame');controls.pack(fill='x')
+        if key=='compression':
+            for i,choice in enumerate(choices):
+                controls.columnconfigure(i,weight=1)
+                ttk.Radiobutton(controls,text=choice,variable=var,value=choice,style='Compression.TRadiobutton').grid(row=0,column=i,sticky='ew',padx=(0,6),ipady=9)
+            return
         if choices:
             widget=ttk.Combobox(controls,textvariable=var,values=choices,state='readonly',width=12)
         else:
@@ -323,7 +333,7 @@ class App:
             cell.grid_forget()
             if self.tool=='split' and ((key=='pages' and n_split) or (key in ('split_count','split_starts') and not n_split)):continue
             visible.append(cell)
-        for i,cell in enumerate(visible):cell.grid(row=i//columns,column=i%columns,sticky='ew',padx=(0,10),pady=5)
+        for i,cell in enumerate(visible):cell.grid(row=i//columns,column=i%columns,columnspan=columns if self.tool=='compress' else 1,sticky='ew',padx=(0,10),pady=5)
 
     def update_split_preview(self,*_):
         if self.tool!='split' or self.split_updating:return
@@ -345,8 +355,7 @@ class App:
         path=self.selected_file()
         if not path or Path(path).suffix.lower()!='.pdf':return 0
         try:
-            password=self.options.get('input_password')
-            doc,_=open_pdf(path,password.get() if password else '')
+            doc,_=open_pdf(path,cached_password(self,path))
             try:return doc.page_count
             finally:doc.close()
         except (UserError,OSError):return 0
@@ -367,9 +376,8 @@ class App:
         else:self.name_frame.pack_forget()
         if self.tool=='redact':self.region_controls.pack(fill='x')
         else:self.region_controls.pack_forget()
-        if self.tool not in ('merge','images_pdf','unlock','protect','compress','clean','redact'):
+        if self.tool not in ('merge','images_pdf','unlock','protect','compress','clean','redact','upscale'):
             self.field('페이지', 'pages', '')
-        self.field('입력 암호','input_password',secret=True)
         if self.tool=='split':
             self.field('나누는 방식','split_mode','페이지별로 나누기',['페이지별로 나누기','N개 파일로 나누기'])
             self.field('만들 파일 수 N','split_count','2')
@@ -378,7 +386,16 @@ class App:
                 self.options[key].trace_add('write',self.update_split_preview)
             self.split_summary.pack(fill='x',pady=(7,0));self.update_split_preview()
         else:self.split_summary.pack_forget()
-        if self.tool in ('protect','merge','images_pdf'):self.field('새 암호','output_password',secret=True)
+        if self.tool=='protect':self.field('새 암호','output_password',secret=True)
+        elif self.tool in ('merge','images_pdf'):self.options['output_password']=tk.StringVar()
+        self.output_password_button.config(text='암호 추가')
+        self.ai_preview_button.pack_forget()
+        if self.tool=='compress':
+            self.field('압축 수준','compression','권장',['무손실','선명하게','권장','작게'])
+            self.options['compression'].trace_add('write',self.compression_note)
+        if self.tool=='upscale':
+            self.field('확대 배율 (배)','scale','2',['2','4'])
+            self.ai_preview_button.pack(side='left',padx=8)
         if self.tool=='rotate':self.field('시계 방향 각도','angle','90',['90','180','270'])
         if self.tool=='pdf_images':
             self.field('해상도 DPI','dpi','150',['72','100','150','200','300']);self.field('저장 형식','format','JPG',list(EXPORT_FORMATS))
@@ -398,10 +415,66 @@ class App:
         self.update_file_summary()
         self.arrange_fields()
         if self.tool=='split':self.update_split_preview()
+        if self.tool=='compress':self.compression_note()
+        if self.tool=='upscale':
+            self.security.config(text='CPU 처리 · 2배 권장 · 텍스트와 도형은 유지하며 스캔 이미지만 보정합니다.')
+            self.security.pack(anchor='w',pady=(8,0))
         self.update_region_status()
         self.hide_preview(restore=False)
         if self.tool=='extract':self.refresh_organizer();self.run_button.config(text='정리한 PDF 저장  →')
         elif self.tool=='redact':self.show_preview()
+
+    def compression_note(self,*_):
+        notes={'무손실':'화질을 유지하며 문서 데이터를 정리합니다. 용량이 줄지 않을 수도 있습니다.',
+               '선명하게':'이미지 300 DPI·품질 90 · 선명도를 우선합니다.',
+               '권장':'이미지 150 DPI·품질 75 · 가독성과 용량의 균형을 맞춥니다.',
+               '작게':'이미지 96 DPI·품질 50 · 작은 글자나 사진이 흐려질 수 있습니다.'}
+        self.security.config(text=notes.get(self.options['compression'].get(),''))
+        self.security.pack(anchor='w',pady=(8,0))
+
+    def set_output_password(self):
+        if self.busy():return
+        password=ask_password(self,output=True)
+        if password is not None:
+            self.options['output_password'].set(password)
+            self.output_password_button.config(text='암호 설정됨')
+
+    def show_ai_comparison(self,folder):
+        # Keep one back control. The comparison is another navigation level.
+        self.comparison_origin=self.screen;self.comparison_folder=folder
+        self.comparison_frame=ttk.Frame(self.document_host,padding=10)
+        for widget in self.document_host.winfo_children():widget.pack_forget()
+        self.columns.pack_forget()
+        self.comparison_frame.pack(fill='both',expand=True)
+        ttk.Label(self.comparison_frame,text='선택 문서의 첫 스캔 이미지 중앙 영역 · 실제 AI 보정 결과',style='Muted.TLabel').pack(anchor='w',pady=(0,8))
+        row=ttk.Frame(self.comparison_frame);row.pack(fill='both',expand=True)
+        row.columnconfigure((0,1),weight=1,uniform='comparison');row.rowconfigure(0,weight=1)
+        from PIL import Image,ImageTk
+        self.comparison_photos={};self.comparison_images=[]
+        for i,(caption,name) in enumerate([('원본 확대','before.png'),('AI 보정 후','after.png')]):
+            cell=ttk.Frame(row);cell.grid(row=0,column=i,sticky='nsew',padx=5)
+            ttk.Label(cell,text=caption,font=('맑은 고딕',11,'bold')).pack(anchor='w',pady=5)
+            with Image.open(Path(folder)/name) as image:
+                source=image.copy();self.comparison_images.append(source)
+            canvas=tk.Canvas(cell,width=100,height=120,bg=PANEL,highlightthickness=0);canvas.pack(fill='both',expand=True)
+            def draw(event,canvas=canvas,source=source):
+                picture=source.copy();picture.thumbnail((max(1,event.width-10),max(1,event.height-10)))
+                photo=ImageTk.PhotoImage(picture);picture.close();self.comparison_photos[canvas]=photo
+                canvas.delete('all');canvas.create_image(event.width/2,5,anchor='n',image=photo)
+            canvas.bind('<Configure>',draw)
+        self.screen='comparison';self.update_back_state()
+
+    def close_ai_comparison(self):
+        if not self.comparison_folder:return
+        self.comparison_frame.destroy();self.comparison_photos={}
+        for image in self.comparison_images:image.close()
+        self.comparison_images=[]
+        shutil.rmtree(self.comparison_folder,ignore_errors=True);self.comparison_folder=None
+        self.screen=self.comparison_origin
+        if self.screen=='preview':
+            self.preview_panel.pack(fill='both',expand=True,pady=(8,0));self.schedule_preview()
+        else:self.hide_preview(restore=False)
+        self.update_back_state()
 
     def add_files(self):
         if self.busy():return
@@ -450,13 +523,14 @@ class App:
                 continue
             known.add(key);self.files.append(str(candidate));added+=1
         if added:
+            for path in self.files[-added:]:ensure_password(self,path)
             self.sync_list();self.file_list.selection_clear(0,'end');self.file_list.selection_set(len(self.files)-added)
             self.feedback.file_added(range(len(self.files)-added,len(self.files)))
             self.update_file_summary()
             if not home:
                 if self.tool=='extract':self.refresh_organizer()
                 elif self.tool=='split':self.update_split_preview()
-                else:self.show_preview()
+                else:self.hide_preview(restore=False)
                 self.refresh_preview(reset=True)
         details=[f'{added}개 추가',f'전체 {len(self.files)}개']
         if duplicates:details.append(f'중복 {duplicates}개 제외')
@@ -465,6 +539,8 @@ class App:
         self.status.set(' · '.join(details))
 
     def sync_list(self,animate=False):
+        self.password_cache={p:v for p,v in self.password_cache.items() if p in self.files}
+        self.metadata_cache.clear()
         self.file_list.set_files(self.files,self.file_metadata,animate=animate)
         total=sum(Path(path).stat().st_size for path in self.files if Path(path).is_file())
         self.sidebar_total.set(f'{len(self.files)}개 파일 · {total/1024/1024:.1f} MB')
@@ -479,7 +555,11 @@ class App:
             stat=Path(path).stat();key=(path,stat.st_size,stat.st_mtime_ns)
             if key not in self.metadata_cache:
                 if Path(path).suffix.lower()=='.pdf':
-                    with pdf.open(path) as doc:label='암호화 PDF' if doc.needs_pass else f'{doc.page_count}쪽'
+                    with pdf.open(path) as doc:
+                        if doc.needs_pass:
+                            password=cached_password(self,path)
+                            label=f'{doc.page_count}쪽 · 열림' if password and doc.authenticate(password) else '잠김 · 클릭하여 암호 입력'
+                        else:label=f'{doc.page_count}쪽'
                 else:
                     from PIL import Image
                     with Image.open(path) as image:label=f'{image.width}×{image.height} · {getattr(image,"n_frames",1)}장'
@@ -494,6 +574,9 @@ class App:
 
     def file_selected(self,event=None):
         if self.busy() or self.pending_results is not None:return
+        self.close_ai_comparison()
+        ensure_password(self,self.selected_file());self.metadata_cache.clear()
+        if not self.file_list.motion_timer:self.file_list.set_files(self.files,self.file_metadata)
         if self.tool=='extract':self.refresh_organizer()
         if self.tool=='split':self.update_split_preview()
         self.update_file_summary();self.refresh_preview(reset=True)
@@ -556,7 +639,7 @@ class App:
             self.page_label.config(text='미리보기');return
         try:
             check_local_path(path)
-            pw=self.options.get('input_password');password=pw.get() if pw else ''
+            password=cached_password(self,path)
             if Path(path).suffix.lower()=='.pdf':doc,_=open_pdf(path,password,extraction=True)
             else:doc=open_image_document(path)
             try:
@@ -578,11 +661,11 @@ class App:
                             self.overview_canvas.configure(scrollregion=(0,0,ow,((len(ranges)+cols-1)//cols)*80))
                         except UserError:pass
                     else:
-                        scale=min((ow-30)/page.rect.width,(oh-15)/page.rect.height)
+                        scale=min((ow-30)/page.rect.width,math.sqrt(12_000_000/(page.rect.width*page.rect.height)))
                         thumb=page.get_pixmap(matrix=pdf.Matrix(max(.05,scale)),alpha=False,colorspace=pdf.csRGB)
                         self.overview_photo=tk.PhotoImage(data=base64.b64encode(thumb.tobytes('png')))
                         self.overview_canvas.create_image(ow/2,5,anchor='n',image=self.overview_photo)
-                        self.overview_canvas.configure(scrollregion=(0,0,ow,oh))
+                        self.overview_canvas.configure(scrollregion=(0,0,ow,thumb.height+15))
                 rw,rh=(page.rect.height,page.rect.width) if angle%180 else (page.rect.width,page.rect.height)
                 w=max(self.canvas.winfo_width()-24,150);h=max(100,self.canvas.winfo_height()-24)
                 fit=min(w/rw,h/rh) if self.preview_mode=='page' else w/rw
@@ -602,7 +685,7 @@ class App:
                         self.canvas.create_rectangle(*[12+c*self.preview_scale for c in coords],outline='#d32f2f',width=2,stipple='gray50',fill='#d32f2f')
             finally:doc.close()
         except Exception:
-            self.canvas.create_text(15,25,anchor='nw',width=320,text='미리보기를 열 수 없습니다.\n입력 암호와 파일 형식을 확인하세요.')
+            self.canvas.create_text(15,25,anchor='nw',width=320,text='미리보기를 열 수 없습니다.\n잠긴 파일은 왼쪽 목록에서 클릭해 암호를 입력하세요.')
         self.update_region_status()
 
     def preview_wheel(self,event):
@@ -649,12 +732,14 @@ class App:
         path=filedialog.askdirectory(parent=self.root,title='승인된 로컬 저장 폴더를 선택하세요')
         if path:self.output.set(path);self.save_mode.set('지정한 폴더')
 
-    def run(self):
+    def run(self,preview=False):
         if self.busy():return
         if not self.files:messagebox.showinfo('파일 추가','처리할 파일을 먼저 추가하세요.',parent=self.root);return
-        active_files=[self.selected_file()] if self.tool in ('extract','split') else list(self.files)
+        active_files=[self.selected_file()] if preview or self.tool in ('extract','split') else list(self.files)
         if not all(path and self.accepted_path(path) for path in active_files):
             messagebox.showinfo('파일 형식','이 도구에서 지원하지 않는 파일을 목록에서 제거하거나 다른 도구를 선택하세요.',parent=self.root);return
+        for path in active_files:
+            if not ensure_password(self,path):return
         if self.tool=='extract':
             if not self.organizer.doc or not self.organizer.matches(self.selected_file()):
                 self.refresh_organizer();messagebox.showinfo('페이지 확인','페이지를 불러온 후 순서를 확인하고 다시 실행하세요.',parent=self.root);return
@@ -680,13 +765,26 @@ class App:
         try:
             for path in active_files:
                 if Path(path).suffix.lower()=='.pdf':
-                    src,_=open_pdf(path,self.options['input_password'].get(),extraction=self.tool in ('text','pdf_images','ocr'))
+                    src,_=open_pdf(path,cached_password(self,path),extraction=self.tool in ('text','pdf_images','ocr'))
                     try:signed=src.get_sigflags()>0
                     finally:src.close()
                     if signed and not messagebox.askokcancel('전자서명 문서','수정하면 기존 전자서명 검증 상태가 달라질 수 있습니다. 원본은 보존됩니다. 계속하시겠습니까?',parent=self.root):return
         except UserError as exc:messagebox.showerror('파일 확인',str(exc),parent=self.root);return
         job={'tool':self.tool,'files':active_files,'output':self.output.get(),'options':{k:v.get() for k,v in self.options.items() if k!='hint'}}
+        job['passwords']={p:cached_password(self,p) for p in active_files}
         if self.tool in ('merge','images_pdf'):job['options']['output_name']=self.output_name.get()
+        if self.tool=='merge' and len({p for p in job['passwords'].values() if p})>1 and not job['options'].get('output_password'):
+            password=ask_password(self,output=True,explanation='서로 다른 암호의 문서를 합칩니다. 결과 PDF에 사용할 새 암호를 설정하세요.')
+            if password is None:return
+            job['options']['output_password']=password
+        if preview:job['options']['preview_only']=True
+        self.preview_job=preview
+        self.job_passwords={}
+        if not preview and self.tool not in ('unlock','text','pdf_images'):
+            for i,path in enumerate(active_files):
+                self.job_passwords[f'{i+1:03d}_']=job['options'].get('output_password') or job['passwords'].get(path,'')
+            if self.tool in ('merge','images_pdf'):
+                self.job_passwords={'all':job['options'].get('output_password') or next((v for v in job['passwords'].values() if v),'')}
         if self.tool=='extract':job['options']['page_plan']=self.organizer.model.plan()
         if self.tool=='redact':job['options']['regions']=self.regions.get(self.files[0],{})
         if self.tool=='ocr':job['options']['language']={'한국어 + 영어':'kor+eng','한국어':'kor','영어':'eng'}.get(job['options']['language'],job['options']['language'])
@@ -698,11 +796,13 @@ class App:
         except Exception:
             self.process=None;self.cleanup_stage();self.events.close();self.events=None
             messagebox.showerror('실행 오류','작업 프로세스를 실행할 수 없습니다. 백신·실행 권한·배포파일 구성을 확인하세요.',parent=self.root);return
-        self.result_files=();self.result_folder=None;self.result_output=job['output'];self.result_tool=self.tool
+        if not preview:
+            self.result_files=();self.result_folder=None;self.result_output=job['output'];self.result_tool=self.tool
         self.next_button.config(state='disabled')
         # Remove secrets from visible controls after the child has its own copy.
         for key in ('input_password','output_password'):
             if key in self.options:self.options[key].set('')
+        self.output_password_button.config(text='암호 추가')
         self.run_button.config(state='disabled');self.cancel_button.config(state='normal');self.open_button.config(state='disabled')
         self.home_button.config(state='disabled');self.save_mode_combo.config(state='disabled')
         self.status.set('처리 중입니다. 원본 파일은 변경하지 않습니다.');self.progress['value']=0
@@ -741,8 +841,13 @@ class App:
                     elif kind=='progress':
                         self.progress['value']=100*event['current']/max(1,event['total']);self.status.set(event['label'])
                     elif kind=='done':
-                        self.finish('완료했습니다. 결과를 확인하거나 “결과로 다음 작업”을 선택하세요.');self.remember_result(event['folder']);self.progress['value']=100;self.open_button.config(state='normal')
-                        if self.auto_open.get():self.open_result()
+                        preview=self.preview_job
+                        self.finish('미리보기 준비 완료' if preview else '완료했습니다. 결과를 확인하거나 “결과로 다음 작업”을 선택하세요.')
+                        if preview:self.show_ai_comparison(event['folder'])
+                        else:
+                            self.remember_result(event['folder']);self.progress['value']=100;self.open_button.config(state='normal')
+                            self.result_passwords={p:self.job_passwords.get('all',next((v for k,v in self.job_passwords.items() if Path(p).name.startswith(k)),'')) for p in self.result_files}
+                            if self.auto_open.get():self.open_result()
                         break
                     elif kind=='cancelled':self.finish('작업을 취소했습니다. 원본은 그대로 보관됩니다.');break
                     elif kind=='error':
@@ -772,6 +877,7 @@ class App:
             self.cancel.set();self.process.join(timeout=.5)
             if self.process.is_alive():self.process.terminate();self.process.join(timeout=2)
             self.cleanup_stage()
+        self.close_ai_comparison()
         if self.file_drop:self.file_drop.close()
         self.feedback.close();self.file_list.close();self.window_drop_hover.close()
         if self.card_resize_timer:self.root.after_cancel(self.card_resize_timer)
@@ -779,6 +885,7 @@ class App:
         if self.preview_timer:
             try:self.root.after_cancel(self.preview_timer)
             except tk.TclError:pass
+        self.password_cache.clear();self.result_passwords.clear();self.job_passwords.clear()
         self.root.destroy()
 
     def help(self):

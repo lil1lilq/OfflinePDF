@@ -9,6 +9,10 @@ PyMuPDF의 오픈소스 라이선스에 맞춰 프로그램의 대응 소스와 
 | PyMuPDF 1.26.6 및 포함 MuPDF | PDF 렌더링·처리 | AGPL-3.0 계열 오픈소스 경로 사용, Pro·상용 키 없음 |
 | Pillow 13.0.0 | 이미지 읽기·쓰기·회전 정보 처리 | MIT-CMU 및 포함 이미지 라이브러리 고지 |
 | pillow-heif 1.8.1 | HEIC·HEIF 읽기 | BSD-3-Clause. 바이너리에 포함된 libheif·libde265·x265 등의 별도 라이선스도 적용 |
+| NumPy 2.2.6 | AI 이미지 배열 처리 | BSD-3-Clause 및 OpenBLAS 등 포함 구성요소 고지 |
+| ONNX Runtime 1.24.2 CPU | 오프라인 AI 추론 | MIT 및 ThirdPartyNotices |
+| Real-ESRGAN realesr-general-x4v3 | AI 업스케일 가중치 | BSD-3-Clause, 원본 고지는 models/Real-ESRGAN-LICENSE.txt |
+| ONNX 1.17.0 | 모델 변환·검사 전용 | Apache-2.0, 사용자 실행파일에는 제외 |
 | Python 3.12 | 실행 환경 | PSF 및 포함 구성요소 고지 |
 | Tcl/Tk | 한글 데스크톱 화면 | Tcl/Tk 고지 및 조건 |
 | PyInstaller 6.16.0 | 실행파일 패키징 | GPL 계열과 bootloader 예외, 일부 Apache-2.0 |
@@ -17,6 +21,8 @@ PyMuPDF의 오픈소스 라이선스에 맞춰 프로그램의 대응 소스와 
 
 OCR은 PyMuPDF 빌드에 포함된 OCR 지원과 로컬 tessdata를 사용합니다.
 별도 Tesseract 실행파일을 실행하거나 다운로드하지 않습니다.
+AI 가중치 원본은 models/source에, 변환된 ONNX와 SHA256은 models에 포함합니다.
+런타임 의존성인 flatbuffers·protobuf·sympy·mpmath·packaging의 고지도 licenses에 함께 수집합니다.
 한국어·영어 모델과 Apache-2.0 고지를 tessdata에 포함했으며 원본 커밋·해시는 models.json에 있습니다.
 
 이미지 변환에는 오픈소스 Pillow와 pillow-heif를 사용합니다. HEIC는 PyMuPDF의 Pro 기능을 사용하지 않습니다.

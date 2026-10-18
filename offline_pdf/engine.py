@@ -195,7 +195,9 @@ def _process(job, paths, stage, emit, cancel):
     tool = job['tool']; opt = job.get('options', {})
     if tool=='extract' and 'page_plan' in opt and len(paths)!=1:
         raise UserError('페이지 정리는 PDF 파일 하나씩 처리하세요.')
-    password = opt.get('input_password', '')
+    passwords = job.get('passwords', {})
+    def password_for(path):
+        return passwords.get(str(path), opt.get('input_password', ''))
     output_password = opt.get('output_password', '')
     if tool == 'protect' and not output_password:
         raise UserError('설정할 새 암호를 입력하세요.')
@@ -209,14 +211,17 @@ def _process(job, paths, stage, emit, cancel):
             raise UserError('저장 파일 이름을 확인하세요. 경로·특수문자·Windows 예약 이름은 사용할 수 없습니다.')
         result = pdf.open()
         encrypted_any = False
+        inherited_passwords = set()
         try:
             for i, path in enumerate(paths):
                 _tick(emit, cancel, i, len(paths), f'{i+1}/{len(paths)} 파일 처리')
                 if tool == 'merge':
+                    password = password_for(path)
                     src, enc = open_pdf(path, password)
                     try:
                         result.insert_pdf(src)
                         encrypted_any |= enc
+                        if enc:inherited_passwords.add(password)
                     finally:
                         src.close()
                 else:
@@ -233,13 +238,16 @@ def _process(job, paths, stage, emit, cancel):
                         raise UserError(str(exc)) from None
                     except Exception:
                         raise UserError('이미지를 변환하지 못했습니다. 파일 손상 여부와 메모리 여유를 확인하세요.') from None
+            if len(inherited_passwords)>1 and not output_password:
+                raise UserError('서로 다른 암호의 PDF를 합치려면 결과에 사용할 새 암호를 설정하세요.')
             save_pdf(result, stage / name,
-                     output_password or (password if encrypted_any else ''))
+                     output_password or (next(iter(inherited_passwords)) if encrypted_any else ''))
         finally:
             result.close()
         return
     for file_index, path in enumerate(paths):
         check_cancel(cancel)
+        password = password_for(path)
         extraction = tool in ('pdf_images', 'text', 'ocr')
         doc, encrypted = open_pdf(path, password, extraction=extraction)
         try:
@@ -302,6 +310,24 @@ def _process(job, paths, stage, emit, cancel):
                         raise UserError('페이지가 너무 큽니다. 해상도를 낮추세요.')
                     pix = page.get_pixmap(dpi=dpi, colorspace=pdf.csRGB, alpha=False)
                     save_pixmap(pix, stage / f'{prefix}_{n+1:04d}.{fmt}', fmt)
+            elif tool == 'compress':
+                level = opt.get('compression', '권장')
+                presets = {'선명하게': (300, 90), '권장': (150, 75), '작게': (96, 50)}
+                if level != '무손실':
+                    if level not in presets:raise UserError('압축 수준을 다시 선택하세요.')
+                    dpi, quality = presets[level]
+                    _tick(emit, cancel, file_index, len(paths), '이미지 압축 중')
+                    doc.rewrite_images(dpi_threshold=int(dpi*1.2), dpi_target=dpi, quality=quality, bitonal=False)
+                    check_cancel(cancel)
+                save_pdf(doc, target, store_password)
+            elif tool == 'upscale':
+                from .enhance import enhance_pdf, comparison
+                if opt.get('preview_only'):
+                    if len(paths)!=1:raise UserError('미리보기는 PDF 하나씩 선택하세요.')
+                    comparison(doc, stage, opt, emit, cancel)
+                else:
+                    enhance_pdf(doc, opt, emit, cancel)
+                    save_pdf(doc, target, store_password)
             elif tool == 'text':
                 with (stage / f'{prefix}.txt').open('w', encoding='utf-8-sig') as output:
                     for n in selected:
