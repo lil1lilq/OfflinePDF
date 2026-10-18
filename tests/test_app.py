@@ -116,7 +116,8 @@ class AppTests(unittest.TestCase):
         with patch.object(self.app,'busy',return_value=True):
             self.app.show_home();self.app.select_tool('merge')
         self.assertEqual(self.app.tool,'redact');self.assertTrue(self.app.work.winfo_ismapped())
-        self.app.back_button.invoke();self.root.update();self.assertTrue(self.app.home.winfo_ismapped())
+        self.app.home_button.invoke();self.root.update();self.assertTrue(self.app.work.winfo_ismapped())
+        self.app.home_button.invoke();self.root.update();self.assertTrue(self.app.home.winfo_ismapped())
         self.app.all_tools_button.invoke();self.root.update()
         self.assertEqual(sum(card.winfo_ismapped() for card in self.app.cards.values()),6)
 
@@ -132,14 +133,14 @@ class AppTests(unittest.TestCase):
         self.app.output_name.set('최종 합친문서.pdf');self.app.auto_open.set(True)
         with patch.object(self.app,'open_result') as opened,patch('offline_pdf.app.messagebox.showerror',side_effect=AssertionError('Unexpected UI error')):
             self.app.run();deadline=time.monotonic()+20
-            self.assertEqual(str(self.app.back_button.cget('state')),'disabled')
+            self.assertEqual(str(self.app.home_button.cget('state')),'disabled')
             while self.app.process is not None and time.monotonic()<deadline:
                 self.root.update();time.sleep(.02)
             self.assertIsNone(self.app.process)
             opened.assert_called_once()
         self.app.auto_open.set(False)
         self.assertTrue((Path(self.app.result_folder)/'최종 합친문서.pdf').is_file())
-        self.assertEqual(str(self.app.back_button.cget('state')),'normal')
+        self.assertEqual(str(self.app.home_button.cget('state')),'normal')
 
     def test_l_responsive_card_grid_and_scrolling(self):
         self.app.show_home()
@@ -332,9 +333,9 @@ class AppTests(unittest.TestCase):
         self.app.drop_icon.event_generate('<Motion>',warp=True,x=15,y=15);self.pump(.3)
         self.assertTrue(self.app.drop_hover.active)
         self.assertGreater(self.app.drop_hover.tween.value,.9)
-        self.app.back_button.event_generate('<Motion>',warp=True,x=5,y=5);self.pump(.3)
+        self.app.title.event_generate('<Motion>',warp=True,x=5,y=5);self.pump(.3)
         self.assertFalse(self.app.drop_hover.active)
-        self.assertGreaterEqual(self.app.back_button.winfo_height(),40)
+        self.assertGreaterEqual(self.app.home_button.winfo_height(),40)
         # The shared sidebar remains a drop target with or without loaded files.
         for loaded in (False,True):
             if loaded:self.app.add_paths([str(self.source)])
@@ -343,7 +344,7 @@ class AppTests(unittest.TestCase):
             self.assertTrue(hover.sidebar_active)
             self.assertGreater(hover.sidebar_tween.value,.9)
             self.assertIn('여기에 놓아',self.app.add_button.cget('text'))
-            self.app.back_button.event_generate('<Motion>',warp=True,x=5,y=5);self.pump(.3)
+            self.app.title.event_generate('<Motion>',warp=True,x=5,y=5);self.pump(.3)
             self.assertFalse(hover.sidebar_active)
             self.assertLess(hover.sidebar_tween.value,.1)
         with patch.object(self.app,'busy',return_value=True):
@@ -421,8 +422,7 @@ class AppTests(unittest.TestCase):
             self.assertEqual(self.app.file_list.motion_kind,'remove')
             clock.value+=1;self.pump(.04);self.assertFalse(self.app.file_list.motion_rows)
         self.assertTrue(all(Path(path).is_file() for path in paths))
-        for button in (self.app.home_button,self.app.back_button,self.app.preview_back_button):
-            self.assertEqual(button.cget('text'),'뒤로가기')
+        self.assertEqual(self.app.home_button.cget('text'),'뒤로가기')
         style=tk.ttk.Style(self.root)
         self.assertEqual(int(style.lookup('TButton','borderwidth')),1)
 
@@ -458,6 +458,46 @@ class AppTests(unittest.TestCase):
         self.assertIsNotNone(self.app.preview_rect)
         for extension in EXPORT_FORMATS:
             self.assertEqual(self.app.result_input_tools([Path('result.'+extension.lower())]),{'images_pdf'})
+
+    def test_za_single_sidebar_back_restores_each_screen_and_organizer_scroll(self):
+        self.app.cancel_continue();self.app.show_home();self.app.clear_files();self.root.update()
+        self.assertEqual(str(self.app.home_button.cget('state')),'disabled')
+        self.app.select_tool('merge');self.app.add_paths([str(self.source)]);self.pump(.15)
+        self.assertEqual(self.app.screen,'preview')
+        self.app.home_button.invoke();self.root.update()
+        self.assertEqual(self.app.screen,'work');self.assertTrue(self.app.columns.winfo_ismapped())
+        self.app.home_button.invoke();self.root.update()
+        self.assertEqual(self.app.screen,'home');self.assertTrue(self.app.home.winfo_ismapped())
+        self.assertEqual(str(self.app.home_button.cget('state')),'disabled')
+        source=self.folder/'뒤로가기 페이지.pdf'
+        with pdf.open() as doc:
+            for i in range(24):doc.new_page().insert_text((50,80),str(i+1))
+            doc.save(source)
+        self.app.select_tool('extract');self.app.clear_files();self.app.add_paths([str(source)]);self.pump(.1)
+        o=self.app.organizer;o.model.selected={18};o.scroll_to('moveto',.5);self.pump(.1)
+        order=o.model.plan();position=o.canvas.yview()[0]
+        o.enlarge();self.pump(.1);self.app.turn(1)
+        self.app.home_button.invoke();self.pump(.1)
+        self.assertEqual(self.app.screen,'work');self.assertTrue(o.winfo_ismapped())
+        self.assertEqual(o.model.plan(),order);self.assertEqual(o.model.selected,{18})
+        self.assertAlmostEqual(o.canvas.yview()[0],position,places=2)
+        buttons=[]
+        def visit(widget):
+            for child in widget.winfo_children():
+                if isinstance(child,tk.ttk.Button) and child.cget('text')=='뒤로가기':buttons.append(child)
+                visit(child)
+        visit(self.root)
+        self.assertEqual(buttons,[self.app.home_button])
+        self.app.home_button.invoke();self.root.update();self.assertEqual(self.app.screen,'home')
+        self.app.select_tool('merge');self.app.clear_files();self.app.add_paths([str(self.source)])
+        self.app.save_mode.set('지정한 폴더');self.app.output.set(str(self.folder));self.app.auto_open.set(False)
+        self.app.run();self.wait_for_job();self.assertEqual(self.app.screen,'preview')
+        self.app.continue_with_result();self.root.update();self.assertIsNotNone(self.app.pending_results)
+        self.app.home_button.invoke();self.root.update()
+        self.assertIsNone(self.app.pending_results);self.assertEqual(self.app.screen,'preview')
+        self.assertTrue(self.app.work.winfo_ismapped())
+        self.app.home_button.invoke();self.root.update();self.assertEqual(self.app.screen,'work')
+        self.app.home_button.invoke();self.root.update();self.assertEqual(self.app.screen,'home')
 
     @unittest.skipUnless(os.name=='nt','Windows Shell integration test')
     def test_h_native_windows_drop_message(self):

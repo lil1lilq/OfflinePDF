@@ -1,10 +1,10 @@
 #define AppName "오프라인 PDF 업무도구"
-#define AppVersion "1.2"
+#define AppVersion "0.8"
 [Setup]
 AppId={{9DC9CDFB-9463-416E-B5AB-E5E49805C3A7}
 AppName={#AppName}
 AppVersion={#AppVersion}
-VersionInfoVersion=1.2.0.0
+VersionInfoVersion=0.8.0.0
 DefaultDirName={localappdata}\Programs\OfflinePDF
 DefaultGroupName={#AppName}
 PrivilegesRequired=lowest

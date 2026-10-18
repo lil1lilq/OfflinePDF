@@ -48,8 +48,8 @@ Inno Setup이 없으면 포터블 ZIP만 생성합니다. Windows 실행파일�
 | `release/OfflinePDF-Windows-x64-portable.zip` | 압축 실행형 |
 | `release/SHA256SUMS.txt` | 배포 파일의 SHA256 검증값 |
 
-실행파일의 이름은 유지하고 제품 버전 정보에 1.2를 기록합니다.
-Windows의 숫자 버전 정보는 1.2.0.0을 사용합니다. 코드서명 인증서는 포함하지 않습니다.
+실행파일의 이름은 유지하고 제품 버전 정보에 0.8를 기록합니다.
+Windows의 숫자 버전 정보는 0.8.0.0을 사용합니다. 코드서명 인증서는 포함하지 않습니다.
 
 ## GitHub Actions
 

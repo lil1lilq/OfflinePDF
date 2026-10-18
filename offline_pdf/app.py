@@ -54,6 +54,7 @@ class App:
         self.result_files=();self.result_output=None;self.result_tool=None;self.pending_results=None
         self.preview_mode='width';self.preview_zoom=1.;self.organizer_preview_uid=None
         self.metadata_cache={};self.split_updating=False
+        self.screen='home';self.preview_origin=None;self.chain_return_screen='work'
         from .layout import build
         build(self)
         self.file_drop=None
@@ -65,6 +66,7 @@ class App:
             self.drop_title.config(text='파일 추가 버튼으로 파일을 선택하세요')
         root.protocol('WM_DELETE_WINDOW',self.close)
         self.configure_form();root.after(150,self.poll)
+        self.update_back_state()
 
     def busy(self):return self.process is not None
 
@@ -118,6 +120,7 @@ class App:
             self.cancel_continue()
         previous=self.tool
         self.tool=key
+        self.preview_origin=None;self.screen='work'
         if previous!=key:self.organizer.close_document();self.organizer_preview_uid=None
         if previous!=key:self.regions={}
         self.home.pack_forget();self.work.pack(fill='both',expand=True)
@@ -130,6 +133,27 @@ class App:
         if self.busy():return
         self.cancel_continue()
         self.work.pack_forget();self.home.pack(fill='both',expand=True);self.schedule_cards()
+        self.screen='home';self.update_back_state()
+
+    def update_back_state(self):
+        enabled=not self.busy() and (self.screen!='home' or self.pending_results is not None)
+        self.home_button.config(state='normal' if enabled else 'disabled')
+
+    def go_back(self):
+        if self.busy():return
+        if self.pending_results is not None:
+            self.cancel_continue();self.home.pack_forget();self.work.pack(fill='both',expand=True)
+            self.screen=self.chain_return_screen;self.update_back_state();return
+        if self.screen=='preview':self.hide_preview()
+        elif self.screen=='work':self.show_home()
+
+    def capture_preview_origin(self):
+        organizer=self.organizer
+        return {'selected_paths':[self.files[i] for i in self.file_list.curselection() if i<len(self.files)],
+                'file_y':self.file_list.yview()[0], 'page':self.page_index,
+                'organizer_uid':self.organizer_preview_uid,'organizer_y':organizer.canvas.yview()[0],
+                'organizer_model':organizer.model,'organizer_path':organizer.path,
+                'organizer_fingerprint':organizer.fingerprint,'overview_y':self.overview_canvas.yview()[0]}
 
     @staticmethod
     def result_input_tools(paths):
@@ -147,12 +171,14 @@ class App:
         self.chain_cancel_button.pack_forget()
         for card in self.cards.values():card.set_enabled(True)
         if had_pending:self.sync_list()
+        self.update_back_state()
 
     def continue_with_result(self):
         if self.busy() or not self.result_files:return
         allowed=self.result_input_tools(self.result_files)
         if not allowed:
             messagebox.showinfo('다음 작업','이 결과 형식으로 이어서 할 수 있는 작업이 없습니다.',parent=self.root);return
+        self.chain_return_screen=self.screen
         self.show_home();self.pending_results=tuple(self.result_files)
         self.home_title.config(text='다음 작업을 선택하세요')
         title=CARD_TEXT[self.result_tool][0] if self.result_tool else '이전 작업'
@@ -166,6 +192,7 @@ class App:
         # Image results have just one compatible tool; reveal it immediately.
         if 'images_pdf' in allowed and not self.show_all_tools:self.toggle_tools()
         self.home.canvas.yview_moveto(0)
+        self.update_back_state()
 
     def remember_result(self,folder):
         self.result_folder=folder
@@ -190,12 +217,29 @@ class App:
         else:self.show_preview()
 
     def show_preview(self):
+        if self.screen!='preview':self.preview_origin=self.capture_preview_origin()
         self.preview_mode='width';self.preview_zoom=1.;self.canvas.xview_moveto(0)
         self.columns.pack_forget();self.organizer.pack_forget();self.drop_area.pack_forget();self.file_overview.pack_forget()
         self.preview_panel.pack(fill='both',expand=True,pady=(8,0));self.preview_button.config(text='미리보기 접기')
         self.schedule_preview()
+        if self.work.winfo_manager():self.screen='preview'
+        self.update_back_state()
 
-    def hide_preview(self):
+    def hide_preview(self,restore=True):
+        origin=self.preview_origin if restore else None
+        self.preview_origin=None
+        if origin:
+            self.file_list.selection_clear(0,'end')
+            for i,path in enumerate(self.files):
+                if path in origin['selected_paths']:self.file_list.selection_set(i)
+            if self.files and not self.file_list.curselection():self.file_list.selection_set(0)
+            self.page_index=origin['page'];self.organizer_preview_uid=origin['organizer_uid']
+            self.file_list.yview_moveto(origin['file_y'])
+            if self.tool=='extract' and origin['organizer_path']:
+                password=self.options.get('input_password')
+                self.organizer.load(self.selected_file(),password.get() if password else '')
+                if self.organizer.path==origin['organizer_path'] and self.organizer.fingerprint==origin['organizer_fingerprint']:
+                    self.organizer.model=origin['organizer_model']
         self.preview_panel.pack_forget();self.preview_button.config(text='크게 미리보기')
         self.organizer.pack_forget();self.drop_area.pack_forget();self.file_overview.pack_forget()
         self.columns.pack_forget()
@@ -208,6 +252,12 @@ class App:
                 self.file_overview.pack(fill='both',expand=True)
                 self.overview_title.config(text=Path(self.selected_file()).name if self.selected_file() else '')
                 self.overview_detail.config(text=f'{len(self.files)}개 파일이 준비되었습니다. 왼쪽 목록에서 순서와 선택 항목을 확인하세요.')
+        if self.work.winfo_manager():self.screen='work'
+        if origin:
+            self.overview_canvas.yview_moveto(origin['overview_y'])
+            if self.tool=='extract':self.root.after_idle(lambda:self.organizer.scroll_to('moveto',origin['organizer_y']))
+            self.schedule_preview()
+        self.update_back_state()
 
     def set_preview_mode(self,mode):
         self.preview_mode=mode;self.preview_zoom=1.;self.canvas.xview_moveto(0);self.refresh_preview()
@@ -349,7 +399,7 @@ class App:
         self.arrange_fields()
         if self.tool=='split':self.update_split_preview()
         self.update_region_status()
-        self.hide_preview()
+        self.hide_preview(restore=False)
         if self.tool=='extract':self.refresh_organizer();self.run_button.config(text='정리한 PDF 저장  →')
         elif self.tool=='redact':self.show_preview()
 
@@ -654,7 +704,7 @@ class App:
         for key in ('input_password','output_password'):
             if key in self.options:self.options[key].set('')
         self.run_button.config(state='disabled');self.cancel_button.config(state='normal');self.open_button.config(state='disabled')
-        self.back_button.config(state='disabled');self.save_mode_combo.config(state='disabled')
+        self.home_button.config(state='disabled');self.save_mode_combo.config(state='disabled')
         self.status.set('처리 중입니다. 원본 파일은 변경하지 않습니다.');self.progress['value']=0
         self.update_activity()
 
@@ -678,7 +728,7 @@ class App:
         self.process=None;self.cancel_at=None;clean=self.cleanup_stage()
         if self.events:self.events.close();self.events=None
         self.update_file_summary();self.cancel_button.config(state='disabled')
-        self.back_button.config(state='normal');self.save_mode_combo.config(state='readonly')
+        self.update_back_state();self.save_mode_combo.config(state='readonly')
         self.status.set(message if clean else message+' 임시자료가 남았습니다. 저장 폴더의 .offline-pdf- 폴더를 확인하세요.')
         self.update_activity()
 
