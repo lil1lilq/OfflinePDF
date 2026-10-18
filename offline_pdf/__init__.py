@@ -1,2 +1,3 @@
 """Offline PDF desktop tools. Licensed under AGPL-3.0-or-later."""
-__version__ = '0.8.1'
+
+__version__ = "0.8.2"

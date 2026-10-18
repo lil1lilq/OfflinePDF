@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="216" height="30" viewBox="0 0 216 30" role="img" aria-label="개인정보 삭제 불가">
+<svg xmlns="http://www.w3.org/2000/svg" width="260" height="30" viewBox="0 0 260 30" role="img" aria-label="선택 영역만 영구 삭제">
   <style>text{fill:#c62828}@media(prefers-color-scheme:dark){text{fill:#ff8a80}}</style>
-  <text x="0" y="22" font-family="Malgun Gothic,Apple SD Gothic Neo,sans-serif" font-size="18" font-weight="700">개인정보 삭제 불가</text>
+  <text x="0" y="22" font-family="Malgun Gothic,Apple SD Gothic Neo,sans-serif" font-size="18" font-weight="700">선택 영역만 영구 삭제</text>
 </svg>

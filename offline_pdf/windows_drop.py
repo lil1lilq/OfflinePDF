@@ -3,6 +3,7 @@
 SPDX-License-Identifier: AGPL-3.0-or-later
 No OLE plug-in, external binary, package download, or network is required.
 """
+
 from __future__ import annotations
 
 import ctypes
@@ -42,17 +43,17 @@ class NativeFileDrop:
         self._closing = False
         self._pending = deque()
         self._timer_id = None
-        if sys.platform != 'win32':
+        if sys.platform != "win32":
             return
 
         from ctypes import wintypes as w
-        self._user = ctypes.WinDLL('user32', use_last_error=True)
-        self._shell = ctypes.WinDLL('shell32', use_last_error=True)
-        self._comctl = ctypes.WinDLL('comctl32', use_last_error=True)
+
+        self._user = ctypes.WinDLL("user32", use_last_error=True)
+        self._shell = ctypes.WinDLL("shell32", use_last_error=True)
+        self._comctl = ctypes.WinDLL("comctl32", use_last_error=True)
         ptr = ctypes.c_size_t
         result = ctypes.c_ssize_t
-        proc_type = ctypes.WINFUNCTYPE(result, w.HWND, w.UINT, ptr,
-                                      ctypes.c_ssize_t, ptr, ptr)
+        proc_type = ctypes.WINFUNCTYPE(result, w.HWND, w.UINT, ptr, ctypes.c_ssize_t, ptr, ptr)
         self._callback = proc_type(self._window_proc)
         self._subclass_id = id(self)
 
@@ -79,9 +80,8 @@ class NativeFileDrop:
             for hwnd in targets:
                 if not hwnd:
                     continue
-                if not self._comctl.SetWindowSubclass(hwnd, self._callback,
-                                                      self._subclass_id, 0):
-                    raise OSError('Cannot register file-drop window procedure')
+                if not self._comctl.SetWindowSubclass(hwnd, self._callback, self._subclass_id, 0):
+                    raise OSError("Cannot register file-drop window procedure")
                 self.handles.add(hwnd)
                 self._shell.DragAcceptFiles(hwnd, True)
             self.enabled = bool(self.handles)

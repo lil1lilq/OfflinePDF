@@ -49,8 +49,8 @@ Inno Setup이 없으면 포터블 ZIP만 생성합니다. Windows 실행파일�
 | `release/OfflinePDF-Windows-x64-portable.zip` | 압축 실행형 |
 | `release/SHA256SUMS.txt` | 배포 파일의 SHA256 검증값 |
 
-실행파일의 이름은 유지하고 제품 버전 정보에 0.8.1을 기록합니다.
-Windows의 숫자 버전 정보는 0.8.1.0을 사용합니다. 코드서명 인증서는 포함하지 않습니다.
+실행파일의 이름은 유지하고 제품 버전 정보에 0.8.2를 기록합니다.
+Windows의 숫자 버전 정보는 0.8.2.0을 사용합니다. 코드서명 인증서는 포함하지 않습니다.
 
 ## GitHub Actions
 
@@ -99,3 +99,54 @@ python packaging/prepare_ai_model.py --convert
 자동 검사는 NumPy로 독립 계산한 결과와 실제 모델 추론의 일치, 타일 경계, 2배·4배 크기, 텍스트 보존, 비교 미리보기와 취소를 확인합니다.
 ONNX는 변환·검사용 빌드 의존성이며 사용자 실행파일에서는 제외합니다. 런타임에는 ONNX Runtime CPU와 NumPy를 포함합니다.
 AI 텔레메트리는 세션 생성 전에 비활성화하고, 모델은 로컬 동봉 파일만 읽습니다.
+
+## 코드 구조와 형식 검사
+
+App은 세션 상태와 초기화·종료를 관리합니다. GUI 동작은 다음 모듈로 구분합니다.
+
+| 모듈 | 담당 |
+| --- | --- |
+| controllers/files.py | 파일 추가·선택·암호·변환된 입력 반영 |
+| controllers/navigation.py | 도구 선택·뒤로가기·후속 작업 |
+| controllers/forms.py | 도구별 입력·설정 |
+| controllers/preview.py | 문서·페이지 정리·AI 비교 화면 |
+| controllers/jobs.py | 자식 프로세스·진행률·취소·결과 |
+| engine.py | PDF 처리와 이미지 자동 변환 트랜잭션 |
+| diagnostics.py | 합성 문서 기반 배포본 점검·명시적 네이티브 통신 대조 실험 |
+
+Ruff 0.14.0으로 import·오류·미사용 코드 검사와 포맷을 통일합니다. 빌드에서도 두 검사를 실행합니다.
+
+```powershell
+python -m ruff check offline_pdf packaging tests main.py
+python -m ruff format --check offline_pdf packaging tests main.py
+```
+
+## Windows 배포본·네트워크 검증
+
+GitHub Actions는 빌드 후 packaging/verify_windows_build.ps1을 실행합니다.
+이 절차는 관리자 권한의 격리된 Windows 시험 환경에서 수행하며 일반 사용자 실행에는 필요하지 않습니다.
+설치형 검사는 실제로 임시 폴더에 설치하고, 검사 후 제거하므로 개발 중인 일반 PC보다 시험 VM을 사용하세요.
+
+1. 포터블 실행파일의 명시적 --network-probe 대조 실험으로 외부 TCP 연결이 가능한지 확인합니다.
+2. 실행파일별 아웃바운드 차단 규칙을 추가합니다. Python socket 패치 대신 Winsock 네이티브 호출로 TCP 연결을 재시도하고, Windows 보안 감사의 5157 차단 이벤트까지 확인합니다.
+3. 대조 실험 이후 별도 감사 구간에서 --self-test를 실행합니다. 한글 경로, 혼합 입력 변환, 자식 프로세스, 압축, AI, HEIC, OCR, Tk 화면 이동을 합성 자료로 검사합니다.
+4. 해당 실행파일과 같은 경로의 자식 프로세스에 대한 연결 허용·차단 이벤트(5156·5157)가 없는지 확인합니다.
+5. 설치형도 임시 한글 경로에 설치한 뒤 같은 절차를 실행합니다. 검증 규칙·감사 정책·방화벽 프로필 상태는 종료 시 복원합니다.
+
+기본 TCP 대조 대상은 1.1.1.1:443이며 연결 성립만 검사하고 PDF·파일·HTTP 요청을 보내지 않습니다.
+이 연결은 개발용 --network-probe 명령에서만 발생합니다. 일반 실행·--self-test는 네트워크를 요청하지 않습니다.
+대조 연결이나 보안 감사가 불가능하면 통과로 처리하지 않고 검증 실패로 보고합니다.
+
+```powershell
+# 관리자 권한의 시험 Windows에서 빌드 후 실행
+powershell -NoProfile -ExecutionPolicy Bypass -File packaging/verify_windows_build.ps1
+```
+
+관리자 권한 없이 실행파일 자체 검사만 할 때는 -SkipFirewall을 명시합니다. 이는 네트워크 검증 통과를 의미하지 않으며 GitHub Actions에서는 사용하지 않습니다.
+보고서는 release/validation과 Actions의 OfflinePDF-validation 아티팩트에 있습니다.
+이번 검사는 합성 입력과 지정한 실행파일의 연결 이벤트에 한정됩니다. 모든 입력·모든 실행 상황의 무통신이나 외부 DLL의 완전한 격리를 증명하지 않습니다.
+Windows 방화벽·보안 감사 검증은 Linux에서 대체할 수 없으며, 실제 결과는 Windows 실행 보고서로 확인해야 합니다.
+
+공식 명령 설명:
+- https://learn.microsoft.com/powershell/module/netsecurity/new-netfirewallrule
+- https://learn.microsoft.com/windows/security/threat-protection/auditing/event-5157

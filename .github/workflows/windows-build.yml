@@ -31,6 +31,16 @@ jobs:
           @('release/OfflinePDF-Setup-Windows-x64.exe','release/OfflinePDF-Windows-x64-portable.zip','release/SHA256SUMS.txt') | ForEach-Object {
             if (!(Test-Path $_)) { throw "Missing artifact: $_" }
           }
+      - name: Verify executable, installer and offline firewall behavior
+        shell: pwsh
+        run: ./packaging/verify_windows_build.ps1
+      - name: Upload validation reports even on failure
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: OfflinePDF-validation
+          path: release/validation/
+          if-no-files-found: ignore
       - name: Upload installer and portable bundle
         uses: actions/upload-artifact@v7
         with:

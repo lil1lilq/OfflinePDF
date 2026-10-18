@@ -14,6 +14,8 @@ if ($Offline) {
     Invoke-Checked $Python @('-m','pip','install','-r','requirements-build.txt')
 }
 Invoke-Checked $Python @('packaging/prepare_ai_model.py')
+Invoke-Checked $Python @('-m','ruff','check','offline_pdf','packaging','tests','main.py')
+Invoke-Checked $Python @('-m','ruff','format','--check','offline_pdf','packaging','tests','main.py')
 Invoke-Checked $Python @('-m','unittest','discover','-s','tests','-v')
 Invoke-Checked $Python @('packaging/collect_licenses.py')
 if ($Offline) { Invoke-Checked $Python @('packaging/prepare_dependency_sources.py','--offline') }
@@ -50,7 +52,7 @@ if ($isccPath) {
 } else {
     Write-Host 'Portable build completed. Install Inno Setup 6 and run ISCC.exe packaging/installer.iss for the installer.'
 }
-Get-ChildItem 'release' -File | ForEach-Object {
+Get-ChildItem 'release' -File | Where-Object Name -ne 'SHA256SUMS.txt' | ForEach-Object {
     $hash = Get-FileHash $_.FullName -Algorithm SHA256
     "$($hash.Hash)  $($_.Name)"
 } | Set-Content -Encoding utf8 'release/SHA256SUMS.txt'
