@@ -335,6 +335,20 @@ class AppTests(unittest.TestCase):
         self.app.back_button.event_generate('<Motion>',warp=True,x=5,y=5);self.pump(.3)
         self.assertFalse(self.app.drop_hover.active)
         self.assertGreaterEqual(self.app.back_button.winfo_height(),40)
+        # The shared sidebar remains a drop target with or without loaded files.
+        for loaded in (False,True):
+            if loaded:self.app.add_paths([str(self.source)])
+            self.app.file_list.event_generate('<Motion>',warp=True,x=15,y=15);self.pump(.3)
+            hover=self.app.window_drop_hover
+            self.assertTrue(hover.sidebar_active)
+            self.assertGreater(hover.sidebar_tween.value,.9)
+            self.assertIn('여기에 놓아',self.app.add_button.cget('text'))
+            self.app.back_button.event_generate('<Motion>',warp=True,x=5,y=5);self.pump(.3)
+            self.assertFalse(hover.sidebar_active)
+            self.assertLess(hover.sidebar_tween.value,.1)
+        with patch.object(self.app,'busy',return_value=True):
+            self.app.file_list.event_generate('<Motion>',warp=True,x=15,y=15);self.pump(.3)
+            self.assertFalse(self.app.window_drop_hover.sidebar_active)
 
     def test_v_encrypted_organizer_settings_and_source_replacement(self):
         source=self.folder/'암호 페이지.pdf'
@@ -377,6 +391,40 @@ class AppTests(unittest.TestCase):
         self.assertEqual(lengths,[4,3,3]);self.root.update()
         self.assertFalse(self.app.progress.winfo_ismapped());self.assertTrue(self.app.result_actions.winfo_ismapped())
         self.root.geometry('1180x850')
+
+    def test_x_file_removal_fade_reorder_and_back_button_labels(self):
+        self.app.cancel_continue();self.app.show_home();self.app.clear_files();self.pump(.3)
+        second=self.folder/'두번째 애니메이션.pdf';second.write_bytes(self.source.read_bytes())
+        third=self.folder/'세번째 애니메이션.pdf';third.write_bytes(self.source.read_bytes())
+        paths=[str(self.source.resolve()),str(second.resolve()),str(third.resolve())]
+        self.app.add_paths(paths);self.app.file_list.selection_clear(0,'end');self.app.file_list.selection_set(0)
+        clock=SimpleNamespace(value=100.)
+        # Sample animation frames at fixed times even on a slow Windows runner.
+        with patch.object(self.app.file_list,'motion_clock',lambda:clock.value):
+            self.app.move(1)
+            self.assertEqual(self.app.files,[paths[1],paths[0],paths[2]])
+            self.assertEqual(self.app.file_list.motion_kind,'move')
+            clock.value+=.08;self.pump(.04);y=self.app.file_list.positions[paths[0]][0]
+            self.assertGreater(y,0);self.assertLess(y,self.app.file_list.row_height)
+            clock.value+=1;self.pump(.04);self.assertIsNone(self.app.file_list.motion_kind)
+            self.app.move(-1);self.app.move(1)
+            clock.value+=1;self.pump(.04)
+            self.assertEqual(self.app.files,[paths[1],paths[0],paths[2]])
+            self.app.remove_files()
+            self.assertEqual(self.app.files,[paths[1],paths[2]])
+            self.assertEqual(self.app.file_list.motion_kind,'remove')
+            clock.value+=.04;self.pump(.04)
+            self.assertGreater(self.app.file_list.positions[paths[0]][1],0)
+            self.assertLess(self.app.file_list.positions[paths[0]][1],1)
+            clock.value+=1;self.pump(.04);self.assertNotIn(paths[0],self.app.file_list.positions)
+            self.app.clear_files();self.assertEqual(self.app.files,[])
+            self.assertEqual(self.app.file_list.motion_kind,'remove')
+            clock.value+=1;self.pump(.04);self.assertFalse(self.app.file_list.motion_rows)
+        self.assertTrue(all(Path(path).is_file() for path in paths))
+        for button in (self.app.home_button,self.app.back_button,self.app.preview_back_button):
+            self.assertEqual(button.cget('text'),'뒤로가기')
+        style=tk.ttk.Style(self.root)
+        self.assertEqual(int(style.lookup('TButton','borderwidth')),1)
 
     def test_y_all_forms_keep_controls_and_actions_inside_small_window(self):
         self.app.cancel_continue();self.root.geometry('900x650');self.app.clear_files()

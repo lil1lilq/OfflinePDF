@@ -414,8 +414,8 @@ class App:
         if blocked:details.append(f'접근 불가·동기화·네트워크 경로 {blocked}개 제외')
         self.status.set(' · '.join(details))
 
-    def sync_list(self):
-        self.file_list.set_files(self.files,self.file_metadata)
+    def sync_list(self,animate=False):
+        self.file_list.set_files(self.files,self.file_metadata,animate=animate)
         total=sum(Path(path).stat().st_size for path in self.files if Path(path).is_file())
         self.sidebar_total.set(f'{len(self.files)}개 파일 · {total/1024/1024:.1f} MB')
         self.update_file_summary()
@@ -464,12 +464,16 @@ class App:
 
     def remove_files(self):
         if self.busy() or self.pending_results is not None:return
-        for i in reversed(self.file_list.curselection()):self.files.pop(i)
-        self.regions={};self.sync_list();self.refresh_preview(reset=True)
+        selected=self.file_list.curselection()
+        if not selected:self.status.set('제거할 파일을 선택하세요.');return
+        for i in reversed(selected):self.files.pop(i)
+        self.regions={};self.sync_list(animate=True);self.refresh_preview(reset=True)
+        self.status.set(f'{len(selected)}개 파일을 목록에서 제거했습니다. · 남은 파일 {len(self.files)}개')
 
     def clear_files(self):
         if self.busy() or self.pending_results is not None:return
-        self.files=[];self.regions={};self.sync_list();self.refresh_preview(reset=True)
+        self.files=[];self.regions={};self.sync_list(animate=True);self.refresh_preview(reset=True)
+        self.status.set('파일 목록을 모두 비웠습니다.')
 
     def move(self,delta):
         if self.busy() or self.pending_results is not None:return
@@ -477,7 +481,8 @@ class App:
         if len(sel)!=1:return
         i=sel[0];j=i+delta
         if 0<=j<len(self.files):
-            self.files[i],self.files[j]=self.files[j],self.files[i];self.sync_list();self.file_list.selection_clear(0,'end');self.file_list.selection_set(j);self.file_selected()
+            self.files[i],self.files[j]=self.files[j],self.files[i];self.sync_list(animate=True);self.file_list.selection_clear(0,'end');self.file_list.selection_set(j);self.file_selected()
+            self.status.set(f'파일을 {"위로" if delta<0 else "아래로"} 이동했습니다. · {Path(self.files[j]).name}')
 
     def selected_file(self):
         sel=self.file_list.curselection()
