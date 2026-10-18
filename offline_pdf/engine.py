@@ -10,6 +10,8 @@ from datetime import datetime
 from pathlib import Path
 
 import pymupdf as pdf
+from .images import EXPORT_FORMATS, ImageReadError, iter_frames, png_bytes, save_pixmap
+from .ocr import OCRSetupError, model_directory
 
 
 class UserError(Exception):
@@ -83,6 +85,28 @@ def number(value, low, high, label, integer=False):
     if not low <= n <= high:
         raise UserError(f'{label}은 {low}~{high} 범위로 입력하세요.')
     return n
+
+
+def split_ranges(total, count, boundaries):
+    """Boundary pages are one-based starts of the following output file."""
+    try:
+        if isinstance(count, bool): raise ValueError()
+        count = int(str(count))
+        if isinstance(boundaries, str):
+            boundaries = [int(v.strip()) for v in boundaries.split(',')]
+        elif isinstance(boundaries, (list, tuple)):
+            if any(type(v) is not int for v in boundaries): raise ValueError()
+        else: raise ValueError()
+    except (TypeError, ValueError):
+        raise UserError('파일 수와 시작 쪽을 정수로 입력하세요. 시작 쪽 예: 5,8') from None
+    if not 2 <= count <= total:
+        raise UserError(f'파일 수는 2~{total} 사이로 입력하세요.')
+    if (len(boundaries) != count - 1 or any(not 2 <= n <= total for n in boundaries)
+            or any(a >= b for a, b in zip(boundaries, boundaries[1:]))):
+        raise UserError(f'다음 파일의 시작 쪽 {count-1}개를 2~{total} 범위의 오름차순으로 입력하세요.')
+    starts = [1] + list(boundaries)
+    return [(start - 1, (starts[i+1] - 2) if i+1 < count else total - 1)
+            for i, start in enumerate(starts)]
 
 
 def open_pdf(path, password='', *, extraction=False):
@@ -197,23 +221,18 @@ def _process(job, paths, stage, emit, cancel):
                         src.close()
                 else:
                     try:
-                        image = pdf.open(path)
-                        try:
-                            if image.is_pdf or image.page_count != 1:
-                                raise UserError('JPG 또는 PNG 이미지를 선택하세요.')
-                            data = image.convert_to_pdf()
-                        finally:
-                            image.close()
-                        with pdf.open('pdf', data) as src:
-                            rect = src[0].rect
+                        for frame in iter_frames(path, lambda: check_cancel(cancel)):
                             landscape = opt.get('orientation') == '가로'
                             w, h = (842, 595) if landscape else (595, 842)
                             page = result.new_page(width=w, height=h)
-                            page.show_pdf_page(pdf.Rect(20, 20, w-20, h-20), src, 0)
-                    except UserError:
+                            page.insert_image(pdf.Rect(20, 20, w-20, h-20),
+                                              stream=png_bytes(frame), keep_proportion=True)
+                    except (UserError, Cancelled):
                         raise
+                    except ImageReadError as exc:
+                        raise UserError(str(exc)) from None
                     except Exception:
-                        raise UserError('이미지를 읽지 못했습니다. JPG·PNG 파일인지 확인하세요.') from None
+                        raise UserError('이미지를 변환하지 못했습니다. 파일 손상 여부와 메모리 여유를 확인하세요.') from None
             save_pdf(result, stage / name,
                      output_password or (password if encrypted_any else ''))
         finally:
@@ -226,18 +245,28 @@ def _process(job, paths, stage, emit, cancel):
         try:
             prefix = f'{file_index+1:03d}_{safe_stem(path)}'
             target = stage / (prefix + '_' + tool + '.pdf')
-            selected = pages(opt.get('pages', ''), doc.page_count, duplicates=(tool == 'extract'))
+            selected = (list(range(doc.page_count)) if tool=='split' and opt.get('split_mode')=='N개 파일로 나누기'
+                        else pages(opt.get('pages', ''), doc.page_count, duplicates=(tool == 'extract')))
             store_password = output_password or (password if encrypted else '')
             if tool == 'unlock':
                 if encrypted and not doc.authenticate(password) & 4:
                     raise UserError('암호 해제에는 소유자 암호가 필요합니다.')
                 save_pdf(doc, target)
             elif tool == 'split':
-                for n in selected:
-                    _tick(emit, cancel, n, doc.page_count, f'페이지 {n+1} 분할')
+                mode = opt.get('split_mode', '페이지별로 나누기')
+                if mode == 'N개 파일로 나누기':
+                    ranges = split_ranges(doc.page_count, opt.get('split_count', '2'), opt.get('split_starts', ''))
+                elif mode == '페이지별로 나누기':
+                    ranges = [(n, n) for n in selected]
+                else:
+                    raise UserError('나누기 방식을 다시 선택하세요.')
+                for index, (first, last) in enumerate(ranges):
+                    _tick(emit, cancel, index, len(ranges), f'{index+1}/{len(ranges)} 파일 분할')
                     with pdf.open() as dst:
-                        dst.insert_pdf(doc, from_page=n, to_page=n)
-                        save_pdf(dst, stage / f'{prefix}_{n+1:04d}.pdf', store_password)
+                        dst.insert_pdf(doc, from_page=first, to_page=last)
+                        name=(f'{prefix}_{first+1:04d}.pdf' if mode=='페이지별로 나누기'
+                              else f'{prefix}_{index+1:04d}_{first+1}-{last+1}.pdf')
+                        save_pdf(dst, stage / name, store_password)
             elif tool in ('extract', 'delete'):
                 if tool=='extract' and 'page_plan' in opt:
                     plan=opt['page_plan']
@@ -262,16 +291,17 @@ def _process(job, paths, stage, emit, cancel):
                 save_pdf(doc, target, store_password)
             elif tool == 'pdf_images':
                 dpi = number(opt.get('dpi', '150'), 72, 300, '해상도', integer=True)
-                fmt = opt.get('format', 'PNG').lower()
-                if fmt not in ('png', 'jpg'):
-                    raise UserError('PNG 또는 JPG 형식을 선택하세요.')
+                fmt = str(opt.get('format', 'JPG')).lower()
+                fmt = {'jpeg':'jpg', 'tif':'tiff'}.get(fmt, fmt)
+                if fmt.upper() not in EXPORT_FORMATS:
+                    raise UserError('JPG·PNG·BMP·GIF·TIFF·WebP 중 저장 형식을 선택하세요.')
                 for n in selected:
                     _tick(emit, cancel, n, doc.page_count, f'페이지 {n+1} 이미지 저장')
                     page = doc[n]
                     if page.rect.width * page.rect.height * (dpi/72)**2 > 60_000_000:
                         raise UserError('페이지가 너무 큽니다. 해상도를 낮추세요.')
                     pix = page.get_pixmap(dpi=dpi, colorspace=pdf.csRGB, alpha=False)
-                    pix.save(stage / f'{prefix}_{n+1:04d}.{fmt}')
+                    save_pixmap(pix, stage / f'{prefix}_{n+1:04d}.{fmt}', fmt)
             elif tool == 'text':
                 with (stage / f'{prefix}.txt').open('w', encoding='utf-8-sig') as output:
                     for n in selected:
@@ -280,22 +310,28 @@ def _process(job, paths, stage, emit, cancel):
             elif tool == 'ocr':
                 tessdata = Path(opt.get('tessdata', ''))
                 language = opt.get('language', 'kor+eng')
-                if not str(opt.get('tessdata', '')).strip() or not tessdata.is_dir():
+                if not str(opt.get('tessdata', '')).strip():
                     raise UserError('오프라인 OCR 언어자료 폴더를 선택하세요.')
-                for lang in language.split('+'):
-                    if lang not in ('kor','eng') or not (tessdata / (lang+'.traineddata')).is_file():
-                        raise UserError('선택한 언어의 traineddata 파일이 없습니다.')
-                with pdf.open() as dst:
-                    for n in selected:
-                        _tick(emit, cancel, n, doc.page_count, f'페이지 {n+1} OCR')
-                        page=doc[n]
-                        if page.rect.width*page.rect.height*(200/72)**2 > 40_000_000:
-                            raise UserError('OCR 페이지가 너무 큽니다.')
-                        pix=page.get_pixmap(dpi=200, colorspace=pdf.csRGB, alpha=False)
-                        data=pix.pdfocr_tobytes(language=language, tessdata=str(tessdata))
-                        with pdf.open('pdf',data) as one:
-                            dst.insert_pdf(one)
-                    save_pdf(dst,target,store_password)
+                try:
+                    with model_directory(tessdata, language) as model_path, pdf.open() as dst:
+                        for n in selected:
+                            _tick(emit, cancel, n, doc.page_count, f'페이지 {n+1} OCR')
+                            page=doc[n]
+                            if page.rect.width*page.rect.height*(200/72)**2 > 40_000_000:
+                                raise UserError('OCR 페이지가 너무 큽니다.')
+                            try:
+                                pix=page.get_pixmap(dpi=200, colorspace=pdf.csRGB, alpha=False)
+                                data=pix.pdfocr_tobytes(language=language, tessdata=model_path)
+                            except Exception as exc:
+                                detail=str(exc).lower()
+                                if any(word in detail for word in ('tesseract', 'tessdata', 'ocr initial', 'no ocr')):
+                                    raise UserError('OCR 엔진 또는 언어자료를 불러오지 못했습니다. 배포본을 다시 압축 해제하거나 언어자료 폴더를 확인하세요.') from None
+                                raise UserError(f'{n+1}쪽의 OCR 처리에 실패했습니다. 해당 페이지를 확인하거나 다른 문서로 다시 시도하세요.') from None
+                            with pdf.open('pdf',data) as one:
+                                dst.insert_pdf(one)
+                        save_pdf(dst,target,store_password)
+                except OCRSetupError as exc:
+                    raise UserError(str(exc)) from None
             else:
                 for index, n in enumerate(selected):
                     _tick(emit, cancel, index, len(selected), f'{file_index+1}/{len(paths)} 파일 · {n+1}쪽')

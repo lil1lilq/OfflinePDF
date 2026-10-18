@@ -14,10 +14,10 @@ BLUE = '#285de5'
 SOFT = '#edf2ff'
 FONT = '맑은 고딕'
 
-POPULAR = ('merge', 'split', 'extract', 'compress', 'pdf_images', 'redact')
+POPULAR = ('merge', 'split', 'extract', 'compress', 'ocr', 'pdf_images')
 CARD_TEXT = {
     'merge': ('PDF 합치기', '여러 PDF를 하나로 합칩니다'),
-    'split': ('PDF 나누기', '각 페이지를 별도 파일로 저장합니다'),
+    'split': ('PDF 나누기', '페이지별 또는 N개 파일로 나눕니다'),
     'extract': ('페이지 정리', '필요한 페이지를 고르고 순서를 바꿉니다'),
     'compress': ('용량 줄이기', 'PDF 파일 크기를 줄입니다'),
     'pdf_images': ('PDF → 이미지', '페이지를 이미지 파일로 저장합니다'),
@@ -83,7 +83,7 @@ class ScrollPane(ttk.Frame):
         super().__init__(master, **kwargs)
         self.canvas=tk.Canvas(self,bg=BG,highlightthickness=0)
         self.bar=ttk.Scrollbar(self,orient='vertical',command=self.canvas.yview)
-        self.canvas.configure(yscrollcommand=self.bar.set)
+        self.canvas.configure(yscrollcommand=self._scroll_state)
         self.bar.pack(side='right',fill='y');self.canvas.pack(side='left',fill='both',expand=True)
         self.inner=ttk.Frame(self.canvas)
         self.window=self.canvas.create_window(0,0,window=self.inner,anchor='nw')
@@ -100,6 +100,10 @@ class ScrollPane(ttk.Frame):
                 self.winfo_toplevel().unbind(sequence,binding)
 
     def _content_size(self,event=None):self.canvas.configure(scrollregion=self.canvas.bbox('all'))
+    def _scroll_state(self,first,last):
+        self.bar.set(first,last)
+        if float(first)<=0 and float(last)>=1:self.bar.pack_forget()
+        elif not self.bar.winfo_manager():self.bar.pack(side='right',fill='y',before=self.canvas)
     def _viewport_size(self,event):self.canvas.itemconfigure(self.window,width=event.width)
     def _wheel(self,event):
         if not self.winfo_ismapped():return
@@ -116,6 +120,7 @@ class ToolCard(tk.Canvas):
     def __init__(self, master, key, command):
         super().__init__(master,height=168,width=220,bg=BG,highlightthickness=0,takefocus=True)
         self.key=key;self.command=command;self.active=False;self.enabled=True;self.hover_amount=0
+        self.compact=False
         from .effects import Tween
         self.tween=Tween(self,self.animate)
         self.bind('<Destroy>',lambda e:self.tween.close() if e.widget is self else None,add='+')
@@ -128,6 +133,9 @@ class ToolCard(tk.Canvas):
     def activate(self):
         if self.enabled:self.command(self.key)
 
+    def set_compact(self,compact,height):
+        self.compact=compact;self.configure(height=height,width=170 if compact else 220);self.paint()
+
     def set_enabled(self,enabled):
         self.enabled=enabled;self.configure(takefocus=enabled);self.paint()
 
@@ -135,11 +143,20 @@ class ToolCard(tk.Canvas):
     def animate(self,value):self.hover_amount=value;self.paint()
     def paint(self):
         self.delete('all');w=self.winfo_width();h=self.winfo_height();r=13
-        points=[r,1,w-r,1,w-1,1,w-1,r,w-1,h-r,w-1,h-1,w-r,h-1,r,h-1,1,h-1,1,h-r,1,r,1,1]
+        ph=h-5
+        points=[r,1,w-r,1,w-1,1,w-1,r,w-1,ph-r,w-1,ph-1,w-r,ph-1,r,ph-1,1,ph-1,1,ph-r,1,r,1,1]
         from .effects import mix
         lift=round(3*self.hover_amount) if self.enabled else 0
         points=[v+4-lift if i%2 else v for i,v in enumerate(points)]
         self.create_polygon(points,smooth=True,fill=PANEL if self.enabled else BG,outline=mix(LINE,BLUE,self.hover_amount) if self.enabled else LINE,width=1.5)
+        if self.compact:
+            y=h/2
+            self.create_rectangle(10,y-16,42,y+16,fill=SOFT,outline=SOFT)
+            icon(self,self.key,14,y-12,BLUE if self.enabled else MUTED)
+            title,description=CARD_TEXT[self.key]
+            self.create_text(52,y-9 if self.key=='redact' else y,anchor='w',text=title,font=(FONT,10,'bold'),fill=INK if self.enabled else MUTED,width=max(75,w-62))
+            if self.key=='redact':self.create_text(52,y+11,anchor='w',text='개인정보 삭제 불가',font=(FONT,8),fill=RED,width=max(75,w-60))
+            return
         self.create_rectangle(20,20,60,60,fill=SOFT,outline=SOFT)
         icon(self,self.key,28,28,BLUE if self.enabled else MUTED)
         self.create_line(w-33,31,w-23,21,w-23,29,fill=MUTED,width=1.5)
@@ -160,8 +177,8 @@ def setup_style(root):
     style.configure('Panel.TLabel',background=PANEL)
     style.configure('Muted.TLabel',foreground=MUTED)
     style.configure('PanelMuted.TLabel',background=PANEL,foreground=MUTED,font=(FONT,9))
-    style.configure('Title.TLabel',font=(FONT,23,'bold'))
-    style.configure('Task.TLabel',font=(FONT,20,'bold'))
+    style.configure('Title.TLabel',font=(FONT,20,'bold'))
+    style.configure('Task.TLabel',font=(FONT,16,'bold'))
     style.configure('Section.TLabel',font=(FONT,10,'bold'),background=PANEL)
     style.configure('TButton',padding=(12,8),background=PANEL,bordercolor=LINE,lightcolor=LINE,darkcolor=LINE,relief='flat')
     style.map('TButton',background=[('active',SOFT)],foreground=[('disabled',MUTED)])

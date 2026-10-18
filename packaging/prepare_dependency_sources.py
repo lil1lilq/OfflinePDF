@@ -35,15 +35,27 @@ def main():
     if args.offline:
         if not manifest.is_file():raise SystemExit('Run prepare_dependency_sources.py on an online preparation PC first.')
         data=json.loads(manifest.read_text(encoding='utf-8'))
+        required={'pillow-13.0.0.tar.gz','pillow_heif-1.8.1.tar.gz',
+                  'libheif-1.23.6-source.tar.gz','libde265-1.1.3-source.tar.gz',
+                  'x265-e9b8812-source.tar.gz'}
+        if not required <= {record['filename'] for record in data}:
+            raise SystemExit('Image dependency sources are missing. Prepare dependency sources online again.')
         for record in data:
             path=out/record['filename']
             if not path.is_file() or digest(path)!=record['sha256']:raise SystemExit('Missing or altered source archive: '+record['filename'])
         return
-    with urllib.request.urlopen('https://pypi.org/pypi/PyMuPDF/1.26.6/json',timeout=30) as response:
-        release=json.load(response)
-    source=next(item for item in release['urls'] if item['packagetype']=='sdist')
-    records=[{'filename':source['filename'],'url':source['url'],'sha256':source['digests']['sha256']},
-             {'filename':'mupdf-1.26.11-source.tar.gz','url':'https://mupdf.com/downloads/archive/mupdf-1.26.11-source.tar.gz'}]
+    records=[]
+    for package, version in [('PyMuPDF','1.26.6'),('Pillow','13.0.0'),('pillow-heif','1.8.1')]:
+        with urllib.request.urlopen(f'https://pypi.org/pypi/{package}/{version}/json',timeout=30) as response:
+            release=json.load(response)
+        source=next(item for item in release['urls'] if item['packagetype']=='sdist')
+        records.append({'filename':source['filename'],'url':source['url'],'sha256':source['digests']['sha256']})
+    records += [
+        {'filename':'mupdf-1.26.11-source.tar.gz','url':'https://mupdf.com/downloads/archive/mupdf-1.26.11-source.tar.gz'},
+        {'filename':'libheif-1.23.6-source.tar.gz','url':'https://github.com/strukturag/libheif/archive/refs/tags/v1.23.6.tar.gz'},
+        {'filename':'libde265-1.1.3-source.tar.gz','url':'https://github.com/strukturag/libde265/archive/refs/tags/v1.1.3.tar.gz'},
+        {'filename':'x265-e9b8812-source.tar.gz','url':'https://github.com/Multicorewareinc/x265/archive/e9b8812.tar.gz'},
+    ]
     for record in records:
         path=out/record['filename']
         if not path.is_file():download(record['url'],path)

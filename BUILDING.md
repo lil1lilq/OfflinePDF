@@ -4,7 +4,7 @@
 
 - Windows 10·11, x64
 - Python 3.12, x64
-- PyMuPDF 및 PyInstaller: requirements 파일에 고정한 버전
+- PyMuPDF·Pillow·pillow-heif 및 PyInstaller: requirements 파일에 고정한 버전
 - 설치파일 생성: Inno Setup 6.x
 
 ## 소스 실행
@@ -25,6 +25,10 @@ py -3.12 -m venv .venv
 
 GUI 검사는 데스크톱 환경이 필요합니다. 탐색기 파일 드롭 통합 검사는 Windows에서 실행합니다.
 변경 사항과 검증 내역은 [CHANGELOG.md](CHANGELOG.md)에서 확인할 수 있습니다.
+
+이미지 검사는 지원 형식의 실제 인코딩·디코딩, PDF 변환, 미리보기용 문서, 다중 프레임 순서, 사진 회전, 투명 배경, 원본 보존과 실패 시 결과 취소를 확인합니다.
+HEIC 처리는 pillow-heif를 사용하며, 사용자 PC에서 별도 Windows 코덱을 요구하지 않습니다.
+Windows 빌드에는 `packaging/hooks/hook-pillow_heif.py`가 배포 휠의 코덱 DLL을 포함합니다. 이 파일도 함께 유지하세요.
 
 ## Windows 실행파일 생성
 
@@ -74,6 +78,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File packaging\build_windows.ps1 
 
 `tessdata`의 한국어·영어 모델을 빌드 시 포함하며, 프로그램 실행 중 다운로드하지 않습니다.
 모델 출처·SHA256은 `tessdata/models.json`, 고지는 `tessdata/LICENSE`에서 확인할 수 있습니다.
+Windows의 한글 언어자료 경로는 `GetShortPathNameW`로 ASCII 축약 경로를 얻습니다. 축약 경로가 없으면 로컬 임시 경로·환경변수 경로 중 쓰기 가능한 영문 경로에 언어자료만 복사합니다.
+오류나 정상 종료 시 해당 임시 디렉터리를 정리하며 문서는 이곳에 복사하지 않습니다. 모든 후보 경로는 기존 로컬 경로 정책을 적용합니다.
 
 실행파일에는 애플리케이션의 `CorrespondingSource.zip`과 제3자 라이브러리의 `dependency-sources`를 함께 포함합니다.
 [LICENSE](LICENSE), [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), `licenses`의 고지를 유지해야 합니다.

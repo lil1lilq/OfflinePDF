@@ -113,7 +113,7 @@ class EngineTests(unittest.TestCase):
                 if tool=='number':self.assertIn('10',doc[0].get_text())
                 if tool=='clean':self.assertFalse(doc.metadata.get('author'))
                 if tool=='crop':self.assertLess(doc[0].rect.width,595)
-        folder=self.run_tool('pdf_images',pages='1',dpi='72')
+        folder=self.run_tool('pdf_images',pages='1',dpi='72',format='PNG')
         self.run_tool('stamp',stamp_path=str(next(folder.glob('*.png'))))
 
     def test_redaction_removes_text_and_metadata(self):

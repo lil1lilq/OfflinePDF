@@ -19,7 +19,8 @@ if ($Offline) { Invoke-Checked $Python @('packaging/prepare_dependency_sources.p
 else { Invoke-Checked $Python @('packaging/prepare_dependency_sources.py') }
 $bundleArgs = @('-m','PyInstaller','--noconfirm','--clean','--onedir','--windowed','--name','OfflinePDF',
     '--version-file','packaging/windows-version.txt',
-    '--collect-all','pymupdf','--add-data','licenses;licenses','--add-data','LICENSE;.',
+    '--collect-all','pymupdf','--collect-all','PIL','--collect-all','pillow_heif',
+    '--additional-hooks-dir','packaging/hooks','--add-data','licenses;licenses','--add-data','LICENSE;.',
     '--add-data','README.md;.','main.py')
 if (Test-Path 'tessdata') { $bundleArgs += @('--add-data','tessdata;tessdata') }
 Invoke-Checked $Python $bundleArgs

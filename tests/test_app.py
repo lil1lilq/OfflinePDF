@@ -60,7 +60,7 @@ class AppTests(unittest.TestCase):
         self.app.on_files_drop([str(self.source),str(second),str(self.source)])
         self.assertEqual(self.app.files,[str(self.source.resolve()),str(second.resolve())])
         self.assertIn('중복 1개',self.app.status.get())
-        self.assertIsNotNone(self.app.preview_rect)
+        self.assertTrue(self.app.sidebar.winfo_ismapped())
 
     def test_e_drop_unsupported_files_folder_and_cloud(self):
         blocked=self.folder/'OneDrive'/'private.pdf';blocked.parent.mkdir(exist_ok=True);blocked.write_bytes(self.source.read_bytes())
@@ -72,7 +72,7 @@ class AppTests(unittest.TestCase):
     def test_f_drop_image_for_image_tool(self):
         image=self.folder/'사진 한 장.png'
         with pdf.open(self.source) as source:source[0].get_pixmap().save(image)
-        self.app.tool='images_pdf';self.app.configure_form();self.app.clear_files()
+        self.app.select_tool('images_pdf');self.app.clear_files()
         self.app.on_files_drop([str(image),str(self.source)])
         self.assertEqual(self.app.files,[str(image.resolve())])
         self.assertIn('JPG·PNG',self.app.status.get())
@@ -91,7 +91,7 @@ class AppTests(unittest.TestCase):
         sizes={(card.winfo_width(),card.winfo_height()) for card in self.app.cards.values()}
         # One-pixel rounding across equal grid columns is normal.
         self.assertLessEqual(max(w for w,h in sizes)-min(w for w,h in sizes),1)
-        self.assertEqual({h for w,h in sizes},{168})
+        self.assertTrue(all(h<=68 for w,h in sizes))
         self.app.select_tool('redact');self.root.update()
         self.assertTrue(self.app.work.winfo_ismapped());self.assertFalse(self.app.home.winfo_ismapped())
         self.assertTrue(self.app.clear_preview_regions.winfo_ismapped())
@@ -102,10 +102,11 @@ class AppTests(unittest.TestCase):
         self.app.all_tools_button.invoke();self.root.update()
         self.assertEqual(sum(card.winfo_ismapped() for card in self.app.cards.values()),6)
 
-    def test_j_switch_image_category_clears_incompatible_files(self):
+    def test_j_switch_image_category_preserves_and_marks_incompatible_files(self):
         self.app.select_tool('merge');self.app.files=[str(self.source)];self.app.sync_list()
         self.app.select_tool('rotate');self.assertEqual(self.app.files,[str(self.source)])
-        self.app.select_tool('images_pdf');self.assertEqual(self.app.files,[])
+        self.app.select_tool('images_pdf');self.assertEqual(self.app.files,[str(self.source)])
+        self.assertIn('사용 불가',self.app.file_list.rows[0][1])
         self.assertEqual(str(self.app.run_button.cget('state')),'disabled')
 
     def test_k_gui_merge_name_and_auto_open(self):
@@ -123,11 +124,15 @@ class AppTests(unittest.TestCase):
         self.assertEqual(str(self.app.back_button.cget('state')),'normal')
 
     def test_l_responsive_card_grid_and_scrolling(self):
-        self.app.show_home();self.app.toggle_tools();self.root.geometry('900x650');self.root.update()
-        self.assertEqual(self.app.card_columns,2)
-        self.assertEqual(len(self.app.cards_frame.grid_slaves()),18)
-        self.app.home.canvas.yview_moveto(1);self.root.update()
-        self.assertGreater(self.app.home.canvas.yview()[0],0)
+        self.app.show_home()
+        if not self.app.show_all_tools:self.app.toggle_tools()
+        columns=[]
+        for width,height in [(900,650),(1280,720),(1920,1080)]:
+            self.root.geometry(f'{width}x{height}');self.pump(.2)
+            columns.append(self.app.card_columns)
+            self.assertEqual(len(self.app.cards_frame.grid_slaves()),18)
+            self.assertLessEqual(self.app.home.inner.winfo_height(),self.app.home.canvas.winfo_height()+2)
+        self.assertGreater(columns[-1],columns[0])
         self.app.toggle_tools();self.root.geometry('1180x850');self.root.update()
 
     def test_m_preview_and_always_visible_run_button(self):
@@ -161,6 +166,7 @@ class AppTests(unittest.TestCase):
             self.assertEqual(str(self.app.next_button.cget('state')),'normal')
             self.app.next_button.invoke();self.root.update()
             self.assertTrue(self.app.home.winfo_ismapped())
+            self.assertEqual(self.app.file_list.rows[0][2],merged)
             self.assertFalse(self.app.cards['images_pdf'].enabled)
             self.app.cards['compress'].activate();self.root.update()
             self.assertEqual(self.app.files,[merged]);self.assertEqual(self.app.tool,'compress')
@@ -265,10 +271,11 @@ class AppTests(unittest.TestCase):
     def test_s_width_fit_zoom_and_scrolled_redaction_coordinates(self):
         self.app.select_tool('redact');self.app.files=[str(self.source)];self.app.sync_list();self.app.show_preview();self.pump()
         self.app.set_preview_mode('width');self.pump()
-        self.assertGreater(self.app.canvas.winfo_width(),self.root.winfo_width()*.8)
+        self.assertGreater(self.app.canvas.winfo_width(),self.app.content_host.winfo_width()*.85)
         width_scale=self.app.preview_scale
         self.assertAlmostEqual(width_scale,(self.app.canvas.winfo_width()-24)/self.app.preview_rect[0],places=3)
-        self.assertGreater(self.app.canvas.winfo_height(),self.root.winfo_height())
+        self.assertLess(self.app.canvas.winfo_height(),self.root.winfo_height())
+        self.assertGreater(float(self.app.canvas.cget('scrollregion').split()[-1]),self.app.canvas.winfo_height())
         self.app.set_preview_mode('page');self.pump();self.assertLess(self.app.preview_scale,width_scale)
         self.app.set_preview_mode('width');self.app.zoom_preview(.5);self.pump();self.app.canvas.xview_moveto(.2)
         start=SimpleNamespace(x=30,y=50);end=SimpleNamespace(x=170,y=160)
@@ -296,7 +303,7 @@ class AppTests(unittest.TestCase):
     def test_u_menu_and_drop_hover_transitions(self):
         self.app.show_home();self.root.update();card=self.app.cards['merge'];card.highlight(True);self.pump(.22)
         self.assertGreater(card.hover_amount,.9);card.highlight(False);self.pump(.22);self.assertLess(card.hover_amount,.1)
-        self.app.select_tool('merge');self.app.hide_preview();self.root.update()
+        self.app.select_tool('merge');self.app.clear_files();self.app.hide_preview();self.root.update()
         self.app.drop_icon.event_generate('<Motion>',warp=True,x=15,y=15);self.pump(.3)
         self.assertTrue(self.app.drop_hover.active)
         self.assertGreater(self.app.drop_hover.tween.value,.9)
@@ -307,7 +314,7 @@ class AppTests(unittest.TestCase):
     def test_v_encrypted_organizer_settings_and_source_replacement(self):
         source=self.folder/'암호 페이지.pdf'
         with pdf.open(self.source) as doc:doc.save(source,encryption=pdf.PDF_ENCRYPT_AES_256,user_pw='password',owner_pw='password')
-        self.app.select_tool('extract');self.app.add_paths([str(source)]);self.assertIsNone(self.app.organizer.model)
+        self.app.select_tool('extract');self.app.clear_files();self.app.add_paths([str(source)]);self.assertIsNone(self.app.organizer.model)
         dialog=self.app.organizer_settings();self.app.options['input_password'].set('password')
         buttons=dialog.winfo_children()[0].winfo_children()
         next(b for b in buttons if isinstance(b,tk.ttk.Button) and b.cget('text')=='확인').invoke()
@@ -317,9 +324,67 @@ class AppTests(unittest.TestCase):
             self.app.run();self.wait_for_job()
         with pdf.open(self.app.result_files[0]) as doc:
             self.assertTrue(doc.needs_pass);self.assertTrue(doc.authenticate('password'));self.assertEqual(doc[0].rotation,90)
-        self.app.add_paths([str(self.source)]);self.assertEqual(self.app.files,[str(self.source.resolve())])
+        self.app.add_paths([str(self.source)]);self.assertEqual(self.app.files,[str(source.resolve()),str(self.source.resolve())])
         self.assertEqual([p['rotation'] for p in self.app.organizer.model.plan()],[0,0])
-        self.app.add_paths([str(self.source),str(source)]);self.assertEqual(self.app.files,[str(self.source.resolve())])
+        before=list(self.app.files);self.app.add_paths([str(self.source),str(source)]);self.assertEqual(self.app.files,before)
+
+    def test_w_home_sidebar_repeated_feedback_and_n_file_split(self):
+        self.root.geometry('1280x720');self.app.show_home();self.app.clear_files()
+        source=self.folder/'나누기 열 쪽.pdf'
+        with pdf.open() as doc:
+            for i in range(10):doc.new_page().insert_text((50,80),f'PAGE {i+1}')
+            doc.save(source)
+        self.root.update();self.app.add_paths([str(source)]);self.pump(.1)
+        self.assertTrue(self.app.home.winfo_ismapped());self.assertTrue(self.app.sidebar.winfo_ismapped())
+        self.assertIn('10쪽',self.app.file_list.rows[0][1]);self.assertGreater(self.app.file_list.flash_value,0)
+        serial=self.app.feedback.serial
+        self.app.status.set('0개 추가 · 전체 1개');self.app.status.set('0개 추가 · 전체 1개')
+        self.assertEqual(self.app.feedback.serial,serial+2)
+        self.app.select_tool('split');self.app.options['split_mode'].set('N개 파일로 나누기')
+        self.app.options['split_count'].set('3');self.app.options['split_starts'].set('5,8')
+        self.assertIn('1–4쪽',self.app.split_summary.cget('text'));self.assertIn('8–10쪽',self.app.split_summary.cget('text'))
+        self.app.save_mode.set('지정한 폴더');self.app.output.set(str(self.folder));self.app.auto_open.set(False)
+        with patch('offline_pdf.app.messagebox.showerror',side_effect=AssertionError('Unexpected UI error')):
+            self.app.run();self.root.update();self.assertTrue(self.app.progress.winfo_ismapped());self.wait_for_job()
+        lengths=[]
+        for path in self.app.result_files:
+            with pdf.open(path) as doc:lengths.append(len(doc))
+        self.assertEqual(lengths,[4,3,3]);self.root.update()
+        self.assertFalse(self.app.progress.winfo_ismapped());self.assertTrue(self.app.result_actions.winfo_ismapped())
+        self.root.geometry('1180x850')
+
+    def test_y_all_forms_keep_controls_and_actions_inside_small_window(self):
+        self.app.cancel_continue();self.root.geometry('900x650');self.app.clear_files()
+        for tool in TOOLS:
+            self.app.select_tool(tool);self.pump(.08)
+            bottom=self.root.winfo_rooty()+self.root.winfo_height()-43
+            for key,cell in self.app.form_cells:
+                if cell.winfo_ismapped():
+                    self.assertLessEqual(cell.winfo_rooty()+cell.winfo_height(),bottom,(tool,key))
+                    self.assertLessEqual(cell.winfo_rootx()+cell.winfo_width(),self.root.winfo_rootx()+self.root.winfo_width(),(tool,key))
+            self.assertLessEqual(self.app.run_button.winfo_rooty()+self.app.run_button.winfo_height(),bottom,tool)
+        self.root.geometry('1180x850')
+
+    def test_z_image_formats_and_jpg_default(self):
+        from PIL import Image
+        from offline_pdf.images import EXPORT_FORMATS
+        self.app.cancel_continue()
+        self.app.tool='pdf_images';self.app.configure_form()
+        self.assertEqual(self.app.options['format'].get(),'JPG')
+        self.app.tool='images_pdf';self.app.configure_form();self.app.clear_files()
+        paths=[]
+        for extension,fmt in [('bmp','BMP'),('gif','GIF'),('tif','TIFF'),('tiff','TIFF'),
+                              ('webp','WEBP'),('heic','HEIF'),('heif','HEIF')]:
+            path=self.folder/('추가한 이미지.'+extension.upper())
+            with Image.new('RGB',(64,32),'red') as im:im.save(path,format=fmt)
+            paths.append(str(path.resolve()))
+        self.app.add_paths(paths)
+        self.assertEqual(self.app.files,paths)
+        self.app.file_list.selection_clear(0,'end');self.app.file_list.selection_set(5)
+        self.app.refresh_preview(reset=True);self.root.update()
+        self.assertIsNotNone(self.app.preview_rect)
+        for extension in EXPORT_FORMATS:
+            self.assertEqual(self.app.result_input_tools([Path('result.'+extension.lower())]),{'images_pdf'})
 
     @unittest.skipUnless(os.name=='nt','Windows Shell integration test')
     def test_h_native_windows_drop_message(self):

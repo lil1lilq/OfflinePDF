@@ -6,7 +6,7 @@ import sys
 import tkinter
 
 out=Path('licenses');out.mkdir(exist_ok=True)
-for name in ['PyMuPDF','pyinstaller','pyinstaller-hooks-contrib']:
+for name in ['PyMuPDF','Pillow','pillow-heif','pyinstaller','pyinstaller-hooks-contrib']:
     dist=metadata.distribution(name)
     target=out/name;target.mkdir(exist_ok=True)
     for entry in dist.files or []:
