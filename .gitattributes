@@ -1,0 +1,6 @@
+# Keep the license checksum stable across Windows/Linux checkouts.
+models/Real-ESRGAN-LICENSE.txt text eol=lf
+models/manifest.json text eol=lf
+# Model weights must never undergo text/line-ending conversion.
+models/*.onnx binary
+models/source/*.pth binary

@@ -21,7 +21,12 @@ URL = 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr
 
 
 def digest(path):
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    data = path.read_bytes()
+    # Git on Windows can check text out with CRLF. Only the license's line
+    # endings are normalised; all content and every model byte stay checked.
+    if path.name == 'Real-ESRGAN-LICENSE.txt':
+        data = data.replace(b'\r\n', b'\n')
+    return hashlib.sha256(data).hexdigest()
 
 
 def verify():
