@@ -18,12 +18,16 @@ Invoke-Checked $Python @('packaging/collect_licenses.py')
 if ($Offline) { Invoke-Checked $Python @('packaging/prepare_dependency_sources.py','--offline') }
 else { Invoke-Checked $Python @('packaging/prepare_dependency_sources.py') }
 $bundleArgs = @('-m','PyInstaller','--noconfirm','--clean','--onedir','--windowed','--name','OfflinePDF',
+    '--version-file','packaging/windows-version.txt',
     '--collect-all','pymupdf','--add-data','licenses;licenses','--add-data','LICENSE;.',
     '--add-data','README.md;.','main.py')
 if (Test-Path 'tessdata') { $bundleArgs += @('--add-data','tessdata;tessdata') }
 Invoke-Checked $Python $bundleArgs
 $destination = 'dist/OfflinePDF'
 Copy-Item 'README.md','USER_GUIDE_KO.txt','LICENSE','THIRD_PARTY_NOTICES.md' $destination
+Copy-Item 'CHANGELOG.md' $destination
+Copy-Item 'BUILDING.md','TEST_REPORT.md' $destination
+Copy-Item 'assets' "$destination/assets" -Recurse -Force
 Copy-Item 'licenses' "$destination/licenses" -Recurse -Force
 Copy-Item 'dependency-sources' "$destination/dependency-sources" -Recurse -Force
 Invoke-Checked $Python @('packaging/make_source_archive.py', "$destination/CorrespondingSource.zip")

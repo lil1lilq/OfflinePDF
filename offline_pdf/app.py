@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+import math
 import multiprocessing as mp
 import os
 from pathlib import Path
@@ -18,13 +19,13 @@ import pymupdf as pdf
 from .engine import UserError, check_local_path, disable_network, open_pdf, worker
 from . import __version__
 from .windows_drop import NativeFileDrop
-from .ui import CARD_TEXT, POPULAR, PANEL, MUTED, icon
+from .ui import CARD_TEXT, POPULAR, PANEL, MUTED, RED, icon
 
 
 TOOLS = {
     'merge': ('PDF 합치기', '파일 목록 순서대로 모든 페이지를 한 PDF로 합칩니다.'),
     'split': ('PDF 나누기', '선택한 페이지마다 별도 PDF를 만듭니다.'),
-    'extract': ('페이지 정리', '입력한 순서로 추출합니다. 예: 3,1,2 또는 1-3,5'),
+    'extract': ('페이지 정리', '페이지를 끌어 순서를 바꾸고, 선택한 페이지를 삭제·회전합니다.'),
     'delete': ('페이지 삭제', '입력한 페이지를 삭제합니다. 원본은 그대로 보관합니다.'),
     'rotate': ('페이지 회전', '선택한 페이지를 시계 방향으로 회전합니다.'),
     'compress': ('용량 줄이기', '무손실 정리·압축입니다. 파일에 따라 용량이 늘 수도 있습니다.'),
@@ -37,7 +38,7 @@ TOOLS = {
     'stamp': ('서명·직인 이미지', '오른쪽 아래에 서명 이미지를 넣습니다. 인증서 전자서명 기능은 아닙니다.'),
     'crop': ('여백 자르기', '네 방향 여백을 같은 크기로 가립니다. 가려진 정보는 영구 삭제되지 않습니다.'),
     'text': ('텍스트 추출', '문자를 TXT로 저장합니다. 암호 보호는 TXT에 적용되지 않습니다. 스캔 문서는 OCR을 사용하세요.'),
-    'redact': ('영역 영구 삭제', '미리보기에서 드래그해 영역을 지정하세요. 복사·추출과 이미지로 결과를 확인하세요.'),
+    'redact': ('영역 영구 삭제', '개인정보 삭제 불가 · 미리보기에서 드래그해 삭제할 영역을 지정하세요.'),
     'clean': ('문서 부가정보 정리', '문서 속성·첨부파일·JavaScript·주석 응답 등을 정리합니다. 본문 개인정보 삭제 기능은 아닙니다.'),
     'ocr': ('검색 가능한 PDF', '선택 기능: 오프라인 OCR 언어자료가 필요합니다. 글자·표·서명 모양을 복원하는 기능은 아닙니다.'),
 }
@@ -49,12 +50,15 @@ class App:
         self.page_index=0; self.preview_scale=1; self.preview_rect=None; self.preview_photo=None
         self.process=None; self.events=None; self.cancel=None; self.cancel_at=None; self.stage=None
         self.result_folder=None; self.drag_start=None; self.drag_id=None; self.options={}
+        self.result_files=();self.result_output=None;self.result_tool=None;self.pending_results=None
+        self.preview_mode='width';self.preview_zoom=1.;self.organizer_preview_uid=None
         from .layout import build
         build(self)
         self.file_drop=None
         try:
             self.file_drop=NativeFileDrop(root,self.on_files_drop,
-                (self.file_list,self.canvas,self.drop_area,self.drop_title,self.add_button))
+                (self.file_list,self.canvas,self.drop_area,self.drop_title,self.drop_hint,self.drop_icon,self.add_button,
+                 self.organizer.canvas,self.organizer.drop_area,self.organizer.drop_title,self.organizer.drop_sub,self.organizer.drop_icon))
         except (OSError,AttributeError):
             self.drop_title.config(text='파일 추가 버튼으로 파일을 선택하세요')
         root.protocol('WM_DELETE_WINDOW',self.close)
@@ -80,26 +84,123 @@ class App:
 
     def select_tool(self,key):
         if self.busy() or key not in TOOLS:return
+        pending=self.pending_results
+        if pending is not None:
+            if key not in self.result_input_tools(pending):return
+            try:
+                for path in pending:
+                    if not check_local_path(path).is_file():raise UserError('결과 파일을 찾을 수 없습니다. 저장 폴더를 확인하세요.')
+            except (UserError,OSError,RuntimeError) as exc:
+                messagebox.showinfo('결과 파일 확인',str(exc),parent=self.root);return
+            # Replace the inputs, never append results to the original sources.
+            self.files=list(pending);self.regions={}
+            self.save_mode.set('지정한 폴더');self.output.set(self.result_output)
+            self.cancel_continue()
         previous=self.tool
         self.tool=key
-        if (previous=='images_pdf') != (key=='images_pdf'):
+        if previous!=key:self.organizer.close_document();self.organizer_preview_uid=None
+        if pending is None and (previous=='images_pdf') != (key=='images_pdf'):
             self.files=[];self.regions={};self.sync_list()
         if previous!=key:self.regions={}
         self.home.pack_forget();self.work.pack(fill='both',expand=True)
         self.configure_form();self.work_scroll.canvas.yview_moveto(0)
+        if pending is not None:
+            self.sync_list();self.status.set(f'이전 작업 결과 {len(self.files)}개를 가져왔습니다. 설정을 확인하고 실행하세요.')
         self.root.after_idle(lambda:self.refresh_preview(reset=True))
 
     def show_home(self):
         if self.busy():return
+        self.cancel_continue()
         self.work.pack_forget();self.home.pack(fill='both',expand=True)
 
+    @staticmethod
+    def result_input_tools(paths):
+        if not paths:return set()
+        extensions={Path(path).suffix.lower() for path in paths}
+        if extensions<={'.pdf'}:return set(TOOLS)-{'images_pdf'}
+        if extensions<={'.png','.jpg','.jpeg'}:return {'images_pdf'}
+        return set()
+
+    def cancel_continue(self):
+        self.pending_results=None
+        self.home_title.config(text='어떤 작업을 할까요?')
+        self.home_description.config(text='필요한 도구를 선택하고 파일을 추가하세요.')
+        self.chain_cancel_button.pack_forget()
+        for card in self.cards.values():card.set_enabled(True)
+
+    def continue_with_result(self):
+        if self.busy() or not self.result_files:return
+        allowed=self.result_input_tools(self.result_files)
+        if not allowed:
+            messagebox.showinfo('다음 작업','이 결과 형식으로 이어서 할 수 있는 작업이 없습니다.',parent=self.root);return
+        self.show_home();self.pending_results=tuple(self.result_files)
+        self.home_title.config(text='다음 작업을 선택하세요')
+        title=CARD_TEXT[self.result_tool][0] if self.result_tool else '이전 작업'
+        self.home_description.config(text=f'{title} 결과 {len(self.pending_results)}개를 다음 작업에 사용합니다.')
+        self.chain_cancel_button.pack(anchor='w',pady=(0,12),before=self.home_section.master)
+        for key,card in self.cards.items():card.set_enabled(key in allowed)
+        # Image results have just one compatible tool; reveal it immediately.
+        if 'images_pdf' in allowed and not self.show_all_tools:self.toggle_tools()
+        self.home.canvas.yview_moveto(0)
+
+    def remember_result(self,folder):
+        self.result_folder=folder
+        try:
+            directory=check_local_path(folder)
+            self.result_files=tuple(str(path) for path in sorted(directory.iterdir()) if path.is_file() and not path.is_symlink())
+        except (UserError,OSError,RuntimeError):self.result_files=()
+        self.next_button.config(state='normal' if self.result_input_tools(self.result_files) else 'disabled')
+
     def toggle_preview(self):
-        if self.tool=='redact':return
         if self.preview_panel.winfo_manager():
-            self.preview_panel.pack_forget();self.preview_button.config(text='미리보기 펼치기')
+            self.hide_preview()
+        else:self.show_preview()
+
+    def show_preview(self):
+        self.preview_mode='width';self.preview_zoom=1.;self.canvas.xview_moveto(0)
+        self.columns.pack_forget();self.organizer.pack_forget();self.task_title_row.pack_forget()
+        self.preview_panel.pack(fill='both',expand=True,pady=(8,0));self.preview_button.config(text='미리보기 접기')
+        self.work_scroll.canvas.yview_moveto(0);self.schedule_preview()
+
+    def hide_preview(self):
+        self.preview_panel.pack_forget();self.preview_button.config(text='미리보기 펼치기')
+        if self.tool=='extract' and len(self.files)<=1:
+            self.columns.pack_forget();self.task_title_row.pack_forget();self.organizer.pack(fill='both',expand=True)
         else:
-            self.preview_panel.pack(fill='both',expand=True,pady=(16,0));self.preview_button.config(text='미리보기 접기')
-            self.schedule_preview()
+            self.organizer.pack_forget();self.columns.pack(fill='both',expand=True)
+            self.task_title_row.pack(fill='x',pady=(0,18),before=self.columns)
+        self.work_scroll.canvas.yview_moveto(0)
+
+    def set_preview_mode(self,mode):
+        self.preview_mode=mode;self.preview_zoom=1.;self.canvas.xview_moveto(0);self.refresh_preview()
+
+    def zoom_preview(self,delta):
+        self.preview_zoom=max(.25,min(3.,self.preview_zoom+delta));self.refresh_preview()
+
+    def refresh_organizer(self):
+        if self.tool!='extract':return
+        password=self.options.get('input_password')
+        self.organizer.load(self.files[0] if len(self.files)==1 else None,password.get() if password else '')
+        if not self.preview_panel.winfo_manager():self.hide_preview()
+        self.update_file_summary();self.organizer.update_summary()
+
+    def organizer_settings(self):
+        if self.busy():return
+        dialog=tk.Toplevel(self.root);dialog.title('페이지 정리 · 파일·저장 설정');dialog.geometry('560x390');dialog.transient(self.root)
+        body=ttk.Frame(dialog,padding=24);body.pack(fill='both',expand=True);body.columnconfigure(0,weight=1)
+        ttk.Label(body,text='입력 암호 (암호화된 PDF만)').grid(row=0,column=0,sticky='w')
+        ttk.Entry(body,textvariable=self.options['input_password'],show='●').grid(row=1,column=0,sticky='ew',pady=8)
+        ttk.Label(body,text='결과 저장 폴더').grid(row=2,column=0,sticky='w',pady=(10,0))
+        entry=ttk.Entry(body,textvariable=self.output);entry.grid(row=3,column=0,sticky='ew',pady=8)
+        entry.bind('<KeyRelease>',lambda e:self.save_mode.set('지정한 폴더'))
+        ttk.Button(body,text='폴더 선택',command=self.choose_output).grid(row=3,column=1,padx=8)
+        ttk.Checkbutton(body,text='완료 후 저장 폴더 열기',variable=self.auto_open).grid(row=4,column=0,sticky='w',pady=10)
+        ttk.Button(body,text='페이지 번호로 지정',command=self.organizer.apply_text).grid(row=5,column=0,sticky='w',pady=6)
+        def done():
+            dialog.destroy();self.refresh_organizer()
+        ttk.Button(body,text='확인',command=done,style='Back.TButton').grid(row=6,column=0,sticky='e',pady=15)
+        dialog.protocol('WM_DELETE_WINDOW',done);dialog.grab_set()
+        return dialog
 
     def change_save_mode(self,event=None):
         if self.busy():return
@@ -125,13 +226,14 @@ class App:
     def configure_form(self):
         for w in self.form.winfo_children():w.destroy()
         self.options={};title,desc=TOOLS[self.tool];self.title.config(text=title);self.description.config(text=desc)
+        self.description.config(foreground=RED if self.tool=='redact' else MUTED)
         self.task_icon.delete('all');icon(self.task_icon,self.tool,12,12)
         self.run_button.config(text=CARD_TEXT[self.tool][0]+'  →')
         self.drop_hint.config(text='JPG·PNG 이미지' if self.tool=='images_pdf' else 'PDF 파일')
+        self.preview_button.config(state='normal')
         if self.tool=='redact':
-            self.preview_panel.pack(fill='both',expand=True,pady=(16,0));self.preview_button.config(text='영역 선택용 미리보기',state='disabled')
-        else:
-            self.preview_panel.pack_forget();self.preview_button.config(text='미리보기 펼치기',state='normal')
+            self.clear_preview_regions.pack(side='right');self.redaction_warning.pack(anchor='w',padx=16,pady=(0,10),before=self.preview_zoom_row)
+        else:self.clear_preview_regions.pack_forget();self.redaction_warning.pack_forget()
         self.output_name.set('합친문서.pdf' if self.tool=='merge' else '이미지문서.pdf')
         if self.tool in ('merge','images_pdf'):self.name_frame.pack(fill='x',pady=(13,0),before=self.name_frame.master.winfo_children()[-1])
         else:self.name_frame.pack_forget()
@@ -159,6 +261,9 @@ class App:
         else:self.security.pack_forget()
         self.update_file_summary()
         self.update_region_status()
+        self.hide_preview()
+        if self.tool=='extract':self.refresh_organizer();self.run_button.config(text='정리한 PDF 저장  →')
+        elif self.tool=='redact':self.show_preview()
 
     def add_files(self):
         if self.busy():return
@@ -167,6 +272,8 @@ class App:
         if paths:self.add_paths(paths)
 
     def on_files_drop(self, paths):
+        if self.pending_results is not None:
+            messagebox.showinfo('다음 작업','다음 작업을 먼저 선택하세요. 새 파일을 추가하려면 “이어서 작업 취소”를 누르세요.',parent=self.root);return
         if not self.busy() and self.home.winfo_ismapped():self.select_tool(self.tool)
         self.add_paths(paths)
 
@@ -174,6 +281,9 @@ class App:
         if self.busy():
             self.status.set('작업 중에는 파일을 추가할 수 없습니다. 완료 후 다시 끌어놓으세요.')
             return
+        paths=list(paths)
+        if self.tool=='extract' and len(paths)>1:
+            self.status.set('페이지 정리에는 PDF 파일 하나만 추가하세요.');return
         extensions={'.jpg','.jpeg','.png'} if self.tool=='images_pdf' else {'.pdf'}
         expected='JPG·PNG' if self.tool=='images_pdf' else 'PDF'
         known={os.path.normcase(str(Path(path).resolve())) for path in self.files}
@@ -195,9 +305,11 @@ class App:
             if key in known:
                 duplicates+=1
                 continue
+            if self.tool=='extract':self.files=[];known.clear();self.organizer.close_document()
             known.add(key);self.files.append(str(candidate));added+=1
         if added:
             self.sync_list();self.refresh_preview(reset=True)
+            if self.tool!='extract':self.show_preview()
         details=[f'{added}개 추가',f'전체 {len(self.files)}개']
         if duplicates:details.append(f'중복 {duplicates}개 제외')
         if unsupported:details.append(f'지원하지 않는 항목 {unsupported}개 제외 ({expected} 파일만 추가 가능)')
@@ -209,12 +321,15 @@ class App:
         for i,path in enumerate(self.files):self.file_list.insert('end',f'{i+1:02d}  {Path(path).name}')
         if self.files:self.file_list.selection_set(0)
         self.update_file_summary()
+        if self.tool=='extract':self.refresh_organizer()
         self.status.set(f'{len(self.files)}개 파일 · 목록의 위에서 아래 순서로 처리합니다.')
 
     def update_file_summary(self):
         self.file_count.config(text=f'선택한 파일  {len(self.files)}개')
         self.summary.set(f'파일 {len(self.files)}개 선택됨' if self.files else '파일을 추가해 주세요.')
+        if self.tool=='extract' and self.organizer.model:self.summary.set(f'{len(self.organizer.model.items)}페이지를 저장합니다')
         self.run_button.config(state='disabled' if self.busy() or not self.files else 'normal')
+        if self.tool=='extract' and (len(self.files)!=1 or not self.organizer.model):self.run_button.config(state='disabled')
         if self.files and self.save_mode.get()=='원본 파일과 같은 폴더':self.output.set(str(Path(self.files[0]).parent))
 
     def remove_files(self):
@@ -247,6 +362,7 @@ class App:
         if reset:self.page_index=0
         path=self.selected_file()
         if not path:
+            self.canvas.config(height=280,scrollregion=(0,0,max(300,self.canvas.winfo_width()),280))
             text='파일을 추가하면 여기에서 미리 볼 수 있습니다.'
             if self.file_drop and self.file_drop.enabled:text='파일을 여기에 끌어놓거나\n파일 추가 버튼으로 선택하세요.'
             self.canvas.create_text(15,25,anchor='nw',text=text)
@@ -257,14 +373,27 @@ class App:
             if Path(path).suffix.lower()=='.pdf':doc,_=open_pdf(path,password,extraction=True)
             else:doc=pdf.open(path)
             try:
+                angle=0
+                if self.tool=='extract' and self.organizer.model:
+                    item=next((p for p in self.organizer.model.items if p[0]==self.organizer_preview_uid),self.organizer.model.items[0])
+                    self.organizer_preview_uid=item[0];self.page_index=item[1];angle=item[2]
                 self.page_index=max(0,min(self.page_index,doc.page_count-1));page=doc[self.page_index]
-                w=max(self.canvas.winfo_width()-24,150);h=max(self.canvas.winfo_height()-24,200)
-                self.preview_scale=min(w/page.rect.width,h/page.rect.height,1.5)
-                pix=page.get_pixmap(matrix=pdf.Matrix(self.preview_scale,self.preview_scale),alpha=False,colorspace=pdf.csRGB)
+                rw,rh=(page.rect.height,page.rect.width) if angle%180 else (page.rect.width,page.rect.height)
+                w=max(self.canvas.winfo_width()-24,150);h=max(250,self.root.winfo_height()-390)
+                fit=min(w/rw,h/rh) if self.preview_mode=='page' else w/rw
+                self.preview_scale=min(fit*self.preview_zoom,math.sqrt(16_000_000/(rw*rh)),20_000/rh)
+                pix=page.get_pixmap(matrix=pdf.Matrix(self.preview_scale,self.preview_scale).prerotate(angle),alpha=False,colorspace=pdf.csRGB)
                 self.preview_photo=tk.PhotoImage(data=base64.b64encode(pix.tobytes('png')))
                 self.canvas.create_image(12,12,anchor='nw',image=self.preview_photo)
                 self.preview_rect=(page.rect.width,page.rect.height)
+                wanted=max(220,pix.height+24)
+                if int(self.canvas.cget('height'))!=wanted:self.canvas.config(height=wanted)
+                self.canvas.configure(scrollregion=(0,0,pix.width+24,pix.height+24))
+                self.zoom_label.config(text=('폭 맞춤' if self.preview_mode=='width' else '한 페이지')+f' · {round(self.preview_zoom*100)}%')
                 self.page_label.config(text=f'{self.page_index+1} / {doc.page_count}쪽')
+                if self.tool=='extract' and self.organizer.model:
+                    position=next((i for i,p in enumerate(self.organizer.model.items) if p[0]==self.organizer_preview_uid),0)
+                    self.page_label.config(text=f'원본 {self.page_index+1}쪽 · 정리 후 {position+1}/{len(self.organizer.model.items)}')
                 if self.tool=='redact':
                     for coords in self.regions.get(path,{}).get(str(self.page_index),[]):
                         self.canvas.create_rectangle(*[12+c*self.preview_scale for c in coords],outline='#d32f2f',width=2,stipple='gray50',fill='#d32f2f')
@@ -274,19 +403,23 @@ class App:
         self.update_region_status()
 
     def turn(self,delta):
+        if self.tool=='extract' and self.organizer.model:
+            items=self.organizer.model.items;i=next((j for j,p in enumerate(items) if p[0]==self.organizer_preview_uid),0)
+            self.organizer_preview_uid=items[max(0,min(len(items)-1,i+delta))][0];self.refresh_preview();return
         self.page_index=max(0,self.page_index+delta);self.refresh_preview()
 
     def draw_start(self,event):
         if self.tool!='redact' or not self.preview_rect or self.busy():return
         self.drag_start=self.canvas_point(event)
-        self.drag_id=self.canvas.create_rectangle(event.x,event.y,event.x,event.y,outline='#d32f2f',width=2)
+        x,y=self.canvas.canvasx(event.x),self.canvas.canvasy(event.y)
+        self.drag_id=self.canvas.create_rectangle(x,y,x,y,outline='#d32f2f',width=2)
 
     def canvas_point(self,event):
-        return (max(0,min(self.preview_rect[0],(event.x-12)/self.preview_scale)),max(0,min(self.preview_rect[1],(event.y-12)/self.preview_scale)))
+        return (max(0,min(self.preview_rect[0],(self.canvas.canvasx(event.x)-12)/self.preview_scale)),max(0,min(self.preview_rect[1],(self.canvas.canvasy(event.y)-12)/self.preview_scale)))
 
     def draw_move(self,event):
         if self.drag_start and self.drag_id:
-            x,y=self.drag_start;self.canvas.coords(self.drag_id,12+x*self.preview_scale,12+y*self.preview_scale,event.x,event.y)
+            x,y=self.drag_start;xx,yy=self.canvas_point(event);self.canvas.coords(self.drag_id,12+x*self.preview_scale,12+y*self.preview_scale,12+xx*self.preview_scale,12+yy*self.preview_scale)
 
     def draw_end(self,event):
         if not self.drag_start:return
@@ -312,6 +445,10 @@ class App:
     def run(self):
         if self.busy():return
         if not self.files:messagebox.showinfo('파일 추가','처리할 파일을 먼저 추가하세요.',parent=self.root);return
+        if self.tool=='extract':
+            if len(self.files)!=1:messagebox.showinfo('파일 선택','페이지 정리는 PDF 파일 하나씩 처리하세요.',parent=self.root);return
+            if not self.organizer.doc or not self.organizer.matches(self.files[0]):
+                self.refresh_organizer();messagebox.showinfo('페이지 확인','페이지를 불러온 후 순서를 확인하고 다시 실행하세요.',parent=self.root);return
         if self.tool=='redact' and len(self.files)!=1:
             messagebox.showinfo('파일 선택','영구 삭제는 한 파일씩 처리하세요.',parent=self.root);return
         try:check_local_path(self.output.get())
@@ -338,6 +475,7 @@ class App:
         except UserError as exc:messagebox.showerror('파일 확인',str(exc),parent=self.root);return
         job={'tool':self.tool,'files':list(self.files),'output':self.output.get(),'options':{k:v.get() for k,v in self.options.items() if k!='hint'}}
         if self.tool in ('merge','images_pdf'):job['options']['output_name']=self.output_name.get()
+        if self.tool=='extract':job['options']['page_plan']=self.organizer.model.plan()
         if self.tool=='redact':job['options']['regions']=self.regions.get(self.files[0],{})
         job['stage_id']=uuid.uuid4().hex
         ctx=mp.get_context('spawn');self.events=ctx.Queue();self.cancel=ctx.Event();self.cancel_at=None
@@ -347,6 +485,8 @@ class App:
         except Exception:
             self.process=None;self.cleanup_stage();self.events.close();self.events=None
             messagebox.showerror('실행 오류','작업 프로세스를 실행할 수 없습니다. 백신·실행 권한·배포파일 구성을 확인하세요.',parent=self.root);return
+        self.result_files=();self.result_folder=None;self.result_output=job['output'];self.result_tool=self.tool
+        self.next_button.config(state='disabled')
         # Remove secrets from visible controls after the child has its own copy.
         for key in ('input_password','output_password'):
             if key in self.options:self.options[key].set('')
@@ -386,7 +526,7 @@ class App:
                     elif kind=='progress':
                         self.progress['value']=100*event['current']/max(1,event['total']);self.status.set(event['label'])
                     elif kind=='done':
-                        self.result_folder=event['folder'];self.finish('완료했습니다. “결과 폴더 열기”에서 확인하세요.');self.progress['value']=100;self.open_button.config(state='normal')
+                        self.finish('완료했습니다. 결과를 확인하거나 “결과로 다음 작업”을 선택하세요.');self.remember_result(event['folder']);self.progress['value']=100;self.open_button.config(state='normal')
                         if self.auto_open.get():self.open_result()
                         break
                     elif kind=='cancelled':self.finish('작업을 취소했습니다. 원본은 그대로 보관됩니다.');break
@@ -418,6 +558,10 @@ class App:
             if self.process.is_alive():self.process.terminate();self.process.join(timeout=2)
             self.cleanup_stage()
         if self.file_drop:self.file_drop.close()
+        self.drop_hover.close();self.organizer.drop_hover.close();self.organizer.close_document()
+        if self.preview_timer:
+            try:self.root.after_cancel(self.preview_timer)
+            except tk.TclError:pass
         self.root.destroy()
 
     def help(self):
@@ -429,6 +573,7 @@ class App:
             '페이지 공란은 전체 페이지입니다. 예: 1-3,5 / 역순: 3-1\n'
             '합치기는 목록 순서입니다. 파일을 선택하고 위로·아래로 이동하세요.\n'
             '결과는 선택한 폴더 안에 새 PDF결과 폴더로 저장됩니다.\n'
+            '완료 후 “결과로 다음 작업”을 누르면 결과 파일로 다른 작업을 이어갑니다.\n'
             '기존 파일을 덮어쓰지 않으며 실패한 작업 결과는 정리합니다.\n\n'
             '영구 삭제: 미리보기에서 드래그 → 실행 → 결과를 검색·복사·추출해 확인\n'
             'OCR: 배포 담당자가 준비한 kor/eng.traineddata 폴더를 선택\n'

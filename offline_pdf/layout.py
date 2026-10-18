@@ -4,7 +4,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from . import __version__
-from .ui import BG, PANEL, INK, MUTED, LINE, BLUE, SOFT, FONT, POPULAR, CARD_TEXT, ScrollPane, ToolCard, icon, setup_style
+from .ui import BG, PANEL, INK, MUTED, RED, LINE, BLUE, SOFT, FONT, POPULAR, CARD_TEXT, ScrollPane, ToolCard, icon, setup_style
 
 
 def panel(master):
@@ -25,8 +25,9 @@ def build(app):
     app.host=ttk.Frame(root);app.host.pack(fill='both',expand=True)
     app.home=ScrollPane(app.host);app.home.pack(fill='both',expand=True)
     home=ttk.Frame(app.home.inner,padding=(30,28,30,24));home.pack(fill='both',expand=True)
-    ttk.Label(home,text='어떤 작업을 할까요?',style='Title.TLabel').pack(anchor='w')
-    ttk.Label(home,text='필요한 도구를 선택하고 파일을 추가하세요.',style='Muted.TLabel').pack(anchor='w',pady=(7,23))
+    app.home_title=ttk.Label(home,text='어떤 작업을 할까요?',style='Title.TLabel');app.home_title.pack(anchor='w')
+    app.home_description=ttk.Label(home,text='필요한 도구를 선택하고 파일을 추가하세요.',style='Muted.TLabel',wraplength=800);app.home_description.pack(anchor='w',pady=(7,15))
+    app.chain_cancel_button=ttk.Button(home,text='이어서 작업 취소',command=app.cancel_continue)
     row=ttk.Frame(home);row.pack(fill='x',pady=(0,9))
     app.home_section=ttk.Label(row,text='자주 쓰는 도구',font=(FONT,10,'bold'));app.home_section.pack(side='left')
     app.all_tools_button=ttk.Button(row,text='전체 도구 보기  ⌄',style='Quiet.TButton',command=app.toggle_tools);app.all_tools_button.pack(side='right')
@@ -40,22 +41,25 @@ def build(app):
     app.work=ttk.Frame(app.host)
     app.work_scroll=ScrollPane(app.work);app.work_scroll.pack(fill='both',expand=True)
     body=ttk.Frame(app.work_scroll.inner,padding=(26,16,26,20));body.pack(fill='both',expand=True)
-    app.back_button=ttk.Button(body,text='←  모든 도구',style='Quiet.TButton',command=app.show_home);app.back_button.pack(anchor='w',pady=(0,10))
-    title_row=ttk.Frame(body);title_row.pack(fill='x',pady=(0,18))
+    back_border=tk.Frame(body,bg=LINE,padx=1,pady=1);back_border.pack(anchor='w',pady=(0,16))
+    app.back_button=ttk.Button(back_border,text='←  모든 도구',style='Back.TButton',command=app.show_home);app.back_button.pack()
+    app.back_button.bind('<Enter>',lambda e:back_border.configure(bg=BLUE),add='+');app.back_button.bind('<Leave>',lambda e:back_border.configure(bg=LINE),add='+')
+    title_row=ttk.Frame(body);app.task_title_row=title_row;title_row.pack(fill='x',pady=(0,18))
     app.task_icon=tk.Canvas(title_row,width=48,height=48,bg=SOFT,highlightthickness=0);app.task_icon.pack(side='left',padx=(0,13))
     title_text=ttk.Frame(title_row);title_text.pack(side='left',fill='x',expand=True)
     app.title=ttk.Label(title_text,text='',style='Task.TLabel');app.title.pack(anchor='w')
     app.description=ttk.Label(title_text,text='',style='Muted.TLabel',wraplength=950);app.description.pack(anchor='w',pady=(4,0))
     title_text.bind('<Configure>',lambda e:app.description.configure(wraplength=max(200,e.width)))
-    columns=ttk.Frame(body);columns.pack(fill='both',expand=True);columns.columnconfigure(0,weight=1);columns.columnconfigure(1,weight=0,minsize=310)
+    columns=ttk.Frame(body);app.columns=columns;columns.pack(fill='both',expand=True);columns.columnconfigure(0,weight=1);columns.columnconfigure(1,weight=0,minsize=310)
     left=ttk.Frame(columns);left.grid(row=0,column=0,sticky='nsew',padx=(0,18))
     files=panel(left);files.pack(fill='x')
     files_head=ttk.Frame(files,style='Panel.TFrame',padding=(16,12));files_head.pack(fill='x')
     app.file_count=ttk.Label(files_head,text='선택한 파일  0개',style='Section.TLabel');app.file_count.pack(side='left')
     ttk.Button(files_head,text='전체 비우기',command=app.clear_files).pack(side='right')
-    app.drop_area=tk.Frame(files,bg=BG,highlightthickness=1,highlightbackground=LINE,padx=14,pady=15);app.drop_area.pack(fill='x',padx=16,pady=(0,12))
+    app.drop_area=tk.Frame(files,bg=BG,highlightthickness=2,highlightbackground=LINE,padx=14,pady=15);app.drop_area.pack(fill='x',padx=16,pady=(0,12))
+    app.drop_icon=tk.Canvas(app.drop_area,width=40,height=35,bg=BG,highlightthickness=0);app.drop_icon.pack()
     app.drop_title=tk.Label(app.drop_area,text='파일을 여기에 끌어다 놓으세요',font=(FONT,11,'bold'),fg=INK,bg=BG);app.drop_title.pack()
-    app.drop_hint=ttk.Label(app.drop_area,text='PDF 파일',style='Muted.TLabel');app.drop_hint.pack(pady=(5,9))
+    app.drop_hint=tk.Label(app.drop_area,text='PDF 파일',fg=MUTED,bg=BG);app.drop_hint.pack(pady=(5,9))
     app.add_button=ttk.Button(app.drop_area,text='＋  파일 추가',command=app.add_files);app.add_button.pack()
     filebox=tk.Frame(files,bg=PANEL);filebox.pack(fill='x',padx=16)
     app.file_list=tk.Listbox(filebox,height=4,selectmode='extended',exportselection=False,bg=PANEL,fg=INK,selectbackground=SOFT,selectforeground=BLUE,relief='flat',borderwidth=0,highlightthickness=0,activestyle='none',font=(FONT,10))
@@ -66,14 +70,25 @@ def build(app):
     for text,command in [('↑ 위로',lambda:app.move(-1)),('↓ 아래로',lambda:app.move(1)),('선택 삭제',app.remove_files)]:
         ttk.Button(controls,text=text,command=command).pack(side='left',padx=(0,6))
     app.preview_button=ttk.Button(controls,text='미리보기 펼치기',command=app.toggle_preview);app.preview_button.pack(side='right')
-    preview=panel(left);app.preview_panel=preview
+    from .organizer import PageOrganizer
+    app.organizer=PageOrganizer(body,app);app.organizer.canvas.own_wheel=True
+    preview=panel(body);app.preview_panel=preview
     nav=ttk.Frame(preview,style='Panel.TFrame',padding=(16,10));nav.pack(fill='x')
-    ttk.Label(nav,text='미리보기',style='Section.TLabel').pack(side='left')
+    preview_border=tk.Frame(nav,bg=LINE,padx=1,pady=1);preview_border.pack(side='left')
+    preview_back=ttk.Button(preview_border,text='←  파일·설정으로',style='Back.TButton',command=app.hide_preview);preview_back.pack()
+    preview_back.bind('<Enter>',lambda e:preview_border.configure(bg=BLUE),add='+');preview_back.bind('<Leave>',lambda e:preview_border.configure(bg=LINE),add='+')
     ttk.Button(nav,text='다음 ›',command=lambda:app.turn(1)).pack(side='right')
     app.page_label=ttk.Label(nav,text='미리보기',style='PanelMuted.TLabel');app.page_label.pack(side='right',padx=9)
     ttk.Button(nav,text='‹ 이전',command=lambda:app.turn(-1)).pack(side='right')
+    app.redaction_warning=tk.Label(preview,text='개인정보 삭제 불가',bg=PANEL,fg=RED,font=(FONT,11,'bold'))
+    zoom=ttk.Frame(preview,style='Panel.TFrame',padding=(16,0,16,9));app.preview_zoom_row=zoom;zoom.pack(fill='x')
+    for text,command in [('폭 맞춤',lambda:app.set_preview_mode('width')),('한 페이지 보기',lambda:app.set_preview_mode('page')),('－',lambda:app.zoom_preview(-.25)),('＋',lambda:app.zoom_preview(.25))]:
+        ttk.Button(zoom,text=text,command=command).pack(side='left',padx=(0,6))
+    app.zoom_label=ttk.Label(zoom,text='폭 맞춤',style='PanelMuted.TLabel');app.zoom_label.pack(side='left',padx=5)
+    app.clear_preview_regions=ttk.Button(zoom,text='이 페이지 영역 지우기',command=app.clear_regions)
     app.canvas=tk.Canvas(preview,bg='#e9edf4',highlightthickness=0,height=280);app.canvas.pack(fill='both',expand=True,padx=12,pady=(0,12))
     app.canvas.bind('<Configure>',lambda e:app.schedule_preview())
+    app.preview_hscroll=ttk.Scrollbar(preview,orient='horizontal',command=app.canvas.xview);app.preview_hscroll.pack(fill='x',padx=12,pady=(0,8));app.canvas.configure(xscrollcommand=app.preview_hscroll.set)
     app.canvas.bind('<ButtonPress-1>',app.draw_start);app.canvas.bind('<B1-Motion>',app.draw_move);app.canvas.bind('<ButtonRelease-1>',app.draw_end)
     app.preview_timer=None
     settings=panel(columns);settings.grid(row=0,column=1,sticky='new')
@@ -105,9 +120,13 @@ def build(app):
     ttk.Label(actions,textvariable=app.summary,style='Muted.TLabel').pack(side='left')
     app.run_button=ttk.Button(actions,text='PDF 합치기  →',style='Run.TButton',command=app.run,state='disabled');app.run_button.pack(side='right')
     app.cancel_button=ttk.Button(actions,text='작업 취소',command=app.cancel_job,state='disabled');app.cancel_button.pack(side='right',padx=8)
-    app.open_button=ttk.Button(actions,text='결과 폴더 열기',command=app.open_result,state='disabled');app.open_button.pack(side='right',padx=(8,0))
+    result_actions=ttk.Frame(footer);result_actions.pack(fill='x',pady=(7,0))
+    app.next_button=ttk.Button(result_actions,text='결과로 다음 작업  →',command=app.continue_with_result,state='disabled');app.next_button.pack(side='right')
+    app.open_button=ttk.Button(result_actions,text='결과 폴더 열기',command=app.open_result,state='disabled');app.open_button.pack(side='right',padx=(0,8))
     app.progress=ttk.Progressbar(footer,mode='determinate');app.progress.pack(fill='x',pady=(12,7))
     app.status=tk.StringVar(value='파일을 추가해 주세요.')
     status=ttk.Label(footer,textvariable=app.status,style='Muted.TLabel',wraplength=1050);status.pack(anchor='w',fill='x')
     status.bind('<Configure>',lambda e:status.configure(wraplength=max(200,e.width)))
     app.arrange_cards(1000,force=True)
+    from .effects import DropHover
+    app.drop_hover=DropHover(root,app.drop_area,app.drop_title,app.drop_hint,app.drop_icon,app.busy)

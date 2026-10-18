@@ -169,6 +169,8 @@ def execute(job: dict, emit=lambda message: None, cancel=None) -> Path:
 
 def _process(job, paths, stage, emit, cancel):
     tool = job['tool']; opt = job.get('options', {})
+    if tool=='extract' and 'page_plan' in opt and len(paths)!=1:
+        raise UserError('페이지 정리는 PDF 파일 하나씩 처리하세요.')
     password = opt.get('input_password', '')
     output_password = opt.get('output_password', '')
     if tool == 'protect' and not output_password:
@@ -237,6 +239,22 @@ def _process(job, paths, stage, emit, cancel):
                         dst.insert_pdf(doc, from_page=n, to_page=n)
                         save_pdf(dst, stage / f'{prefix}_{n+1:04d}.pdf', store_password)
             elif tool in ('extract', 'delete'):
+                if tool=='extract' and 'page_plan' in opt:
+                    plan=opt['page_plan']
+                    if not isinstance(plan,list) or not plan or len(plan)>100_000:raise UserError('저장할 페이지 목록을 확인하세요.')
+                    for entry in plan:
+                        if (not isinstance(entry,dict) or type(entry.get('page')) is not int
+                                or not 0<=entry['page']<doc.page_count or type(entry.get('rotation')) is not int
+                                or entry['rotation'] not in (0,90,180,270)):
+                            raise UserError('페이지 순서나 회전 값이 올바르지 않습니다.')
+                    with pdf.open() as dst:
+                        for i,entry in enumerate(plan):
+                            _tick(emit,cancel,i,len(plan),f'{i+1}/{len(plan)} 페이지 정리')
+                            dst.insert_pdf(doc,from_page=entry['page'],to_page=entry['page'])
+                            page=dst[-1];page.set_rotation((page.rotation+entry['rotation'])%360)
+                        metadata={key:value for key,value in (doc.metadata or {}).items() if key not in ('format','encryption')}
+                        dst.set_metadata(metadata);save_pdf(dst,target,store_password)
+                    continue
                 chosen = selected if tool == 'extract' else [n for n in range(doc.page_count) if n not in selected]
                 if not chosen:
                     raise UserError('모든 페이지를 삭제할 수 없습니다.')

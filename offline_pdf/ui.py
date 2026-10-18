@@ -8,6 +8,7 @@ BG = '#f5f7fb'
 PANEL = '#ffffff'
 INK = '#202b3d'
 MUTED = '#637086'
+RED = '#c62828'
 LINE = '#e2e7ef'
 BLUE = '#285de5'
 SOFT = '#edf2ff'
@@ -20,7 +21,7 @@ CARD_TEXT = {
     'extract': ('페이지 정리', '필요한 페이지를 고르고 순서를 바꿉니다'),
     'compress': ('용량 줄이기', 'PDF 파일 크기를 줄입니다'),
     'pdf_images': ('PDF → 이미지', '페이지를 이미지 파일로 저장합니다'),
-    'redact': ('영역 영구 삭제', '지정한 영역의 내용을 삭제합니다'),
+    'redact': ('영역 영구 삭제', '개인정보 삭제 불가'),
     'images_pdf': ('이미지 → PDF', '여러 이미지를 하나의 PDF로 만듭니다'),
     'delete': ('페이지 삭제', '지정한 페이지를 문서에서 삭제합니다'),
     'rotate': ('페이지 회전', '페이지 방향을 바꿉니다'),
@@ -43,7 +44,9 @@ def icon(canvas, key, x, y, color=BLUE):
         canvas.create_line(*points, fill=color, width=1.8, capstyle='round', joinstyle='round', **kwargs)
     def box(a,b,c,d):canvas.create_rectangle(x+a,y+b,x+c,y+d,outline=color,width=1.7)
     def oval(a,b,c,d):canvas.create_oval(x+a,y+b,x+c,y+d,outline=color,width=1.7)
-    if key in ('merge','images_pdf'):
+    if key=='upload':
+        line(3,15,3,22,21,22,21,15);line(12,17,12,2);line(6,8,12,2,18,8)
+    elif key in ('merge','images_pdf'):
         box(2,2,11,15);box(13,8,22,22);line(6,19,11,19,11,22);line(8,16,11,19,8,22)
     elif key=='split':
         oval(2,2,8,8);oval(2,16,8,22);line(7,7,22,21);line(7,17,22,3)
@@ -103,7 +106,7 @@ class ScrollPane(ttk.Frame):
         widget=self.winfo_containing(event.x_root,event.y_root)
         if widget is None or not str(widget).startswith(str(self)):return
         # Native lists and entries keep their own wheel behavior.
-        if isinstance(widget,(tk.Listbox,ttk.Combobox,tk.Text)):return
+        if isinstance(widget,(tk.Listbox,ttk.Combobox,tk.Text)) or getattr(widget,'own_wheel',False):return
         if self.inner.winfo_height()<=self.canvas.winfo_height():return
         step=(-1 if event.num==4 else 1) if event.num in (4,5) else -int(event.delta/120) or (-1 if event.delta>0 else 1)
         self.canvas.yview_scroll(step*3,'units')
@@ -112,25 +115,40 @@ class ScrollPane(ttk.Frame):
 class ToolCard(tk.Canvas):
     def __init__(self, master, key, command):
         super().__init__(master,height=168,width=220,bg=BG,highlightthickness=0,takefocus=True)
-        self.key=key;self.command=command;self.active=False
+        self.key=key;self.command=command;self.active=False;self.enabled=True;self.hover_amount=0
+        from .effects import Tween
+        self.tween=Tween(self,self.animate)
+        self.bind('<Destroy>',lambda e:self.tween.close() if e.widget is self else None,add='+')
         self.bind('<Configure>',lambda e:self.paint())
         self.bind('<Enter>',lambda e:self.highlight(True));self.bind('<Leave>',lambda e:self.highlight(False))
         self.bind('<FocusIn>',lambda e:self.highlight(True));self.bind('<FocusOut>',lambda e:self.highlight(False))
-        self.bind('<ButtonRelease-1>',lambda e:self.command(self.key))
-        self.bind('<Return>',lambda e:self.command(self.key));self.bind('<space>',lambda e:self.command(self.key))
+        self.bind('<ButtonRelease-1>',lambda e:self.activate())
+        self.bind('<Return>',lambda e:self.activate());self.bind('<space>',lambda e:self.activate())
 
-    def highlight(self,active):self.active=active;self.paint()
+    def activate(self):
+        if self.enabled:self.command(self.key)
+
+    def set_enabled(self,enabled):
+        self.enabled=enabled;self.configure(takefocus=enabled);self.paint()
+
+    def highlight(self,active):self.active=active;self.tween.to(1 if active and self.enabled else 0)
+    def animate(self,value):self.hover_amount=value;self.paint()
     def paint(self):
         self.delete('all');w=self.winfo_width();h=self.winfo_height();r=13
         points=[r,1,w-r,1,w-1,1,w-1,r,w-1,h-r,w-1,h-1,w-r,h-1,r,h-1,1,h-1,1,h-r,1,r,1,1]
-        self.create_polygon(points,smooth=True,fill=PANEL,outline=BLUE if self.active else LINE,width=1.5)
+        from .effects import mix
+        lift=round(3*self.hover_amount) if self.enabled else 0
+        points=[v+4-lift if i%2 else v for i,v in enumerate(points)]
+        self.create_polygon(points,smooth=True,fill=PANEL if self.enabled else BG,outline=mix(LINE,BLUE,self.hover_amount) if self.enabled else LINE,width=1.5)
         self.create_rectangle(20,20,60,60,fill=SOFT,outline=SOFT)
-        icon(self,self.key,28,28)
+        icon(self,self.key,28,28,BLUE if self.enabled else MUTED)
         self.create_line(w-33,31,w-23,21,w-23,29,fill=MUTED,width=1.5)
         self.create_line(w-23,21,w-31,21,fill=MUTED,width=1.5)
         title,description=CARD_TEXT[self.key]
-        self.create_text(20,78,anchor='nw',text=title,font=(FONT,13,'bold'),fill=INK,width=max(100,w-40))
-        self.create_text(20,112,anchor='nw',text=description,font=(FONT,9),fill=MUTED,width=max(100,w-40))
+        self.create_text(20,78,anchor='nw',text=title,font=(FONT,13,'bold'),fill=INK if self.enabled else MUTED,width=max(100,w-40))
+        self.create_text(20,112,anchor='nw',text=description if self.enabled else '현재 결과의 파일 형식은 지원하지 않습니다',font=(FONT,9),fill=RED if self.key=='redact' and self.enabled else MUTED,width=max(100,w-40))
+        if lift:
+            for item in self.find_all()[1:]:self.move(item,0,-lift)
 
 
 def setup_style(root):
@@ -148,6 +166,8 @@ def setup_style(root):
     style.configure('TButton',padding=(12,8),background=PANEL,bordercolor=LINE,lightcolor=LINE,darkcolor=LINE,relief='flat')
     style.map('TButton',background=[('active',SOFT)],foreground=[('disabled',MUTED)])
     style.configure('Quiet.TButton',background=BG,borderwidth=0,foreground=MUTED)
+    style.configure('Back.TButton',background=PANEL,foreground=INK,font=(FONT,12,'bold'),padding=(20,12),borderwidth=2,bordercolor=LINE,lightcolor=LINE,darkcolor=LINE)
+    style.map('Back.TButton',background=[('active',SOFT)],bordercolor=[('active',BLUE)],foreground=[('active',BLUE)])
     style.configure('Run.TButton',font=(FONT,11,'bold'),padding=(22,12),background=BLUE,foreground=PANEL,bordercolor=BLUE)
     style.map('Run.TButton',background=[('disabled','#ccd5e8'),('active','#1e4fc9')],foreground=[('disabled',MUTED),('!disabled',PANEL)])
     style.configure('TEntry',fieldbackground=PANEL,padding=7,bordercolor=LINE,lightcolor=LINE,darkcolor=LINE)

@@ -6,6 +6,7 @@ import tempfile
 import time
 import tkinter as tk
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pymupdf as pdf
@@ -93,7 +94,7 @@ class AppTests(unittest.TestCase):
         self.assertEqual({h for w,h in sizes},{168})
         self.app.select_tool('redact');self.root.update()
         self.assertTrue(self.app.work.winfo_ismapped());self.assertFalse(self.app.home.winfo_ismapped())
-        self.assertTrue(self.app.region_controls.winfo_ismapped())
+        self.assertTrue(self.app.clear_preview_regions.winfo_ismapped())
         with patch.object(self.app,'busy',return_value=True):
             self.app.show_home();self.app.select_tool('merge')
         self.assertEqual(self.app.tool,'redact');self.assertTrue(self.app.work.winfo_ismapped())
@@ -136,10 +137,187 @@ class AppTests(unittest.TestCase):
         self.assertTrue(self.app.preview_panel.winfo_ismapped())
         self.app.select_tool('redact');self.root.update()
         self.assertTrue(self.app.preview_panel.winfo_ismapped())
-        self.assertEqual(str(self.app.preview_button.cget('state')),'disabled')
+        self.assertTrue(self.app.clear_preview_regions.winfo_ismapped())
         button=self.app.run_button
         self.assertLessEqual(button.winfo_rooty()+button.winfo_height(),self.root.winfo_rooty()+self.root.winfo_height())
         self.app.select_tool('merge');self.root.geometry('1180x850');self.root.update()
+
+    def wait_for_job(self):
+        deadline=time.monotonic()+20
+        while self.app.process is not None and time.monotonic()<deadline:
+            self.root.update();time.sleep(.02)
+        self.assertIsNone(self.app.process,'PDF worker did not finish')
+
+    def test_n_merge_compress_delete_result_chain(self):
+        self.app.cancel_continue();self.app.select_tool('merge')
+        second=self.folder/'연속 작업 두번째.pdf';second.write_bytes(self.source.read_bytes())
+        self.app.files=[str(self.source),str(second)];self.app.sync_list()
+        self.app.save_mode.set('지정한 폴더');self.app.output.set(str(self.folder));self.app.auto_open.set(False)
+        self.app.output_name.set('연속 병합.pdf')
+        original_bytes=self.source.read_bytes()
+        with patch('offline_pdf.app.messagebox.showerror',side_effect=AssertionError('Unexpected UI error')):
+            self.app.run();self.wait_for_job()
+            merged=self.app.result_files[0];merged_bytes=Path(merged).read_bytes()
+            self.assertEqual(str(self.app.next_button.cget('state')),'normal')
+            self.app.next_button.invoke();self.root.update()
+            self.assertTrue(self.app.home.winfo_ismapped())
+            self.assertFalse(self.app.cards['images_pdf'].enabled)
+            self.app.cards['compress'].activate();self.root.update()
+            self.assertEqual(self.app.files,[merged]);self.assertEqual(self.app.tool,'compress')
+            self.assertEqual(self.app.output.get(),str(self.folder))
+            self.app.run();self.assertEqual(str(self.app.next_button.cget('state')),'disabled');self.wait_for_job()
+            compressed=self.app.result_files[0];compressed_bytes=Path(compressed).read_bytes()
+            self.app.next_button.invoke();self.app.cards['delete'].activate();self.root.update()
+            self.assertEqual(self.app.files,[compressed]);self.assertEqual(self.app.tool,'delete')
+            self.app.options['pages'].set('2');self.app.run();self.wait_for_job()
+        final=self.app.result_files[0]
+        with pdf.open(final) as doc:
+            self.assertEqual(len(doc),3)
+            self.assertEqual([page.get_text().strip() for page in doc],['FIRST','FIRST','SECOND'])
+        for output in (merged,compressed,final):self.assertEqual(Path(output).parent.parent,self.folder)
+        self.assertEqual(self.source.read_bytes(),original_bytes)
+        self.assertEqual(Path(merged).read_bytes(),merged_bytes)
+        self.assertEqual(Path(compressed).read_bytes(),compressed_bytes)
+
+    def test_o_pending_chain_cancel_missing_file_and_busy(self):
+        before=list(self.app.files)
+        self.app.continue_with_result();self.root.update()
+        self.app.select_tool('images_pdf')
+        self.assertEqual(self.app.files,before)
+        self.app.chain_cancel_button.invoke();self.root.update()
+        self.assertIsNone(self.app.pending_results)
+        self.assertTrue(all(card.enabled for card in self.app.cards.values()))
+        self.assertEqual(self.app.files,before)
+        with patch.object(self.app,'busy',return_value=True):self.app.continue_with_result()
+        self.assertIsNone(self.app.pending_results)
+        saved=self.app.result_files
+        try:
+            self.app.result_files=(str(self.folder/'missing-result.pdf'),)
+            self.app.continue_with_result()
+            with patch('offline_pdf.app.messagebox.showinfo') as notice:self.app.select_tool('compress')
+            notice.assert_called_once();self.assertEqual(self.app.files,before)
+            self.assertIsNotNone(self.app.pending_results)
+        finally:self.app.result_files=saved;self.app.cancel_continue()
+
+    def test_p_image_results_continue_and_text_results_stop(self):
+        self.app.select_tool('pdf_images');self.app.files=[str(self.source)];self.app.sync_list()
+        self.app.options['dpi'].set('72');self.app.options['format'].set('PNG')
+        self.app.save_mode.set('지정한 폴더');self.app.output.set(str(self.folder))
+        with patch('offline_pdf.app.messagebox.askokcancel',return_value=True),patch('offline_pdf.app.messagebox.showerror',side_effect=AssertionError('Unexpected UI error')):
+            self.app.run();self.wait_for_job();images=self.app.result_files
+            self.assertEqual(len(images),2)
+            self.app.continue_with_result();self.root.update()
+            self.assertEqual({key for key,card in self.app.cards.items() if card.enabled},{'images_pdf'})
+            self.assertTrue(self.app.show_all_tools)
+            self.app.cards['images_pdf'].activate();self.assertEqual(self.app.files,list(images))
+            self.app.run();self.wait_for_job()
+            with pdf.open(self.app.result_files[0]) as doc:self.assertEqual(len(doc),2)
+            self.app.select_tool('text');self.app.files=[str(self.source)];self.app.sync_list()
+            self.app.run();self.wait_for_job()
+            self.assertEqual({Path(p).suffix for p in self.app.result_files},{'.txt'})
+            self.assertEqual(str(self.app.next_button.cget('state')),'disabled')
+
+    def test_q_failed_job_does_not_offer_previous_results(self):
+        self.app.select_tool('merge');self.app.files=[str(self.source)];self.app.sync_list()
+        self.app.output_name.set('CON.pdf')
+        with patch('offline_pdf.app.messagebox.showerror') as error:
+            self.app.run();self.wait_for_job();error.assert_called_once()
+        self.assertEqual(self.app.result_files,())
+        self.assertIsNone(self.app.result_folder)
+        self.assertEqual(str(self.app.next_button.cget('state')),'disabled')
+        self.assertFalse(list(self.folder.glob('.offline-pdf-*')))
+
+    def pump(self,seconds=.3):
+        deadline=time.monotonic()+seconds
+        while time.monotonic()<deadline:self.root.update();time.sleep(.01)
+
+    def test_r_drag_pages_rotate_delete_save_and_continue(self):
+        source=self.folder/'페이지 정리 시험.pdf'
+        with pdf.open() as doc:
+            for i in range(8):doc.new_page().insert_text((72,72),f'PAGE {i+1}')
+            doc.save(source)
+        original=source.read_bytes();self.app.cancel_continue();self.app.select_tool('extract');self.app.add_paths([str(source)]);self.pump()
+        o=self.app.organizer;c=o.canvas
+        self.assertEqual(len(o.model.items),8);self.assertTrue(o.winfo_ismapped());self.assertFalse(self.app.columns.winfo_ismapped())
+        x1=int(o.cellw*.5);x3=int(o.cellw*2.8)
+        c.event_generate('<ButtonPress-1>',x=x1,y=100);self.root.update()
+        c.event_generate('<B1-Motion>',x=x3,y=110);self.root.update()
+        self.assertIsNotNone(o.boundary)
+        c.event_generate('<ButtonRelease-1>',x=x3,y=110);self.root.update()
+        self.assertEqual([p[1] for p in o.model.items],[1,2,0,3,4,5,6,7])
+        o.model.selected={1};o.rotate();o.model.selected={2};o.delete()
+        self.assertEqual(o.model.plan()[1],{'page':0,'rotation':90})
+        o.model.selected={1};o.enlarge();self.pump();self.assertTrue(self.app.preview_panel.winfo_ismapped())
+        self.assertEqual(self.app.page_index,0);self.app.turn(1);self.assertEqual(self.app.page_index,3)
+        self.app.hide_preview();self.root.update();self.assertEqual(o.model.plan()[1]['rotation'],90)
+        self.app.save_mode.set('지정한 폴더');self.app.output.set(str(self.folder))
+        with patch('offline_pdf.app.messagebox.showerror',side_effect=AssertionError('Unexpected UI error')):
+            self.app.run();self.wait_for_job()
+        result=self.app.result_files[0]
+        with pdf.open(result) as doc:
+            self.assertEqual([p.get_text().strip() for p in doc],['PAGE 3','PAGE 1','PAGE 4','PAGE 5','PAGE 6','PAGE 7','PAGE 8'])
+            self.assertEqual(doc[1].rotation,90)
+        self.assertEqual(source.read_bytes(),original)
+        self.app.continue_with_result();self.app.select_tool('compress');self.assertEqual(self.app.files,[result])
+
+    def test_s_width_fit_zoom_and_scrolled_redaction_coordinates(self):
+        self.app.select_tool('redact');self.app.files=[str(self.source)];self.app.sync_list();self.app.show_preview();self.pump()
+        self.app.set_preview_mode('width');self.pump()
+        self.assertGreater(self.app.canvas.winfo_width(),self.root.winfo_width()*.8)
+        width_scale=self.app.preview_scale
+        self.assertAlmostEqual(width_scale,(self.app.canvas.winfo_width()-24)/self.app.preview_rect[0],places=3)
+        self.assertGreater(self.app.canvas.winfo_height(),self.root.winfo_height())
+        self.app.set_preview_mode('page');self.pump();self.assertLess(self.app.preview_scale,width_scale)
+        self.app.set_preview_mode('width');self.app.zoom_preview(.5);self.pump();self.app.canvas.xview_moveto(.2)
+        start=SimpleNamespace(x=30,y=50);end=SimpleNamespace(x=170,y=160)
+        a=self.app.canvas_point(start);b=self.app.canvas_point(end)
+        self.app.regions={};self.app.draw_start(start);self.app.draw_move(end);self.app.draw_end(end)
+        coords=self.app.regions[str(self.source)]['0'][0]
+        for got,wanted in zip(coords,[a[0],a[1],b[0],b[1]]):self.assertAlmostEqual(got,wanted)
+        self.app.clear_regions();self.app.preview_zoom=1.;self.app.select_tool('merge')
+
+    def test_t_large_document_virtual_thumbnails_and_busy_lock(self):
+        source=self.folder/'많은 페이지.pdf'
+        with pdf.open() as doc:
+            for i in range(150):doc.new_page().insert_text((72,72),str(i+1))
+            doc.save(source)
+        self.app.select_tool('extract');self.app.add_paths([str(source)]);self.pump()
+        o=self.app.organizer;self.assertEqual(len(o.model.items),150);self.assertLessEqual(len(o.cache),20)
+        o.scroll_to('moveto',1);self.pump();self.assertLessEqual(len(o.cache),40)
+        self.assertGreater(o.canvas.yview()[0],.5)
+        before=o.model.plan();o.model.selected={1}
+        with patch.object(self.app,'busy',return_value=True):o.rotate();o.delete();o.reset();o.keyboard_move(1)
+        self.assertEqual(o.model.plan(),before)
+        o.scroll_to('moveto',0);o.model.selected={1};o.keyboard_move(1)
+        self.assertEqual(o.model.items[1][1],0);o.undo();self.assertEqual(o.model.items[0][1],0)
+
+    def test_u_menu_and_drop_hover_transitions(self):
+        self.app.show_home();self.root.update();card=self.app.cards['merge'];card.highlight(True);self.pump(.22)
+        self.assertGreater(card.hover_amount,.9);card.highlight(False);self.pump(.22);self.assertLess(card.hover_amount,.1)
+        self.app.select_tool('merge');self.app.hide_preview();self.root.update()
+        self.app.drop_icon.event_generate('<Motion>',warp=True,x=15,y=15);self.pump(.3)
+        self.assertTrue(self.app.drop_hover.active)
+        self.assertGreater(self.app.drop_hover.tween.value,.9)
+        self.app.back_button.event_generate('<Motion>',warp=True,x=5,y=5);self.pump(.3)
+        self.assertFalse(self.app.drop_hover.active)
+        self.assertGreaterEqual(self.app.back_button.winfo_height(),40)
+
+    def test_v_encrypted_organizer_settings_and_source_replacement(self):
+        source=self.folder/'암호 페이지.pdf'
+        with pdf.open(self.source) as doc:doc.save(source,encryption=pdf.PDF_ENCRYPT_AES_256,user_pw='password',owner_pw='password')
+        self.app.select_tool('extract');self.app.add_paths([str(source)]);self.assertIsNone(self.app.organizer.model)
+        dialog=self.app.organizer_settings();self.app.options['input_password'].set('password')
+        buttons=dialog.winfo_children()[0].winfo_children()
+        next(b for b in buttons if isinstance(b,tk.ttk.Button) and b.cget('text')=='확인').invoke()
+        self.root.update();self.assertEqual(len(self.app.organizer.model.items),2)
+        self.app.organizer.model.selected={1};self.app.organizer.rotate()
+        with patch('offline_pdf.app.messagebox.showerror',side_effect=AssertionError('Unexpected UI error')):
+            self.app.run();self.wait_for_job()
+        with pdf.open(self.app.result_files[0]) as doc:
+            self.assertTrue(doc.needs_pass);self.assertTrue(doc.authenticate('password'));self.assertEqual(doc[0].rotation,90)
+        self.app.add_paths([str(self.source)]);self.assertEqual(self.app.files,[str(self.source.resolve())])
+        self.assertEqual([p['rotation'] for p in self.app.organizer.model.plan()],[0,0])
+        self.app.add_paths([str(self.source),str(source)]);self.assertEqual(self.app.files,[str(self.source.resolve())])
 
     @unittest.skipUnless(os.name=='nt','Windows Shell integration test')
     def test_h_native_windows_drop_message(self):

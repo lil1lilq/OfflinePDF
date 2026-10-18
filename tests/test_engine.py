@@ -51,6 +51,25 @@ class EngineTests(unittest.TestCase):
         with pdf.open(self.output_pdf(folder)) as doc:
             self.assertEqual(len(doc),3);self.assertIn('THIRD',doc[0].get_text());self.assertIn('FIRST',doc[2].get_text())
 
+    def test_visual_plan_preserves_order_and_independent_rotation(self):
+        plan=[{'page':2,'rotation':0},{'page':0,'rotation':90},{'page':0,'rotation':180}]
+        with pdf.open(self.output_pdf(self.run_tool('extract',page_plan=plan))) as doc:
+            self.assertEqual([p.rotation for p in doc],[0,90,180])
+            self.assertEqual([p.get_text().strip() for p in doc],['THIRD PAGE','FIRST SECRET','FIRST SECRET'])
+            self.assertEqual(doc.metadata['author'],'SENSITIVE AUTHOR')
+
+    def test_visual_plan_invalid_values_discard_entire_output(self):
+        for plan in ([],[{'page':-1,'rotation':0}],[{'page':3,'rotation':0}],[{'page':0,'rotation':45}],[{'page':True,'rotation':0}],{'page':0}):
+            with self.assertRaises(UserError):self.run_tool('extract',page_plan=plan)
+            self.assertFalse(list(self.root.glob('.offline-pdf-*')))
+
+    def test_visual_plan_keeps_pdf_encrypted(self):
+        source=self.output_pdf(self.run_tool('protect',output_password='secret'))
+        folder=self.run_tool('extract',[str(source)],input_password='secret',page_plan=[{'page':1,'rotation':270}])
+        with pdf.open(self.output_pdf(folder)) as doc:
+            self.assertTrue(doc.needs_pass);self.assertTrue(doc.authenticate('secret'))
+            self.assertEqual(doc[0].rotation,270);self.assertIn('SECOND',doc[0].get_text())
+
     def test_split_and_delete(self):
         self.assertEqual(len(list(self.run_tool('split',pages='1,3').glob('*.pdf'))),2)
         folder=self.run_tool('delete',pages='1,3')
