@@ -8,7 +8,7 @@ from pathlib import Path
 from tkinter import filedialog, ttk
 
 from ..engine import UserError, open_pdf, split_ranges
-from ..images import EXPORT_FORMATS, IMAGE_EXTENSIONS, open_image_document
+from ..images import EXPORT_FORMATS, IMAGE_EXTENSIONS, IMAGE_PATTERN, open_image_document
 from ..passwords import ask_password, cached_password, ensure_password
 from ..tools import TOOLS
 from ..ui import BLUE, CARD_TEXT, MUTED, RED, icon
@@ -104,7 +104,7 @@ class FormController:
                     filedialog.askdirectory(parent=self.root)
                     if browse == "dir"
                     else filedialog.askopenfilename(
-                        parent=self.root, filetypes=[("이미지", "*.png *.jpg *.jpeg")]
+                        parent=self.root, filetypes=[("이미지", IMAGE_PATTERN)]
                     )
                 )
                 if path:
@@ -135,6 +135,15 @@ class FormController:
                 or (key in ("split_count", "split_starts") and not n_split)
             ):
                 continue
+            if self.tool == "protect" and key == "output_password":
+                if self.options["password_mode"].get() == "암호 제거":
+                    continue
+            if self.tool == "watermark":
+                image = self.options["insert_mode"].get() == "이미지"
+                if (image and key in ("text", "font_size")) or (
+                    not image and key in ("stamp_path", "stamp_width")
+                ):
+                    continue
             visible.append(cell)
         for i, cell in enumerate(visible):
             cell.grid(
@@ -224,7 +233,6 @@ class FormController:
         if self.tool not in (
             "merge",
             "images_pdf",
-            "unlock",
             "protect",
             "compress",
             "clean",
@@ -248,7 +256,9 @@ class FormController:
         else:
             self.split_summary.pack_forget()
         if self.tool == "protect":
+            self.field("작업", "password_mode", "암호 설정", ["암호 설정", "암호 제거"])
             self.field("새 암호", "output_password", secret=True)
+            self.options["password_mode"].trace_add("write", self.update_password_mode)
         elif self.tool in ("merge", "images_pdf"):
             self.options["output_password"] = tk.StringVar()
         self.output_password_button.config(text="암호 추가")
@@ -259,24 +269,37 @@ class FormController:
         if self.tool == "upscale":
             self.field("확대 배율 (배)", "scale", "2", ["2", "4"])
             self.ai_preview_button.pack(side="left", padx=8)
-        if self.tool == "rotate":
-            self.field("시계 방향 각도", "angle", "90", ["90", "180", "270"])
         if self.tool == "pdf_images":
             self.field("해상도 DPI", "dpi", "150", ["72", "100", "150", "200", "300"])
             self.field("저장 형식", "format", "JPG", list(EXPORT_FORMATS))
         if self.tool == "images_pdf":
             self.field("A4 방향", "orientation", "세로", ["세로", "가로"])
         if self.tool == "watermark":
+            self.field("삽입 종류", "insert_mode", "문구", ["문구", "이미지"])
             self.field("문구", "text", "내부 업무용")
             self.field("글자 크기", "font_size", "24")
+            self.field("이미지 파일", "stamp_path", browse="file")
+            self.field("이미지 너비 pt", "stamp_width", "100")
+            self.field(
+                "삽입 위치",
+                "position",
+                "가운데",
+                [
+                    "왼쪽 위",
+                    "가운데 위",
+                    "오른쪽 위",
+                    "가운데",
+                    "왼쪽 아래",
+                    "가운데 아래",
+                    "오른쪽 아래",
+                ],
+            )
             self.field("불투명도", "opacity", "0.25")
+            self.options["insert_mode"].trace_add("write", self.update_insert_mode)
         if self.tool == "number":
             self.field("시작 번호", "start", "1")
         if self.tool == "crop":
             self.field("여백 mm", "margin", "10")
-        if self.tool == "stamp":
-            self.field("서명 이미지", "stamp_path", browse="file")
-            self.field("너비 pt", "stamp_width", "100")
         if self.tool == "ocr":
             root = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
             self.field("언어자료 폴더", "tessdata", str(root / "tessdata"), browse="dir")
@@ -308,6 +331,27 @@ class FormController:
             self.run_button.config(text="정리한 PDF 저장  →")
         elif self.tool == "redact":
             self.show_preview()
+
+    def effective_tool(self):
+        """Translate the selected mode into the existing worker operation."""
+        if self.tool == "protect" and self.options["password_mode"].get() == "암호 제거":
+            return "unlock"
+        if self.tool == "watermark" and self.options["insert_mode"].get() == "이미지":
+            return "stamp"
+        return self.tool
+
+    def update_password_mode(self, *_):
+        removing = self.options["password_mode"].get() == "암호 제거"
+        if removing:
+            self.options["output_password"].set("")
+        self.run_button.config(text=("암호 제거" if removing else "암호 설정") + "  →")
+        self.arrange_fields()
+
+    def update_insert_mode(self, *_):
+        image = self.options["insert_mode"].get() == "이미지"
+        self.options["position"].set("오른쪽 아래" if image else "가운데")
+        self.options["opacity"].set("1" if image else "0.25")
+        self.arrange_fields()
 
     def compression_note(self, *_):
         notes = {

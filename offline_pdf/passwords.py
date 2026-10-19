@@ -13,6 +13,12 @@ def fingerprint(path):
     return stat.st_size, stat.st_mtime_ns
 
 
+def requested_tool(app):
+    """The combined password tool still requires owner rights for removal."""
+    resolve = getattr(app, "effective_tool", None)
+    return resolve() if callable(resolve) else app.tool
+
+
 def ask_password(app, path=None, *, output=False, explanation=""):
     result = None
     dialog = tk.Toplevel(app.root)
@@ -79,7 +85,7 @@ def ask_password(app, path=None, *, output=False, explanation=""):
                     path, password, extraction=app.tool in ("text", "pdf_images", "ocr")
                 )
                 try:
-                    if app.tool == "unlock" and not doc.authenticate(password) & 4:
+                    if requested_tool(app) == "unlock" and not doc.authenticate(password) & 4:
                         raise UserError("암호 해제에는 소유자 암호가 필요합니다.")
                 finally:
                     doc.close()
@@ -136,7 +142,7 @@ def ensure_password(app, path):
                     path, password, extraction=app.tool in ("text", "pdf_images", "ocr")
                 )
                 try:
-                    valid = app.tool != "unlock" or bool(doc.authenticate(password) & 4)
+                    valid = requested_tool(app) != "unlock" or bool(doc.authenticate(password) & 4)
                 finally:
                     doc.close()
                 if valid:

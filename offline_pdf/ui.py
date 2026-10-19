@@ -5,6 +5,8 @@ from __future__ import annotations
 import tkinter as tk
 from tkinter import ttk
 
+from .tools import TOOLS
+
 BG = "#f5f7fb"
 PANEL = "#ffffff"
 INK = "#202b3d"
@@ -16,27 +18,25 @@ SOFT = "#edf2ff"
 FONT = "맑은 고딕"
 
 POPULAR = ("merge", "split", "extract", "compress", "ocr", "pdf_images")
-CARD_TEXT = {
-    "merge": ("PDF 합치기", "여러 PDF를 하나로 합칩니다"),
-    "split": ("PDF 나누기", "페이지별 또는 N개 파일로 나눕니다"),
-    "extract": ("페이지 정리", "필요한 페이지를 고르고 순서를 바꿉니다"),
-    "compress": ("용량 줄이기", "PDF 파일 크기를 줄입니다"),
-    "upscale": ("AI 업스케일", "흐린 스캔 이미지를 확대·보정합니다"),
-    "pdf_images": ("PDF → 이미지", "페이지를 이미지 파일로 저장합니다"),
-    "redact": ("영역 영구 삭제", "선택한 영역의 내용을 영구 삭제합니다"),
-    "images_pdf": ("이미지 → PDF", "여러 이미지를 하나의 PDF로 만듭니다"),
-    "delete": ("페이지 삭제", "지정한 페이지를 문서에서 삭제합니다"),
-    "rotate": ("페이지 회전", "페이지 방향을 바꿉니다"),
-    "protect": ("암호 설정", "PDF를 열 때 사용할 암호를 설정합니다"),
-    "unlock": ("암호 해제", "소유자 암호로 PDF의 암호를 해제합니다"),
-    "watermark": ("워터마크", "페이지에 지정한 문구를 넣습니다"),
-    "number": ("쪽 번호", "페이지에 쪽 번호를 넣습니다"),
-    "stamp": ("서명·직인 이미지", "페이지에 서명이나 직인 이미지를 넣습니다"),
-    "crop": ("여백 자르기", "페이지 가장자리의 여백을 조정합니다"),
-    "text": ("텍스트 추출", "PDF의 글자를 텍스트 파일로 저장합니다"),
-    "clean": ("문서 부가정보 정리", "문서에 포함된 부가정보를 정리합니다"),
-    "ocr": ("검색 가능한 PDF", "스캔 문서의 글자를 인식합니다"),
+# Titles share one source; compact summaries fit the basic cards.
+CARD_SUMMARIES = {
+    "merge": "여러 파일을 하나의 PDF로 합칩니다",
+    "split": "페이지별 또는 N개 파일로 나눕니다",
+    "extract": "페이지 순서·삭제·회전을 편집합니다",
+    "compress": "압축 수준을 선택해 용량을 줄입니다",
+    "upscale": "스캔 이미지를 AI로 확대·보정합니다",
+    "pdf_images": "PDF 페이지를 이미지로 저장합니다",
+    "images_pdf": "이미지를 PDF로 변환합니다",
+    "protect": "PDF 암호를 설정하거나 제거합니다",
+    "watermark": "문구 또는 서명·직인 이미지를 넣습니다",
+    "number": "페이지에 쪽 번호를 넣습니다",
+    "crop": "페이지 가장자리의 여백을 조정합니다",
+    "text": "PDF 글자를 TXT로 저장합니다",
+    "redact": "선택 영역의 내용을 영구 삭제합니다",
+    "clean": "문서에 포함된 부가정보를 정리합니다",
+    "ocr": "한글, 영어 지원 · 검색·복사 가능한 PDF",
 }
+CARD_TEXT = {key: (title, CARD_SUMMARIES[key]) for key, (title, _) in TOOLS.items()}
 
 
 def icon(canvas, key, x, y, color=BLUE):
@@ -273,7 +273,7 @@ class ToolCard(tk.Canvas):
         self.enabled = True
         self.hover_amount = 0
         self.compact = False
-        self.tooltip = Tooltip(self, CARD_TEXT[key][1])
+        self.tooltip = Tooltip(self, TOOLS[key][1])
         from .effects import Tween
 
         self.tween = Tween(self, self.animate)
@@ -384,7 +384,7 @@ class ToolCard(tk.Canvas):
             78,
             anchor="nw",
             text=title,
-            font=(FONT, 13, "bold"),
+            font=(FONT, 10 if self.key == "ocr" else 13, "bold"),
             fill=INK if self.enabled else MUTED,
             width=max(100, w - 40),
         )

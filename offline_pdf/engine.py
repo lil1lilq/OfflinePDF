@@ -21,6 +21,7 @@ from .images import (
     save_pixmap,
 )
 from .ocr import OCRSetupError, model_directory
+from .overlays import OverlayError, prepare_overlay
 
 
 class UserError(Exception):
@@ -275,6 +276,14 @@ def prepare_image_inputs(job, paths, stage, emit, cancel):
 def _process(job, paths, stage, emit, cancel):
     tool = job["tool"]
     opt = job.get("options", {})
+    overlay = None
+    if tool in ("watermark", "stamp"):
+        if tool == "stamp":
+            check_local_path(opt.get("stamp_path", ""))
+        try:
+            overlay = prepare_overlay(opt, image=tool == "stamp")
+        except OverlayError as exc:
+            raise UserError(str(exc)) from None
     if tool == "extract" and "page_plan" in opt and len(paths) != 1:
         raise UserError("페이지 정리는 PDF 파일 하나씩 처리하세요.")
     passwords = job.get("passwords", {})
@@ -500,32 +509,11 @@ def _process(job, paths, stage, emit, cancel):
                         if angle not in (90, 180, 270):
                             raise UserError("90·180·270도 중 선택하세요.")
                         page.set_rotation((page.rotation + angle) % 360)
-                    elif tool == "watermark":
-                        text = opt.get("text", "").strip()
-                        if not text:
-                            raise UserError("워터마크 문구를 입력하세요.")
-                        size = number(opt.get("font_size", "24"), 8, 72, "글자 크기")
-                        opacity = number(opt.get("opacity", "0.25"), 0.05, 1, "불투명도")
-                        rect = pdf.Rect(
-                            20,
-                            page.rect.height / 2 - 40,
-                            page.rect.width - 20,
-                            page.rect.height / 2 + 50,
-                        )
-                        rect = rect * page.derotation_matrix
-                        if (
-                            page.insert_textbox(
-                                rect,
-                                text,
-                                fontname="korea",
-                                fontsize=size,
-                                align=1,
-                                color=(0.35, 0.35, 0.35),
-                                fill_opacity=opacity,
-                            )
-                            < 0
-                        ):
-                            raise UserError("문구가 영역보다 큽니다. 글자 크기를 줄이세요.")
+                    elif tool in ("watermark", "stamp"):
+                        try:
+                            overlay.draw(page)
+                        except OverlayError as exc:
+                            raise UserError(str(exc)) from None
                     elif tool == "number":
                         start = number(opt.get("start", "1"), 0, 999999, "시작 번호", integer=True)
                         rect = (
@@ -538,23 +526,6 @@ def _process(job, paths, stage, emit, cancel):
                             * page.derotation_matrix
                         )
                         page.insert_textbox(rect, str(start + index), fontsize=11, align=1)
-                    elif tool == "stamp":
-                        image_path = Path(opt.get("stamp_path", ""))
-                        check_local_path(image_path)
-                        if not image_path.is_file():
-                            raise UserError("서명·직인 이미지 파일을 선택하세요.")
-                        width = number(opt.get("stamp_width", "100"), 10, 400, "서명 너비")
-                        rect = pdf.Rect(
-                            page.rect.width - width - 20,
-                            page.rect.height - 100,
-                            page.rect.width - 20,
-                            page.rect.height - 20,
-                        )
-                        page.insert_image(
-                            rect * page.derotation_matrix,
-                            filename=str(image_path),
-                            keep_proportion=True,
-                        )
                     elif tool == "crop":
                         margin = number(opt.get("margin", "10"), 0, 100, "여백 자르기") * 72 / 25.4
                         rect = page.cropbox + (margin, margin, -margin, -margin)

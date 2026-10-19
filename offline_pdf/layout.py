@@ -153,7 +153,7 @@ def build(app):
     actions = ttk.Frame(footer)
     actions.pack(fill="x")
     app.run_button = ttk.Button(
-        actions, text="PDF 합치기  →", style="Run.TButton", command=app.run, state="disabled"
+        actions, text="병합  →", style="Run.TButton", command=app.run, state="disabled"
     )
     app.run_button.pack(side="right")
     app.cancel_button = ttk.Button(

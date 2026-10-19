@@ -26,6 +26,7 @@ class JobController:
         if not self.files:
             messagebox.showinfo("파일 추가", "처리할 파일을 먼저 추가하세요.", parent=self.root)
             return
+        actual_tool = self.effective_tool()
         active_files = (
             [self.selected_file()]
             if preview or self.tool in ("extract", "split")
@@ -71,10 +72,7 @@ class JobController:
         if not Path(self.output.get()).is_dir():
             messagebox.showinfo("저장 폴더", "결과를 저장할 폴더를 선택하세요.", parent=self.root)
             return
-        if self.tool == "delete" and not self.options["pages"].get().strip():
-            messagebox.showinfo("페이지 지정", "삭제할 페이지를 입력하세요.", parent=self.root)
-            return
-        if self.tool in ("redact", "unlock", "pdf_images", "text", "crop"):
+        if actual_tool in ("redact", "unlock", "pdf_images", "text", "crop"):
             notes = {
                 "redact": "지정 영역을 실제 삭제하며 문서의 첨부파일·양식 필드·주석·링크·속성도 정리합니다. 잘린 페이지는 지원하지 않습니다. 지정 영역 밖의 정보는 남으므로 결과를 확인하세요.",
                 "unlock": "결과 PDF의 암호가 제거됩니다.",
@@ -83,7 +81,7 @@ class JobController:
                 "crop": "여백 자르기는 내용을 숨기는 기능입니다. 잘린 부분의 정보도 문서 안에 남습니다.",
             }
             if not messagebox.askokcancel(
-                "작업 확인", notes[self.tool] + "\n\n계속하시겠습니까?", parent=self.root
+                "작업 확인", notes[actual_tool] + "\n\n계속하시겠습니까?", parent=self.root
             ):
                 return
         try:
@@ -108,12 +106,14 @@ class JobController:
             messagebox.showerror("파일 확인", str(exc), parent=self.root)
             return
         job = {
-            "tool": self.tool,
+            "tool": actual_tool,
             "files": active_files,
             "output": self.output.get(),
             "options": {k: v.get() for k, v in self.options.items() if k != "hint"},
         }
         job["passwords"] = {p: cached_password(self, p) for p in active_files}
+        if actual_tool == "unlock":
+            job["options"].pop("output_password", None)
         if self.tool in ("merge", "images_pdf"):
             job["options"]["output_name"] = self.output_name.get()
         if (
@@ -134,7 +134,7 @@ class JobController:
         self.preview_job = preview
         self.converted_count = 0
         self.job_passwords = {}
-        if not preview and self.tool not in ("unlock", "text", "pdf_images"):
+        if not preview and actual_tool not in ("unlock", "text", "pdf_images"):
             for i, path in enumerate(active_files):
                 self.job_passwords[f"{i + 1:03d}_"] = job["options"].get("output_password") or job[
                     "passwords"

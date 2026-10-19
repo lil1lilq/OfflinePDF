@@ -32,7 +32,7 @@ class CardLayoutTests(unittest.TestCase):
         App.arrange_cards(state, 1660, force=True)
         large_columns = state.card_columns
         self.assertGreater(large_columns, small_columns)
-        self.assertEqual(len(state.cards), 19)
+        self.assertEqual(len(state.cards), 15)
         for card in state.cards.values():
             self.assertEqual(card.grid.call_count, 2)
             compact, height = card.set_compact.call_args.args
@@ -73,7 +73,7 @@ class AppTests(unittest.TestCase):
             self.assertEqual(self.app.title.cget("text"), TOOLS[tool][0])
 
     def test_b_preview_and_page_navigation(self):
-        self.app.tool = "rotate"
+        self.app.tool = "pdf_images"
         self.app.configure_form()
         self.app.files = [str(self.source)]
         self.app.sync_list()
@@ -87,12 +87,12 @@ class AppTests(unittest.TestCase):
         self.assertEqual(self.app.page_index, 1)
 
     def test_c_complete_gui_job(self):
-        self.app.tool = "rotate"
+        self.app.tool = "extract"
         self.app.configure_form()
         self.app.files = [str(self.source)]
         self.app.sync_list()
-        self.app.options["pages"].set("1")
-        self.app.options["angle"].set("90")
+        self.app.organizer.model.selected = {self.app.organizer.model.items[0][0]}
+        self.app.organizer.rotate()
         self.app.output.set(str(self.folder))
         with patch(
             "tkinter.messagebox.showerror", side_effect=AssertionError("Unexpected UI error")
@@ -159,7 +159,7 @@ class AppTests(unittest.TestCase):
         self.assertEqual(sum(card.winfo_ismapped() for card in self.app.cards.values()), 6)
         self.app.all_tools_button.invoke()
         self.root.update()
-        self.assertEqual(sum(card.winfo_ismapped() for card in self.app.cards.values()), 19)
+        self.assertEqual(sum(card.winfo_ismapped() for card in self.app.cards.values()), 15)
         sizes = {(card.winfo_width(), card.winfo_height()) for card in self.app.cards.values()}
         # One-pixel rounding across equal grid columns is normal.
         self.assertLessEqual(max(w for w, h in sizes) - min(w for w, h in sizes), 1)
@@ -188,7 +188,7 @@ class AppTests(unittest.TestCase):
         self.app.select_tool("merge")
         self.app.files = [str(self.source)]
         self.app.sync_list()
-        self.app.select_tool("rotate")
+        self.app.select_tool("compress")
         self.assertEqual(self.app.files, [str(self.source)])
         self.app.select_tool("images_pdf")
         self.assertEqual(self.app.files, [str(self.source)])
@@ -230,7 +230,7 @@ class AppTests(unittest.TestCase):
             actual = (self.root.winfo_width(), self.root.winfo_height())
             with self.subTest(requested=(width, height), actual=actual):
                 layouts.append((self.app.cards_frame.winfo_width(), self.app.card_columns))
-                self.assertEqual(len(self.app.cards_frame.grid_slaves()), 19)
+                self.assertEqual(len(self.app.cards_frame.grid_slaves()), 15)
                 self.assertLessEqual(
                     self.app.home.inner.winfo_height(), self.app.home.canvas.winfo_height() + 2
                 )
@@ -310,11 +310,12 @@ class AppTests(unittest.TestCase):
             compressed = self.app.result_files[0]
             compressed_bytes = Path(compressed).read_bytes()
             self.app.next_button.invoke()
-            self.app.cards["delete"].activate()
+            self.app.cards["extract"].activate()
             self.root.update()
             self.assertEqual(self.app.files, [compressed])
-            self.assertEqual(self.app.tool, "delete")
-            self.app.options["pages"].set("2")
+            self.assertEqual(self.app.tool, "extract")
+            self.app.organizer.model.selected = {self.app.organizer.model.items[1][0]}
+            self.app.organizer.delete()
             self.app.run()
             self.wait_for_job()
         final = self.app.result_files[0]
@@ -681,39 +682,52 @@ class AppTests(unittest.TestCase):
         self.app.file_list.selection_clear(0, "end")
         self.app.file_list.selection_set(0)
         clock = SimpleNamespace(value=100.0)
+
+        def wait_for_frame():
+            # Let Tk deliver the scheduled frame even when a busy CI desktop
+            # takes longer than 40 ms to finish other pending redraws.
+            previous = self.app.file_list.motion_value
+            deadline = time.monotonic() + 2
+            while (
+                self.app.file_list.motion_kind is not None
+                and self.app.file_list.motion_value == previous
+                and time.monotonic() < deadline
+            ):
+                self.pump(0.02)
+
         # Sample animation frames at fixed times even on a slow Windows runner.
         with patch.object(self.app.file_list, "motion_clock", lambda: clock.value):
             self.app.move(1)
             self.assertEqual(self.app.files, [paths[1], paths[0], paths[2]])
             self.assertEqual(self.app.file_list.motion_kind, "move")
             clock.value += 0.08
-            self.pump(0.04)
+            wait_for_frame()
             y = self.app.file_list.positions[paths[0]][0]
             self.assertGreater(y, 0)
             self.assertLess(y, self.app.file_list.row_height)
             clock.value += 1
-            self.pump(0.04)
+            wait_for_frame()
             self.assertIsNone(self.app.file_list.motion_kind)
             self.app.move(-1)
             self.app.move(1)
             clock.value += 1
-            self.pump(0.04)
+            wait_for_frame()
             self.assertEqual(self.app.files, [paths[1], paths[0], paths[2]])
             self.app.remove_files()
             self.assertEqual(self.app.files, [paths[1], paths[2]])
             self.assertEqual(self.app.file_list.motion_kind, "remove")
             clock.value += 0.04
-            self.pump(0.04)
+            wait_for_frame()
             self.assertGreater(self.app.file_list.positions[paths[0]][1], 0)
             self.assertLess(self.app.file_list.positions[paths[0]][1], 1)
             clock.value += 1
-            self.pump(0.04)
+            wait_for_frame()
             self.assertNotIn(paths[0], self.app.file_list.positions)
             self.app.clear_files()
             self.assertEqual(self.app.files, [])
             self.assertEqual(self.app.file_list.motion_kind, "remove")
             clock.value += 1
-            self.pump(0.04)
+            wait_for_frame()
             self.assertFalse(self.app.file_list.motion_rows)
         self.assertTrue(all(Path(path).is_file() for path in paths))
         self.assertEqual(self.app.home_button.cget("text"), "뒤로가기")
@@ -799,8 +813,8 @@ class AppTests(unittest.TestCase):
         ) as ask:
             self.app.add_paths(paths)
             self.assertEqual(ask.call_count, 2)
-        self.app.select_tool("rotate")
-        self.app.options["angle"].set("90")
+        self.app.select_tool("compress")
+        self.app.options["compression"].set("무손실")
         self.app.save_mode.set("지정한 폴더")
         self.app.output.set(str(self.folder))
         with (
@@ -817,7 +831,7 @@ class AppTests(unittest.TestCase):
         for path, password in zip(sorted(self.app.result_files), ("one-password", "two-password")):
             with pdf.open(path) as doc:
                 self.assertTrue(doc.authenticate(password))
-                self.assertEqual(doc[0].rotation, 90)
+                self.assertEqual(doc[0].rotation, 0)
         self.app.file_list.selection_clear(0, "end")
         self.app.file_list.selection_set(0)
         self.app.remove_files()
@@ -950,10 +964,10 @@ class AppTests(unittest.TestCase):
             self.assertEqual(len(doc), 3)
         self.assertEqual(self.app.file_list.rows[1][2], self.app.files[1])
         # A failed selected operation must leave the image in the sidebar.
-        self.app.select_tool("rotate")
+        self.app.select_tool("compress")
         self.app.clear_files()
         self.app.add_paths([str(image)])
-        self.app.options["angle"].set("135")
+        self.app.options["compression"].set("invalid")
         self.app.save_mode.set("지정한 폴더")
         self.app.output.set(str(self.folder))
         with patch("tkinter.messagebox.showerror") as error:
@@ -1105,6 +1119,107 @@ class AppTests(unittest.TestCase):
         self.app.home_button.invoke()
         self.root.update()
         self.assertEqual(self.app.screen, "home")
+
+    def test_zh_combined_password_modes_and_removed_password_chain(self):
+        self.app.cancel_continue()
+        self.app.select_tool("protect")
+        self.app.clear_files()
+        self.app.add_paths([str(self.source)])
+        self.app.auto_open.set(False)
+        self.app.save_mode.set("지정한 폴더")
+        self.app.output.set(str(self.folder))
+        self.assertEqual(self.app.title.cget("text"), "암호 편집")
+        self.app.options["output_password"].set("combined-secret")
+        with patch("tkinter.messagebox.showerror", side_effect=AssertionError("Worker failed")):
+            self.app.run()
+            self.wait_for_job()
+            protected = self.app.result_files[0]
+            with pdf.open(protected) as doc:
+                self.assertTrue(doc.needs_pass)
+                self.assertTrue(doc.authenticate("combined-secret"))
+            self.app.continue_with_result()
+            self.app.cards["protect"].activate()
+            self.app.options["output_password"].set("must-be-cleared")
+            self.app.options["password_mode"].set("암호 제거")
+            self.pump(0.05)
+            self.assertEqual(self.app.options["output_password"].get(), "")
+            self.assertEqual(self.app.effective_tool(), "unlock")
+            cells = dict(self.app.form_cells)
+            self.assertFalse(cells["output_password"].winfo_ismapped())
+            with patch("tkinter.messagebox.askokcancel", return_value=True):
+                self.app.run()
+                self.wait_for_job()
+            with pdf.open(self.app.result_files[0]) as doc:
+                self.assertFalse(doc.needs_pass)
+                self.assertIn("FIRST", doc[0].get_text())
+            self.assertEqual(set(self.app.result_passwords.values()), {""})
+            self.app.options["password_mode"].set("암호 설정")
+            self.pump(0.05)
+            self.assertTrue(cells["output_password"].winfo_ismapped())
+
+    def test_zi_combined_insertion_modes_and_worker(self):
+        from PIL import Image
+
+        self.app.select_tool("watermark")
+        self.app.clear_files()
+        self.app.add_paths([str(self.source)])
+        self.app.save_mode.set("지정한 폴더")
+        self.app.output.set(str(self.folder))
+        self.assertEqual(len(self.app.cards), 15)
+        for removed in ("delete", "rotate", "unlock", "stamp"):
+            self.assertNotIn(removed, self.app.cards)
+        with patch("tkinter.messagebox.showerror", side_effect=AssertionError("Worker failed")):
+            self.app.options["text"].set("COMBINED")
+            self.app.options["position"].set("왼쪽 위")
+            self.app.run()
+            self.wait_for_job()
+            with pdf.open(self.app.result_files[0]) as doc:
+                self.assertIn("COMBINED", doc[0].get_text())
+            self.app.options["insert_mode"].set("이미지")
+            self.pump(0.05)
+            cells = dict(self.app.form_cells)
+            self.assertFalse(cells["text"].winfo_ismapped())
+            self.assertFalse(cells["font_size"].winfo_ismapped())
+            self.assertTrue(cells["stamp_path"].winfo_ismapped())
+            self.assertEqual(self.app.effective_tool(), "stamp")
+            self.assertEqual(self.app.options["position"].get(), "오른쪽 아래")
+            image = self.folder / "통합 직인.webp"
+            with Image.new("RGBA", (80, 40), (255, 0, 0, 128)) as stamp:
+                stamp.save(image, lossless=True)
+            self.app.options["stamp_path"].set(str(image))
+            self.app.options["opacity"].set("0.5")
+            self.app.run()
+            self.wait_for_job()
+            with pdf.open(self.app.result_files[0]) as doc:
+                self.assertTrue(doc[0].get_images())
+            self.app.options["insert_mode"].set("문구")
+            self.pump(0.05)
+            self.assertTrue(cells["text"].winfo_ismapped())
+            self.assertFalse(cells["stamp_path"].winfo_ismapped())
+
+    def test_zj_password_removal_rechecks_cached_user_credentials(self):
+        from offline_pdf.passwords import cached_password, ensure_password
+
+        source = self.folder / "소유자 권한 확인.pdf"
+        with pdf.open(self.source) as doc:
+            doc.save(
+                source,
+                encryption=pdf.PDF_ENCRYPT_AES_256,
+                user_pw="reader-password",
+                owner_pw="owner-password",
+                permissions=pdf.PDF_PERM_MODIFY | pdf.PDF_PERM_COPY,
+            )
+        self.app.select_tool("protect")
+        self.app.clear_files()
+        with patch("offline_pdf.passwords.ask_password", return_value="reader-password"):
+            self.app.add_paths([str(source)])
+        path = self.app.files[0]
+        self.assertEqual(cached_password(self.app, path), "reader-password")
+        self.app.options["password_mode"].set("암호 제거")
+        with patch("offline_pdf.passwords.ask_password", return_value="owner-password") as ask:
+            self.assertTrue(ensure_password(self.app, path))
+            ask.assert_called_once()
+        self.assertEqual(cached_password(self.app, path), "owner-password")
 
     @unittest.skipUnless(os.name == "nt", "Windows Shell integration test")
     def test_h_native_windows_drop_message(self):
