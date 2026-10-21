@@ -31,6 +31,7 @@ class FileList(tk.Canvas):
         self.motion_kind = None
         self.positions = {}
         self.motion_clock = time.monotonic
+        self.drop_hover = 0.0
         self.bind("<Configure>", lambda e: self.draw())
         self.bind("<Button-1>", self.click)
         self.bind("<MouseWheel>", self.wheel)
@@ -214,7 +215,7 @@ class FileList(tk.Canvas):
                 width=w - 24,
                 justify="center",
                 font=(FONT, 10),
-                fill=MUTED,
+                fill=mix(MUTED, BLUE, self.drop_hover),
                 tags=("drop_hint",),
             )
         # Draw the moving selected row on top while adjacent rows pass it.
@@ -375,32 +376,47 @@ class WindowDropHover:
         self.app.sidebar.configure(bg=background, highlightbackground=mix(LINE, BLUE, value))
         self.app.file_count.configure(bg=background)
         self.app.file_list.configure(bg=background)
+        self.app.file_list.drop_hover = value
+        self.app.file_list.itemconfigure("drop_hint", fill=mix(MUTED, BLUE, value))
+
+    @staticmethod
+    def contains(widget, x, y):
+        """Use desktop coordinates: an Explorer drag may obscure Tk hit testing."""
+        return bool(
+            widget.winfo_ismapped()
+            and widget.winfo_rootx() <= x < widget.winfo_rootx() + widget.winfo_width()
+            and widget.winfo_rooty() <= y < widget.winfo_rooty() + widget.winfo_height()
+        )
 
     def poll(self):
+        self.timer = None
         if self.closed:
             return
-        x, y = self.app.root.winfo_pointerxy()
-        widget = self.app.root.winfo_containing(x, y)
-        active = bool(widget and not self.app.busy())
+        try:
+            x, y = self.app.root.winfo_pointerxy()
+            active = self.contains(self.app.host, x, y) and not self.app.busy()
+            sidebar_active = active and self.contains(self.app.sidebar, x, y)
+            self.update_hover(active, sidebar_active)
+        except tk.TclError:
+            # A transient map/unmap during a screen change must not stop polling.
+            pass
+        finally:
+            if not self.closed:
+                try:
+                    self.timer = self.app.root.after(70, self.poll)
+                except tk.TclError:
+                    self.closed = True
+
+    def update_hover(self, active, sidebar_active):
         if active != self.active:
             self.active = active
             self.tween.to(1 if active else 0)
-        sidebar_active = bool(
-            active
-            and self.app.sidebar.winfo_ismapped()
-            and widget
-            and (
-                str(widget) == str(self.app.sidebar)
-                or str(widget).startswith(str(self.app.sidebar) + ".")
-            )
-        )
         if sidebar_active != self.sidebar_active:
             self.sidebar_active = sidebar_active
             self.sidebar_tween.to(1 if sidebar_active else 0)
             self.app.add_button.configure(
                 text="↓  여기에 놓아 파일 추가" if sidebar_active else self.add_text
             )
-        self.timer = self.app.root.after(70, self.poll)
 
     def close(self):
         self.closed = True

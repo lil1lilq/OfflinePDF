@@ -1,7 +1,7 @@
 """Descriptions shared by forms and keyboard/pointer tooltips."""
 
 TOOLS = {
-    "merge": ("병합", "파일 목록 순서대로 모든 페이지를 한 PDF로 합칩니다."),
+    "merge": ("PDF병합", "파일 목록 순서대로 모든 페이지를 한 PDF로 합칩니다."),
     "split": ("PDF 분할", "페이지별로 저장하거나 시작 쪽을 지정해 N개 파일로 나눕니다."),
     "extract": ("페이지 정리", "페이지를 끌어 순서를 바꾸고, 선택한 페이지를 삭제·회전합니다."),
     "compress": ("용량 압축", "압축 수준에 따라 이미지 품질과 용량을 조절합니다."),
