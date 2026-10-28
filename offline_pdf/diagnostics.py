@@ -174,6 +174,11 @@ def self_test():
         for level in ("무손실", "권장"):
             assert list(run("compress", [merged_pdf], compression=level).glob("*.pdf"))
         checks.append("compression")
+        imposed = run("nup", [merged_pdf], nup_count="2", nup_orientation="가로")
+        with pdf.open(next(imposed.glob("*.pdf"))) as doc:
+            assert len(doc) == 1 and tuple(doc[0].rect) == (0, 0, 842, 595)
+            assert "SYNTHETIC" in doc[0].get_text()
+        checks.append("a4-nup-worker")
         assert list(run("upscale", [scan], scale="2").glob("*.pdf"))
         checks.append("onnx-cpu-model-worker")
         compare = run("upscale", [scan], scale="2", preview_only=True)

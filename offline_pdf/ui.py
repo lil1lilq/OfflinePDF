@@ -23,6 +23,7 @@ CARD_SUMMARIES = {
     "merge": "여러 파일을 하나의 PDF로 합칩니다",
     "split": "페이지별 또는 N개 파일로 나눕니다",
     "extract": "페이지 순서·삭제·회전을 편집합니다",
+    "nup": "A4 한 장에 원하는 쪽수만큼 배치합니다",
     "compress": "압축 수준을 선택해 용량을 줄입니다",
     "upscale": "스캔 이미지를 AI로 확대·보정합니다",
     "pdf_images": "PDF 페이지를 이미지로 저장합니다",
@@ -73,6 +74,12 @@ def icon(canvas, key, x, y, color=BLUE):
         line(8, 3, 8, 21)
         line(12, 8, 19, 8)
         line(12, 13, 19, 13)
+    elif key == "nup":
+        box(3, 1, 21, 23)
+        box(6, 4, 11, 10)
+        box(13, 4, 18, 10)
+        box(6, 13, 11, 19)
+        box(13, 13, 18, 19)
     elif key == "compress":
         line(2, 2, 9, 9, 3, 9)
         line(9, 9, 9, 3)

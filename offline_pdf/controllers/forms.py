@@ -269,6 +269,27 @@ class FormController:
         if self.tool == "upscale":
             self.field("확대 배율 (배)", "scale", "2", ["2", "4"])
             self.ai_preview_button.pack(side="left", padx=8)
+        if self.tool == "nup":
+            self.field("한 장당 쪽수 (1~64)", "nup_count", "4")
+            self.field("A4 방향", "nup_orientation", "세로", ["세로", "가로"])
+            self.field("가로 칸 수 (0=자동)", "nup_columns", "0")
+            self.field(
+                "채우기", "nup_fit", "전체 내용 유지", ["전체 내용 유지", "꽉 채우기 (잘림)"]
+            )
+            self.field("바깥 여백 (mm)", "nup_margin", "0")
+            self.field("쪽 사이 간격 (mm)", "nup_gap", "0")
+            self.field("배치 순서", "nup_order", "가로 우선", ["가로 우선", "세로 우선"])
+            for key in (
+                "pages",
+                "nup_count",
+                "nup_orientation",
+                "nup_columns",
+                "nup_fit",
+                "nup_margin",
+                "nup_gap",
+                "nup_order",
+            ):
+                self.options[key].trace_add("write", lambda *_: self.schedule_preview())
         if self.tool == "pdf_images":
             self.field("해상도 DPI", "dpi", "150", ["72", "100", "150", "200", "300"])
             self.field("저장 형식", "format", "JPG", list(EXPORT_FORMATS))
@@ -322,6 +343,11 @@ class FormController:
         if self.tool == "upscale":
             self.security.config(
                 text="CPU 처리 · 2배 권장 · 텍스트와 도형은 유지하며 스캔 이미지만 보정합니다."
+            )
+            self.security.pack(anchor="w", pady=(8, 0))
+        if self.tool == "nup":
+            self.security.config(
+                text="파일별 저장 · 원본의 흰 여백은 유지됩니다. 꽉 채우기는 가장자리를 가리며 영구 삭제하지 않습니다."
             )
             self.security.pack(anchor="w", pady=(8, 0))
         self.update_region_status()

@@ -32,7 +32,7 @@ class CardLayoutTests(unittest.TestCase):
         App.arrange_cards(state, 1660, force=True)
         large_columns = state.card_columns
         self.assertGreater(large_columns, small_columns)
-        self.assertEqual(len(state.cards), 15)
+        self.assertEqual(len(state.cards), 16)
         for card in state.cards.values():
             self.assertEqual(card.grid.call_count, 2)
             compact, height = card.set_compact.call_args.args
@@ -159,7 +159,7 @@ class AppTests(unittest.TestCase):
         self.assertEqual(sum(card.winfo_ismapped() for card in self.app.cards.values()), 6)
         self.app.all_tools_button.invoke()
         self.root.update()
-        self.assertEqual(sum(card.winfo_ismapped() for card in self.app.cards.values()), 15)
+        self.assertEqual(sum(card.winfo_ismapped() for card in self.app.cards.values()), 16)
         sizes = {(card.winfo_width(), card.winfo_height()) for card in self.app.cards.values()}
         # One-pixel rounding across equal grid columns is normal.
         self.assertLessEqual(max(w for w, h in sizes) - min(w for w, h in sizes), 1)
@@ -230,7 +230,7 @@ class AppTests(unittest.TestCase):
             actual = (self.root.winfo_width(), self.root.winfo_height())
             with self.subTest(requested=(width, height), actual=actual):
                 layouts.append((self.app.cards_frame.winfo_width(), self.app.card_columns))
-                self.assertEqual(len(self.app.cards_frame.grid_slaves()), 15)
+                self.assertEqual(len(self.app.cards_frame.grid_slaves()), 16)
                 self.assertLessEqual(
                     self.app.home.inner.winfo_height(), self.app.home.canvas.winfo_height() + 2
                 )
@@ -935,7 +935,7 @@ class AppTests(unittest.TestCase):
         with pdf.open(self.app.result_files[0]) as doc:
             self.assertIn("RETAIN TEXT", doc[0].get_text())
             self.assertEqual(doc[0].get_images()[0][2:4], (64, 48))
-        self.assertIn("0.8.2", self.root.title())
+        self.assertIn("0.8.3", self.root.title())
 
     def test_ze_mixed_import_replaces_sidebar_only_after_success(self):
         from PIL import Image
@@ -1165,7 +1165,7 @@ class AppTests(unittest.TestCase):
         self.app.add_paths([str(self.source)])
         self.app.save_mode.set("지정한 폴더")
         self.app.output.set(str(self.folder))
-        self.assertEqual(len(self.app.cards), 15)
+        self.assertEqual(len(self.app.cards), 16)
         for removed in ("delete", "rotate", "unlock", "stamp"):
             self.assertNotIn(removed, self.app.cards)
         with patch("tkinter.messagebox.showerror", side_effect=AssertionError("Worker failed")):

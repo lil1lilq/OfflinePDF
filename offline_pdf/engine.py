@@ -357,7 +357,9 @@ def _process(job, paths, stage, emit, cancel):
             selected = (
                 list(range(doc.page_count))
                 if tool == "split" and opt.get("split_mode") == "N개 파일로 나누기"
-                else pages(opt.get("pages", ""), doc.page_count, duplicates=(tool == "extract"))
+                else pages(
+                    opt.get("pages", ""), doc.page_count, duplicates=(tool in ("extract", "nup"))
+                )
             )
             store_password = output_password or (password if encrypted else "")
             if tool == "unlock":
@@ -421,6 +423,12 @@ def _process(job, paths, stage, emit, cancel):
                     raise UserError("모든 페이지를 삭제할 수 없습니다.")
                 doc.select(chosen)
                 save_pdf(doc, target, store_password)
+            elif tool == "nup":
+                from .nup import make_nup
+
+                with make_nup(doc, selected, opt, emit, cancel) as result:
+                    check_cancel(cancel)
+                    save_pdf(result, target, store_password)
             elif tool == "pdf_images":
                 dpi = number(opt.get("dpi", "150"), 72, 300, "해상도", integer=True)
                 fmt = str(opt.get("format", "JPG")).lower()

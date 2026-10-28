@@ -11,7 +11,7 @@ from tkinter import ttk
 
 import pymupdf as pdf
 
-from ..engine import UserError, check_local_path, open_pdf, split_ranges
+from ..engine import UserError, check_local_path, open_pdf, pages, split_ranges
 from ..images import open_image_document
 from ..passwords import cached_password
 from ..ui import BLUE, MUTED, PANEL
@@ -206,7 +206,20 @@ class PreviewController:
                 doc, _ = open_pdf(path, password, extraction=True)
             else:
                 doc = open_image_document(path)
+            nup_doc = None
             try:
+                preview_total = doc.page_count
+                preview_index = None
+                if self.tool == "nup":
+                    from ..nup import NupLayout, make_nup
+
+                    options = {key: value.get() for key, value in self.options.items()}
+                    selected = pages(options.get("pages", ""), doc.page_count, duplicates=True)
+                    layout = NupLayout.from_options(options, doc[selected[0]].rect)
+                    preview_total = math.ceil(len(selected) / layout.count)
+                    self.page_index = max(0, min(self.page_index, preview_total - 1))
+                    preview_index = self.page_index
+                    nup_doc = make_nup(doc, selected, options, sheet=preview_index)
                 angle = 0
                 if self.tool == "extract" and self.organizer.model:
                     item = next(
@@ -220,8 +233,9 @@ class PreviewController:
                     self.organizer_preview_uid = item[0]
                     self.page_index = item[1]
                     angle = item[2]
-                self.page_index = max(0, min(self.page_index, doc.page_count - 1))
-                page = doc[self.page_index]
+                if nup_doc is None:
+                    self.page_index = max(0, min(self.page_index, doc.page_count - 1))
+                page = nup_doc[0] if nup_doc is not None else doc[self.page_index]
                 if self.file_overview.winfo_ismapped():
                     ow = max(150, self.overview_canvas.winfo_width())
                     if (
@@ -298,7 +312,7 @@ class PreviewController:
                     text=("폭 맞춤" if self.preview_mode == "width" else "한 페이지")
                     + f" · {round(self.preview_zoom * 100)}%"
                 )
-                self.page_label.config(text=f"{self.page_index + 1} / {doc.page_count}쪽")
+                self.page_label.config(text=f"{self.page_index + 1} / {preview_total}쪽")
                 if self.tool == "extract" and self.organizer.model:
                     position = next(
                         (
@@ -321,7 +335,13 @@ class PreviewController:
                             fill="#d32f2f",
                         )
             finally:
+                if nup_doc is not None:
+                    nup_doc.close()
                 doc.close()
+        except UserError as exc:
+            self.canvas.create_text(15, 25, anchor="nw", width=420, text=str(exc))
+            self.overview_canvas.create_text(15, 25, anchor="nw", width=420, text=str(exc))
+            self.page_label.config(text="설정을 확인하세요")
         except Exception:
             self.canvas.create_text(
                 15,
