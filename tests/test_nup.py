@@ -188,7 +188,9 @@ class NupTests(unittest.TestCase):
         broken.write_bytes(b"broken")
         with self.assertRaises(UserError):
             self.run_tool(files=[str(self.source), str(broken)])
-        self.assertEqual(list(self.root.glob("PDF결과_*")), [folder])
+        remaining = list(self.root.glob("PDF결과_*"))
+        self.assertEqual(len(remaining), 1)
+        self.assertTrue(remaining[0].samefile(folder))
         self.assertEqual(list(self.root.glob(".offline-pdf-*")), [])
 
     def test_encrypted_output_inherits_password(self):
