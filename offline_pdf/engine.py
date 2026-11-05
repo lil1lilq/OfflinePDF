@@ -190,6 +190,9 @@ def execute(job: dict, emit=lambda message: None, cancel=None) -> Path:
     paths = [Path(p) for p in job["files"]]
     if not paths:
         raise UserError("파일을 추가하세요.")
+    from .output_options import finalize_outputs, validate_options
+
+    validate_options(job.get("options", {}), job["tool"])
     out = check_local_path(job["output"])
     if not out.is_dir():
         raise UserError("저장할 폴더를 선택하세요.")
@@ -211,6 +214,7 @@ def execute(job: dict, emit=lambda message: None, cancel=None) -> Path:
         emit({"type": "stage", "folder": str(stage)})
         prepared_paths, converted = prepare_image_inputs(job, paths, stage, emit, cancel)
         _process(job, prepared_paths, stage, emit, cancel)
+        finalize_outputs(job, prepared_paths, stage, emit, cancel)
         check_cancel(cancel)
         os.rename(stage, final)
         if converted and not job.get("options", {}).get("preview_only"):
@@ -445,7 +449,7 @@ def _process(job, paths, stage, emit, cancel):
             elif tool == "compress":
                 level = opt.get("compression", "권장")
                 presets = {"선명하게": (300, 90), "권장": (150, 75), "작게": (96, 50)}
-                if level != "무손실":
+                if level not in ("무손실", "목표 용량"):
                     if level not in presets:
                         raise UserError("압축 수준을 다시 선택하세요.")
                     dpi, quality = presets[level]

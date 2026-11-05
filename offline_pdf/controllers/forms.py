@@ -22,7 +22,7 @@ class FormController:
             return
         dialog = tk.Toplevel(self.root)
         dialog.title("페이지 정리 · 파일·저장 설정")
-        dialog.geometry("560x390")
+        dialog.geometry("560x450")
         dialog.transient(self.root)
         body = ttk.Frame(dialog, padding=24)
         body.pack(fill="both", expand=True)
@@ -43,13 +43,20 @@ class FormController:
         ttk.Button(body, text="페이지 번호로 지정", command=self.organizer.apply_text).grid(
             row=5, column=0, sticky="w", pady=6
         )
+        ttk.Label(body, text="결과물 빈 페이지").grid(row=6, column=0, sticky="w")
+        ttk.Combobox(
+            body,
+            textvariable=self.options["remove_blank"],
+            values=["사용 안 함", "흰 빈 페이지 삭제"],
+            state="readonly",
+        ).grid(row=7, column=0, sticky="ew", pady=6)
 
         def done():
             dialog.destroy()
             self.refresh_organizer()
 
         ttk.Button(body, text="확인", command=done, style="Back.TButton").grid(
-            row=6, column=0, sticky="e", pady=15
+            row=8, column=0, sticky="e", pady=15
         )
         dialog.protocol("WM_DELETE_WINDOW", done)
         dialog.grab_set()
@@ -130,6 +137,9 @@ class FormController:
         )
         for key, cell in self.form_cells:
             cell.grid_forget()
+            if key in ("target_mb", "min_dpi", "min_quality") and self.tool == "compress":
+                if self.options["compression"].get() != "목표 용량":
+                    continue
             if self.tool == "split" and (
                 (key == "pages" and n_split)
                 or (key in ("split_count", "split_starts") and not n_split)
@@ -146,10 +156,12 @@ class FormController:
                     continue
             visible.append(cell)
         for i, cell in enumerate(visible):
+            wide = self.tool == "compress" and i == 0
+            offset = i - 1 if self.tool == "compress" else i
             cell.grid(
-                row=i // columns,
-                column=i % columns,
-                columnspan=columns if self.tool == "compress" else 1,
+                row=0 if wide else offset // columns + int(self.tool == "compress"),
+                column=0 if wide else offset % columns,
+                columnspan=columns if wide else 1,
                 sticky="ew",
                 padx=(0, 10),
                 pady=5,
@@ -264,10 +276,21 @@ class FormController:
         self.output_password_button.config(text="암호 추가")
         self.ai_preview_button.pack_forget()
         if self.tool == "compress":
-            self.field("압축 수준", "compression", "권장", ["무손실", "선명하게", "권장", "작게"])
+            self.field(
+                "압축 수준",
+                "compression",
+                "권장",
+                ["무손실", "선명하게", "권장", "작게", "목표 용량"],
+            )
+            self.field("목표 용량 MB / 파일", "target_mb", "5")
+            self.field("최소 이미지 DPI", "min_dpi", "96")
+            self.field("최소 JPEG 품질 (30~95)", "min_quality", "50")
             self.options["compression"].trace_add("write", self.compression_note)
         if self.tool == "upscale":
             self.field("확대 배율 (배)", "scale", "2", ["2", "4"])
+            self.field("최대 용량 MB (공란=무제한)", "max_output_mb", "")
+            self.field("최소 이미지 DPI", "min_dpi", "96")
+            self.field("최소 JPEG 품질 (30~95)", "min_quality", "50")
             self.ai_preview_button.pack(side="left", padx=8)
         if self.tool == "nup":
             self.field("한 장당 쪽수 (1~64)", "nup_count", "4")
@@ -327,6 +350,13 @@ class FormController:
             self.field(
                 "문서 언어", "language", "한국어 + 영어", ["한국어 + 영어", "한국어", "영어"]
             )
+        if self.tool not in ("text", "pdf_images"):
+            self.field(
+                "결과물 빈 페이지",
+                "remove_blank",
+                "사용 안 함",
+                ["사용 안 함", "흰 빈 페이지 삭제"],
+            )
         self.security.config(
             text="페이지를 비워 두면 전체 페이지를 처리합니다." if "pages" in self.options else ""
         )
@@ -342,7 +372,7 @@ class FormController:
             self.compression_note()
         if self.tool == "upscale":
             self.security.config(
-                text="CPU 처리 · 2배 권장 · 텍스트와 도형은 유지하며 스캔 이미지만 보정합니다."
+                text="용량 제한 시 이미지 화질이 낮아질 수 있습니다. 최대 용량은 이미지 크기·메모리 제한과 별개입니다."
             )
             self.security.pack(anchor="w", pady=(8, 0))
         if self.tool == "nup":
@@ -385,7 +415,9 @@ class FormController:
             "선명하게": "이미지 300 DPI·품질 90 · 선명도를 우선합니다.",
             "권장": "이미지 150 DPI·품질 75 · 가독성과 용량의 균형을 맞춥니다.",
             "작게": "이미지 96 DPI·품질 50 · 작은 글자나 사진이 흐려질 수 있습니다.",
+            "목표 용량": "파일당 상한 · 1 MB=1,000,000바이트 · 최소 DPI·품질로도 맞추지 못하면 결과를 저장하지 않습니다.",
         }
+        self.arrange_fields()
         self.security.config(text=notes.get(self.options["compression"].get(), ""))
         self.security.pack(anchor="w", pady=(8, 0))
 

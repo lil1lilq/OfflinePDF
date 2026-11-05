@@ -41,19 +41,10 @@ Copy-Item 'dependency-sources' "$destination/dependency-sources" -Recurse -Force
 Invoke-Checked $Python @('packaging/make_source_archive.py', "$destination/CorrespondingSource.zip")
 New-Item -ItemType Directory -Force 'release' | Out-Null
 Compress-Archive -Path $destination -DestinationPath 'release/OfflinePDF-Windows-x64-portable.zip' -Force
-$iscc = Get-Command 'ISCC.exe' -ErrorAction SilentlyContinue
-$isccPath = if ($iscc) { $iscc.Source } else { $null }
-if (-not $isccPath) {
-    $candidate = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6/ISCC.exe'
-    if (Test-Path $candidate) { $isccPath = $candidate }
-}
-if ($isccPath) {
-    Invoke-Checked $isccPath @('packaging/installer.iss')
-} else {
-    Write-Host 'Portable build completed. Install Inno Setup 6 and run ISCC.exe packaging/installer.iss for the installer.'
-}
-Get-ChildItem 'release' -File | Where-Object Name -ne 'SHA256SUMS.txt' | ForEach-Object {
-    $hash = Get-FileHash $_.FullName -Algorithm SHA256
-    "$($hash.Hash)  $($_.Name)"
-} | Set-Content -Encoding utf8 'release/SHA256SUMS.txt'
-Write-Host 'Build completed. See release folder.'
+# Do not carry a generated setup file from an earlier local build into a release.
+Remove-Item -LiteralPath 'release/OfflinePDF-Setup-Windows-x64.exe' -Force -ErrorAction SilentlyContinue
+$portable = 'release/OfflinePDF-Windows-x64-portable.zip'
+$hash = Get-FileHash -LiteralPath $portable -Algorithm SHA256
+"$($hash.Hash)  $([IO.Path]::GetFileName($portable))" |
+    Set-Content -Encoding utf8 'release/SHA256SUMS.txt'
+Write-Host 'Portable build completed. See release/OfflinePDF-Windows-x64-portable.zip.'

@@ -1,6 +1,6 @@
 param(
-    [string]$Executable = 'dist/OfflinePDF/OfflinePDF.exe',
-    [string]$Installer = 'release/OfflinePDF-Setup-Windows-x64.exe',
+    [string]$PortableArchive = 'release/OfflinePDF-Windows-x64-portable.zip',
+    [string]$Executable = '',
     [switch]$SkipFirewall
 )
 $ErrorActionPreference = 'Stop'
@@ -12,7 +12,6 @@ New-Item -ItemType Directory $temporary | Out-Null
 $auditBackup = Join-Path $temporary 'audit.csv'
 $auditSaved = $false
 $rules = @()
-$installed = $null
 $profileStates = @()
 
 if (-not ('OfflinePDF.VerificationPaths' -as [type])) {
@@ -140,21 +139,22 @@ try {
         $auditSaved = $true
         Invoke-NativeChecked 'auditpol.exe' @('/set', '/subcategory:{0CCE9226-69AE-11D9-BED3-505054503030}', '/success:enable', '/failure:enable')
     }
-    Verify-Program $Executable 'portable'
-    if (Test-Path $Installer) {
-        $installed = Join-Path $temporary '한글 설치 테스트'
-        $installerProcess = Start-Process -FilePath (Resolve-Path $Installer).Path `
-            -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/NOCANCEL', "/DIR=`"$installed`"") -PassThru -Wait
-        if ($installerProcess.ExitCode -ne 0) { throw "Installer test failed ($($installerProcess.ExitCode))" }
-        Verify-Program (Join-Path $installed 'OfflinePDF.exe') 'installed'
+    if (-not $Executable) {
+        if (-not (Test-Path -LiteralPath $PortableArchive -PathType Leaf)) {
+            throw "Portable archive not found: $PortableArchive"
+        }
+        $expanded = Join-Path $temporary '한글 포터블 검증'
+        Expand-Archive -LiteralPath $PortableArchive -DestinationPath $expanded
+        $Executable = Join-Path $expanded 'OfflinePDF/OfflinePDF.exe'
     }
-    Write-Host 'Portable/installer self-tests completed. See release/validation.'
+    if (-not (Test-Path -LiteralPath $Executable -PathType Leaf)) {
+        throw "Portable executable not found: $Executable"
+    }
+    Verify-Program $Executable 'portable'
+    Write-Host 'Portable ZIP self-test completed. See release/validation.'
 } finally {
     foreach ($rule in $rules) { Remove-NetFirewallRule -Name $rule -ErrorAction Continue }
     foreach ($savedProfile in $profileStates) { Set-NetFirewallProfile -Profile $savedProfile.Name -Enabled $savedProfile.Enabled }
     if ($auditSaved) { Invoke-NativeChecked 'auditpol.exe' @('/restore', "/file:$auditBackup") }
-    if ($installed -and (Test-Path (Join-Path $installed 'unins000.exe'))) {
-        Start-Process (Join-Path $installed 'unins000.exe') -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -Wait
-    }
     Remove-Item $temporary -Recurse -Force -ErrorAction SilentlyContinue
 }

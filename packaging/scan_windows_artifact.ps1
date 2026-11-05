@@ -33,18 +33,10 @@ try {
         }
     } | Export-Csv -NoTypeInformation -Encoding utf8 (Join-Path $report 'artifact-sha256.csv')
 
-    $installer = @($originalFiles | Where-Object Name -eq 'OfflinePDF-Setup-Windows-x64.exe')
     $portable = @($originalFiles | Where-Object Name -eq 'OfflinePDF-Windows-x64-portable.zip')
-    if ($installer.Count -ne 1 -or $portable.Count -ne 1) {
-        throw 'Expected exactly one installer EXE and one portable ZIP from the Windows build.'
+    if ($portable.Count -ne 1) {
+        throw 'Expected exactly one portable ZIP from the Windows build.'
     }
-    Get-AuthenticodeSignature -LiteralPath $installer[0].FullName |
-        Select-Object -Property @(
-            'Path'; 'Status'; 'StatusMessage'
-            @{Name = 'Signer'; Expression = { if ($_.SignerCertificate) { $_.SignerCertificate.Subject } }}
-        ) |
-        ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $report 'installer-signature.json')
-
     $candidates = @()
     $platform = Join-Path $env:ProgramData 'Microsoft/Windows Defender/Platform'
     if (Test-Path -LiteralPath $platform) {
@@ -84,7 +76,6 @@ try {
             result = $(if ($code -eq 0) { 'no_detection_reported' } else { 'needs_review' })
         }
     }
-    Invoke-ArtifactScan 'installer' $installer[0].FullName
     Invoke-ArtifactScan 'portable-zip' $portable[0].FullName
 
     # Also scan extracted EXE/DLL files; never execute the downloaded application.
@@ -98,6 +89,12 @@ try {
             throw 'Portable ZIP did not contain OfflinePDF.exe; scan is incomplete.'
         }
         $expandedHashes = @{}
+        $programs = @($expandedFiles | Where-Object Name -eq 'OfflinePDF.exe')
+        $programs | ForEach-Object { Get-AuthenticodeSignature -LiteralPath $_.FullName } |
+            Select-Object -Property @(
+                'Path'; 'Status'; 'StatusMessage'
+                @{Name = 'Signer'; Expression = { if ($_.SignerCertificate) { $_.SignerCertificate.Subject } }}
+            ) | ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $report 'portable-signature.json')
         $expandedFiles | ForEach-Object {
             $expandedHashes[$_.FullName] = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
             [pscustomobject]@{

@@ -15,6 +15,30 @@ from offline_pdf.app import TOOLS, App
 
 
 class CardLayoutTests(unittest.TestCase):
+    def test_compression_fields_do_not_overlap_when_target_mode_is_shown(self):
+        from offline_pdf.controllers.forms import FormController
+
+        keys = ("compression", "target_mb", "min_dpi", "min_quality", "remove_blank")
+        for width in (220, 1200):
+            for mode in ("목표 용량", "권장"):
+                state = SimpleNamespace(
+                    tool="compress",
+                    options={"compression": Mock(get=Mock(return_value=mode))},
+                    form=Mock(),
+                    form_cells=[(key, Mock()) for key in keys],
+                )
+                FormController.arrange_fields(state, width)
+                occupied = set()
+                for key, cell in state.form_cells:
+                    if mode == "권장" and key in ("target_mb", "min_dpi", "min_quality"):
+                        cell.grid.assert_not_called()
+                        continue
+                    args = cell.grid.call_args.kwargs
+                    for col in range(args["column"], args["column"] + args["columnspan"]):
+                        position = (args["row"], col)
+                        self.assertNotIn(position, occupied)
+                        occupied.add(position)
+
     def test_more_columns_with_more_available_width_without_display_limits(self):
         # Test available layout space directly. A CI desktop can cap wm_geometry
         # requests at its physical screen size, regardless of the requested size.
@@ -935,7 +959,7 @@ class AppTests(unittest.TestCase):
         with pdf.open(self.app.result_files[0]) as doc:
             self.assertIn("RETAIN TEXT", doc[0].get_text())
             self.assertEqual(doc[0].get_images()[0][2:4], (64, 48))
-        self.assertIn("0.8.4", self.root.title())
+        self.assertIn("0.8.6", self.root.title())
 
     def test_ze_mixed_import_replaces_sidebar_only_after_success(self):
         from PIL import Image

@@ -16,7 +16,6 @@ PyMuPDF의 오픈소스 라이선스에 맞춰 프로그램의 대응 소스와 
 | Python 3.12 | 실행 환경 | PSF 및 포함 구성요소 고지 |
 | Tcl/Tk | 한글 데스크톱 화면 | Tcl/Tk 고지 및 조건 |
 | PyInstaller 6.16.0 | 실행파일 패키징 | GPL 계열과 bootloader 예외, 일부 Apache-2.0 |
-| Inno Setup 6 | 설치파일 생성 | Inno Setup License, 배포 시 해당 버전 조건 확인 |
 | Tesseract OCR·tessdata | OCR 선택 기능 | Apache-2.0, 추가한 엔진·언어자료의 원본 고지 포함 필요 |
 
 OCR은 PyMuPDF 빌드에 포함된 OCR 지원과 로컬 tessdata를 사용합니다.
@@ -35,7 +34,6 @@ pillow-heif 배포 휠에는 libheif(LGPLv3), libde265(LGPLv3), x265(GPLv2 계�
 - https://docs.python.org/3/license.html
 - https://www.tcl-lang.org/software/tcltk/license.html
 - https://pyinstaller.org/en/stable/license.html
-- https://jrsoftware.org/files/is/license.txt
 - https://github.com/tesseract-ocr/tesseract
 - https://github.com/tesseract-ocr/tessdata_fast
 - https://pillow.readthedocs.io/en/stable/about.html

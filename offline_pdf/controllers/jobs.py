@@ -132,6 +132,7 @@ class JobController:
         if preview:
             job["options"]["preview_only"] = True
         self.preview_job = preview
+        self.output_summary = ""
         self.converted_count = 0
         self.job_passwords = {}
         if not preview and actual_tool not in ("unlock", "text", "pdf_images"):
@@ -247,6 +248,13 @@ class JobController:
                     elif kind == "progress":
                         self.progress["value"] = 100 * event["current"] / max(1, event["total"])
                         self.status.set(event["label"])
+                    elif kind == "output_summary":
+                        notes = []
+                        if event["blank_enabled"]:
+                            notes.append(f"흰 빈 페이지 {event['removed_blank_pages']}쪽 삭제")
+                        if event["size_checked"]:
+                            notes.append("파일당 용량 제한 확인 완료")
+                        self.output_summary = " · ".join(notes)
                     elif kind == "done":
                         preview = self.preview_job
                         self.finish(
@@ -263,6 +271,8 @@ class JobController:
                                     f"이미지 {self.converted_count}개를 PDF로 변경하고 작업을 완료했습니다."
                                 )
                             self.progress["value"] = 100
+                            if self.output_summary:
+                                self.status.set("완료 · " + self.output_summary)
                             self.open_button.config(state="normal")
                             self.result_passwords = {
                                 p: self.job_passwords.get(

@@ -86,6 +86,14 @@ class EnhancementTests(unittest.TestCase):
         self.assertGreater(sizes[1][0], sizes[2][0])
         self.assertGreater(sizes[2][0], sizes[3][0])
 
+    def test_real_cpu_enhancement_with_file_size_cap(self):
+        folder = self.run_tool("upscale", scale="2", max_output_mb="0.02")
+        target = next(folder.glob("*.pdf"))
+        self.assertLessEqual(target.stat().st_size, 20000)
+        with pdf.open(target) as doc:
+            self.assertEqual(len(doc), 2)
+            self.assertIn("SEARCHABLE TEXT", doc[0].get_text())
+
     def test_actual_ai_comparison_crop(self):
         folder = self.run_tool("upscale", scale="2", preview_only=True)
         with Image.open(folder / "before.png") as before, Image.open(folder / "after.png") as after:

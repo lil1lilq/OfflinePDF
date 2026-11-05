@@ -1,13 +1,12 @@
 # 소스 실행과 빌드
 
 이 문서는 OfflinePDF를 소스에서 실행하거나 Windows 배포본을 만드는 개발자를 위한 안내입니다.
-프로그램 설치와 기본 사용법은 [README](README.md), 조작 방법은 [사용 안내](USER_GUIDE_KO.txt)에 있습니다.
+프로그램 다운로드와 기본 사용법은 [README](README.md), 조작 방법은 [사용 안내](USER_GUIDE_KO.txt)에 있습니다.
 
 ## 개발 환경
 
 - Windows 10·11, x64
 - Python 3.12, x64
-- Windows 설치파일 생성 시 Inno Setup 6
 
 실행 의존성은 `requirements.txt`, 빌드·검사 도구는 `requirements-build.txt`에 버전이 고정되어 있습니다.
 Windows 실행파일은 Windows에서 빌드합니다.
@@ -47,40 +46,38 @@ powershell -NoProfile -ExecutionPolicy Bypass -File packaging\build_windows.ps1 
 2. 코드·형식 검사와 자동 검사
 3. 구성요소 고지와 의존성 소스 수집
 4. PyInstaller 포터블 프로그램 생성
-5. Inno Setup 설치파일 생성 및 SHA256 기록
+5. 포터블 ZIP 압축 및 SHA256 기록
 
-Inno Setup이 없으면 포터블 ZIP까지만 생성합니다.
+배포 결과물은 포터블 ZIP과 SHA256 목록입니다. Inno Setup은 필요하지 않습니다.
 
 | 출력 | 파일 |
 | --- | --- |
-| 설치형 | `release/OfflinePDF-Setup-Windows-x64.exe` |
 | 포터블 | `release/OfflinePDF-Windows-x64-portable.zip` |
 | 해시 목록 | `release/SHA256SUMS.txt` |
 
 빌드는 `README.md`, `USER_GUIDE_KO.txt`, `CHANGELOG.md`, `BUILDING.md`, `LICENSE`, `THIRD_PARTY_NOTICES.md`를 배포본에 복사합니다.
 `README.md`는 PyInstaller 데이터에도 포함됩니다.
-`packaging/installer.iss`의 사용 안내 바로가기는 `USER_GUIDE_KO.txt`를 가리킵니다.
+사용 안내는 포터블 폴더의 `USER_GUIDE_KO.txt`에서 확인할 수 있습니다.
 
 버전은 다음 위치에서 관리합니다.
 
 | 위치 | 값의 형식 |
 | --- | --- |
-| `offline_pdf/__init__.py` | 앱 표시 버전, 예: `0.8.4` |
+| `offline_pdf/__init__.py` | 앱 표시 버전, 예: `0.8.6` |
 | `packaging/windows-version.txt` | 실행파일 제품·파일 버전, 숫자 버전은 4자리 |
-| `packaging/installer.iss` | 설치파일 버전 |
 
 소스 버전을 바꿀 때 관련 검사와 문서의 버전 표기도 함께 갱신합니다.
 
 ## GitHub Actions와 릴리스
 
 **Actions → Build Windows x64 → Run workflow**에서 수동 실행하거나 `v*` 태그를 푸시하면 빌드가 시작됩니다.
-워크플로는 설치형·포터블 파일을 검사하고 다음 아티팩트를 업로드합니다.
+워크플로는 포터블 ZIP을 압축 해제해 검사하고 다음 아티팩트를 업로드합니다.
 
 - `OfflinePDF-Windows-x64`: 배포 파일
 - `OfflinePDF-validation`: 검증 보고서
 
 현재 워크플로는 GitHub Release를 자동 게시하지 않습니다.
-공개 배포 시 검증을 마친 버전의 태그로 Release를 만들고 설치형·포터블·SHA256 파일을 첨부합니다.
+공개 배포 시 검증을 마친 버전의 태그로 Release를 만들고 포터블 ZIP과 SHA256 파일을 첨부합니다.
 소스의 버전과 사용자가 내려받는 Release의 버전은 별도로 확인해야 합니다.
 
 ## 오프라인 빌드
@@ -92,7 +89,7 @@ Inno Setup이 없으면 포터블 ZIP까지만 생성합니다.
 .\.venv\Scripts\python.exe packaging/prepare_dependency_sources.py
 ```
 
-저장소, `wheelhouse`, `dependency-sources`, Python과 Inno Setup 설치본을 오프라인 빌드 환경으로 옮긴 뒤 실행합니다.
+저장소, `wheelhouse`, `dependency-sources`, Python 설치본을 오프라인 빌드 환경으로 옮긴 뒤 실행합니다.
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File packaging\build_windows.ps1 -Offline -Python .\.venv\Scripts\python.exe
@@ -124,7 +121,7 @@ AI·OCR 모델은 배포본에 포함되며 문서 처리 중 다운로드하지
 ## Windows 배포본 검사
 
 GitHub Actions는 빌드 후 `packaging/verify_windows_build.ps1`을 실행합니다.
-이 검사는 설치·제거와 방화벽·보안 감사 설정을 사용하므로 관리자 권한의 격리된 Windows 시험 환경을 대상으로 합니다.
+이 검사는 포터블 ZIP을 한글 임시 경로에 압축 해제한 뒤 실행합니다. 방화벽·보안 감사 설정을 사용하므로 관리자 권한의 격리된 Windows 시험 환경을 대상으로 합니다.
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File packaging/verify_windows_build.ps1
@@ -133,7 +130,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File packaging/verify_windows_bui
 검사 항목은 다음과 같습니다.
 
 - 합성 문서의 PDF 처리, 이미지 변환, AI·OCR, 자식 프로세스와 화면 이동
-- 포터블·설치형 실행파일의 동작
+- 포터블 ZIP에서 추출한 실행파일의 동작
 - 방화벽 차단 상태의 처리와 지정 실행파일의 연결 이벤트
 
 `--network-probe`는 일반 문서 처리와 분리된 개발용 통신 검사입니다.
@@ -160,15 +157,16 @@ powershell -NoProfile -ExecutionPolicy Bypass -File packaging/verify_windows_bui
 
 ## 완료된 빌드 파일의 악성코드 검사
 
-**Actions → Scan Windows artifact → Run workflow**에서 기존 빌드의 설치형·포터블을 검사할 수 있습니다.
+**Actions → Scan Windows artifact → Run workflow**에서 기존 빌드의 포터블 ZIP과 내부 파일을 검사할 수 있습니다.
 `build_run_id`를 비우면 `windows-build.yml`의 최신 성공 실행을 선택합니다. 다른 빌드를 검사하려면 실행 URL의 `/actions/runs/` 다음 숫자를 입력합니다.
 보관 기간이 지나 아티팩트가 삭제된 실행은 검사할 수 없습니다.
 
-워크플로는 Microsoft Defender 보안 정보를 갱신하고 설치형 EXE·포터블 ZIP·압축을 푼 파일을 검사합니다.
+워크플로는 Microsoft Defender 보안 정보를 갱신하고 포터블 ZIP과 압축을 푼 파일을 검사합니다.
 대상 프로그램을 설치하거나 실행하지 않습니다. 결과는 `OfflinePDF-antivirus-report` 아티팩트에 저장됩니다.
 
 - `summary.json`: 완료 여부와 검사 종료 코드
-- `installer.log`, `portable-zip.log`, `portable-files.log`: 실제 검사 출력과 탐지 정보
+- `portable-zip.log`, `portable-files.log`: 실제 검사 출력과 탐지 정보
+- `portable-signature.json`: 포터블 실행파일의 코드 서명 상태
 - `artifact-sha256.csv`, `portable-files-sha256.csv`: 파일별 SHA256
 - `build-run.json`, `defender-status.json`: 검사 대상 빌드와 검사 엔진 정보
 
