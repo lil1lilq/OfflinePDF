@@ -1,0 +1,63 @@
+name: Scan Windows artifact
+on:
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: 'Build run ID (leave blank for the latest successful build)'
+        required: false
+        type: string
+permissions:
+  contents: read
+  actions: read
+jobs:
+  scan:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Select existing build
+        id: build
+        shell: pwsh
+        env:
+          REQUESTED_RUN_ID: ${{ inputs.build_run_id }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force scan-report | Out-Null
+          $headers = @{Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json'}
+          $base = "$env:GITHUB_API_URL/repos/$env:GITHUB_REPOSITORY/actions"
+          $id = $env:REQUESTED_RUN_ID.Trim()
+          if ($id -and $id -notmatch '^\d+$') { throw 'Enter only the numeric build run ID.' }
+          if (-not $id) {
+            $runs = Invoke-RestMethod -Headers $headers -Uri "$base/workflows/windows-build.yml/runs?status=success&per_page=1"
+            if (-not $runs.workflow_runs.Count) { throw 'No successful Windows build found.' }
+            $id = [string]$runs.workflow_runs[0].id
+          }
+          $run = Invoke-RestMethod -Headers $headers -Uri "$base/runs/$id"
+          if ($run.status -ne 'completed' -or $run.conclusion -ne 'success') {
+            throw 'Choose a completed, successful build with the release artifact.'
+          }
+          $run | Select-Object -Property @('id'; 'html_url'; 'head_sha'; 'path'; 'status'; 'conclusion') |
+            ConvertTo-Json | Set-Content -Encoding utf8 scan-report/build-run.json
+          "run_id=$id" >> $env:GITHUB_OUTPUT
+          Write-Host "Scanning existing build: $($run.html_url)"
+      - name: Download existing release artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: OfflinePDF-Windows-x64
+          path: artifact-input
+          run-id: ${{ steps.build.outputs.run_id }}
+          github-token: ${{ github.token }}
+      - name: Scan release files with Microsoft Defender
+        shell: pwsh
+        run: "& './packaging/scan_windows_artifact.ps1' -InputDirectory 'artifact-input' -ReportDirectory 'scan-report'"
+      - name: Upload diagnostic report even on failure
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: OfflinePDF-antivirus-report
+          path: scan-report/
+          if-no-files-found: warn
+          retention-days: 14

@@ -157,3 +157,23 @@ powershell -NoProfile -ExecutionPolicy Bypass -File packaging/verify_windows_bui
 | `offline_pdf/diagnostics.py` | 배포본 자체 검사와 개발용 통신 검사 |
 | `packaging/` | 모델 검증·구성요소 수집·Windows 패키징 |
 | `tests/` | 기능·회귀 검사 |
+
+## 완료된 빌드 파일의 악성코드 검사
+
+**Actions → Scan Windows artifact → Run workflow**에서 기존 빌드의 설치형·포터블을 검사할 수 있습니다.
+`build_run_id`를 비우면 `windows-build.yml`의 최신 성공 실행을 선택합니다. 다른 빌드를 검사하려면 실행 URL의 `/actions/runs/` 다음 숫자를 입력합니다.
+보관 기간이 지나 아티팩트가 삭제된 실행은 검사할 수 없습니다.
+
+워크플로는 Microsoft Defender 보안 정보를 갱신하고 설치형 EXE·포터블 ZIP·압축을 푼 파일을 검사합니다.
+대상 프로그램을 설치하거나 실행하지 않습니다. 결과는 `OfflinePDF-antivirus-report` 아티팩트에 저장됩니다.
+
+- `summary.json`: 완료 여부와 검사 종료 코드
+- `installer.log`, `portable-zip.log`, `portable-files.log`: 실제 검사 출력과 탐지 정보
+- `artifact-sha256.csv`, `portable-files-sha256.csv`: 파일별 SHA256
+- `build-run.json`, `defender-status.json`: 검사 대상 빌드와 검사 엔진 정보
+
+검사 중 탐지 또는 오류가 있으면 실행이 실패 상태로 끝나며 결과 로그는 보관됩니다.
+종료 코드 2는 악성코드 탐지뿐 아니라 검사 오류일 수도 있으므로 원본 로그를 확인해야 합니다.
+엔진·서비스·보안 정보 갱신을 사용할 수 없으면 `incomplete_or_unavailable`로 기록합니다.
+`no_detection_reported`는 해당 Defender 검사에서 탐지가 보고되지 않았다는 뜻이며 안전 보증이나 Chrome Safe Browsing 차단 해제를 의미하지 않습니다.
+기존 빌드·배포 워크플로는 이 검사와 별도로 실행됩니다.
