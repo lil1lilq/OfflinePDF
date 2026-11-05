@@ -278,8 +278,9 @@ class PreviewController:
                             (ow - 30) / page.rect.width,
                             math.sqrt(12_000_000 / (page.rect.width * page.rect.height)),
                         )
+                        scale = max(0.05, scale)
                         thumb = page.get_pixmap(
-                            matrix=pdf.Matrix(max(0.05, scale)), alpha=False, colorspace=pdf.csRGB
+                            matrix=pdf.Matrix(scale, scale), alpha=False, colorspace=pdf.csRGB
                         )
                         self.overview_photo = tk.PhotoImage(
                             data=base64.b64encode(thumb.tobytes("png"))

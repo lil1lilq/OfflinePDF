@@ -935,7 +935,7 @@ class AppTests(unittest.TestCase):
         with pdf.open(self.app.result_files[0]) as doc:
             self.assertIn("RETAIN TEXT", doc[0].get_text())
             self.assertEqual(doc[0].get_images()[0][2:4], (64, 48))
-        self.assertIn("0.8.3", self.root.title())
+        self.assertIn("0.8.4", self.root.title())
 
     def test_ze_mixed_import_replaces_sidebar_only_after_success(self):
         from PIL import Image
