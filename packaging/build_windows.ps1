@@ -8,10 +8,11 @@ function Invoke-Checked {
 }
 if ([Environment]::Is64BitOperatingSystem -eq $false) { throw 'Windows x64 is required.' }
 Invoke-Checked $Python @('-c', 'import struct,sys; assert struct.calcsize(chr(80))==8; assert sys.version_info[:2]==(3,12)')
+# Install exactly the locked packages; pip refuses any file whose hash differs.
 if ($Offline) {
-    Invoke-Checked $Python @('-m','pip','install','--no-index','--find-links','wheelhouse','-r','requirements-build.txt')
+    Invoke-Checked $Python @('-m','pip','install','--require-hashes','--no-index','--find-links','wheelhouse','-r','requirements-lock.txt')
 } else {
-    Invoke-Checked $Python @('-m','pip','install','-r','requirements-build.txt')
+    Invoke-Checked $Python @('-m','pip','install','--require-hashes','-r','requirements-lock.txt')
 }
 Invoke-Checked $Python @('packaging/prepare_ai_model.py')
 if ($FixFormat) { Invoke-Checked $Python @('-m','ruff','format','offline_pdf','packaging','tests','main.py') }
@@ -34,7 +35,7 @@ $bundleArgs = @('-m','PyInstaller','--noconfirm','--clean','--onedir','--windowe
 if (Test-Path 'tessdata') { $bundleArgs += @('--add-data','tessdata;tessdata') }
 Invoke-Checked $Python $bundleArgs
 $destination = 'dist/OfflinePDF'
-Copy-Item 'README.md','USER_GUIDE_KO.txt','LICENSE','THIRD_PARTY_NOTICES.md' $destination
+Copy-Item 'README.md','README.en.md','LICENSE','THIRD_PARTY_NOTICES.md' $destination
 Copy-Item 'CHANGELOG.md' $destination
 Copy-Item 'BUILDING.md' $destination
 Copy-Item 'assets' "$destination/assets" -Recurse -Force
