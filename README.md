@@ -56,8 +56,6 @@ Word·Excel·PowerPoint·HWP 변환은 지원하지 않습니다.
 
 창 하단의 **설정**에서 한국어·영어와 **기본·다크모드**를 선택할 수 있습니다. 언어와 테마는 다음 실행에도 유지됩니다.
 
-자세한 조작 방법은 [사용 안내](USER_GUIDE_KO.txt)를 참고하세요.
-
 ## 문서 처리 시 확인할 점
 
 - **여백 자르기**와 모아찍기의 **꽉 채우기**는 내용을 가리는 기능입니다. 가려진 정보는 문서 안에 남을 수 있습니다.
@@ -68,10 +66,7 @@ Word·Excel·PowerPoint·HWP 변환은 지원하지 않습니다.
 
 ## 소스와 라이선스
 
-[소스 실행·빌드](BUILDING.md) · [변경 기록](CHANGELOG.md) · [오류 제보](https://github.com/lil1lilq/OfflinePDF/issues)
-
-기관 내부에 배포된 프로그램을 쓰는 직원은 공개 이슈 대신 소속 기관의 전산 담당자에게 제보해 주세요.
-공개 이슈에는 업무 문서나 내부 정보를 올리지 마세요.
+[소스 실행·빌드](BUILDING.md) · [변경 기록](CHANGELOG.md) ·
 
 소스 코드는 [AGPL-3.0-or-later](LICENSE)로 제공합니다.
 외부 구성요소와 모델의 고지는 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)에 정리되어 있습니다.
