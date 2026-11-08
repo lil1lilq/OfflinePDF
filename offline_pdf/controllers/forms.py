@@ -275,18 +275,22 @@ class FormController:
         self.run_button.config(text=CARD_TEXT[self.tool][0] + "  →")
         self.preview_button.config(state="normal")
         if self.tool == "redact":
-            self.preview_region_row.pack(fill="x", after=self.preview_zoom_row)
+            self.preview_region_row.pack(side="right", padx=(12, 0), before=self.preview_nav)
         else:
             self.preview_region_row.pack_forget()
         self.output_name.set("합친문서.pdf" if self.tool == "merge" else "이미지문서.pdf")
         if self.tool in ("merge", "images_pdf"):
-            self.name_frame.pack(fill="x", pady=(7, 0))
+            self.name_frame.pack(side="right", fill="y", padx=(10, 0), pady=4)
         else:
             self.name_frame.pack_forget()
         if self.tool == "redact":
-            self.region_controls.pack(fill="x")
+            self.region_controls.pack(side="right", fill="y", padx=(10, 0))
         else:
             self.region_controls.pack_forget()
+        if self.tool in ("merge", "images_pdf", "redact"):
+            self.side_controls.pack(side="right", fill="y", before=self.form)
+        else:
+            self.side_controls.pack_forget()
         if self.tool not in (
             "merge",
             "images_pdf",
@@ -308,7 +312,7 @@ class FormController:
             self.field("다음 파일의 시작 쪽 (예: 5,8)", "split_starts", "")
             for key in ("split_mode", "split_count", "split_starts"):
                 self.options[key].trace_add("write", self.update_split_preview)
-            self.split_summary.pack(fill="x", pady=(7, 0))
+            self.split_summary.pack(fill="x", pady=(4, 0))
             self.update_split_preview()
         else:
             self.split_summary.pack_forget()
@@ -406,7 +410,7 @@ class FormController:
             text="페이지를 비워 두면 전체 페이지를 처리합니다." if "pages" in self.options else ""
         )
         if "pages" in self.options:
-            self.security.pack(anchor="w", pady=(12, 0))
+            self.security.pack(anchor="w", pady=(4, 0))
         else:
             self.security.pack_forget()
         self.update_file_summary()
@@ -419,12 +423,12 @@ class FormController:
             self.security.config(
                 text="용량 제한 시 이미지 화질이 낮아질 수 있습니다. 최대 용량은 이미지 크기·메모리 제한과 별개입니다."
             )
-            self.security.pack(anchor="w", pady=(8, 0))
+            self.security.pack(anchor="w", pady=(4, 0))
         if self.tool == "nup":
             self.security.config(
                 text="파일별 저장 · 원본의 흰 여백은 유지됩니다. 꽉 채우기는 가장자리를 가리며 영구 삭제하지 않습니다."
             )
-            self.security.pack(anchor="w", pady=(8, 0))
+            self.security.pack(anchor="w", pady=(4, 0))
         self.update_region_status()
         self.hide_preview(restore=False)
         if self.tool == "extract":
@@ -464,7 +468,7 @@ class FormController:
         }
         self.arrange_fields()
         self.security.config(text=notes.get(self.options["compression"].get(), ""))
-        self.security.pack(anchor="w", pady=(8, 0))
+        self.security.pack(anchor="w", pady=(4, 0))
 
     def set_output_password(self):
         if self.busy():

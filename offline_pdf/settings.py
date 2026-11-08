@@ -24,13 +24,13 @@ def show_settings(app):
     dialog.transient(app.root)
     body = ttk.Frame(dialog)
     body.pack(fill="both", expand=True, padx=24, pady=22)
-    font = (theme.FONT_FAMILY, 12)
+    font = (theme.FONT_FAMILY, 15)
     choices = {}
 
     def choice_row(row, label, options, current):
         """A segmented toggle: one rounded control, the active option filled in."""
         names = {tr(text): value for text, value in options}
-        ttk.Label(body, text=label, font=(theme.FONT_FAMILY, 12, "bold")).grid(
+        ttk.Label(body, text=label, font=(theme.BOLD_FAMILY, 15, "bold")).grid(
             row=row, column=0, sticky="w", padx=(0, 24), pady=8
         )
         control = ctk.CTkSegmentedButton(

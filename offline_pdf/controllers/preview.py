@@ -11,6 +11,7 @@ from pathlib import Path
 import pymupdf as pdf
 
 from .. import ctk_widgets as ttk
+from .. import theme
 from ..engine import UserError, check_local_path, open_pdf, pages, split_ranges
 from ..images import open_image_document
 from ..passwords import cached_password
@@ -150,7 +151,9 @@ class PreviewController:
         ):
             cell = ttk.Frame(row)
             cell.grid(row=0, column=i, sticky="nsew", padx=5)
-            ttk.Label(cell, text=caption, font=("맑은 고딕", 11, "bold")).pack(anchor="w", pady=5)
+            ttk.Label(cell, text=caption, font=(theme.BOLD_FAMILY, 14, "bold")).pack(
+                anchor="w", pady=5
+            )
             with Image.open(Path(folder) / name) as image:
                 source = image.copy()
                 self.comparison_images.append(source)
@@ -277,7 +280,7 @@ class PreviewController:
                                     anchor="w",
                                     text=f"{first + 1}–{last + 1}쪽",
                                     fill=BLUE,
-                                    font=("맑은 고딕", 12, "bold"),
+                                    font=(theme.BOLD_FAMILY, 12, "bold"),
                                 )
                             self.overview_canvas.configure(
                                 scrollregion=(0, 0, ow, ((len(ranges) + cols - 1) // cols) * 80)

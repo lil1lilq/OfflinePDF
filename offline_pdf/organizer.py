@@ -11,6 +11,7 @@ from tkinter import messagebox, simpledialog
 import pymupdf as pdf
 
 from . import ctk_widgets as ttk
+from . import theme
 from .engine import UserError, open_pdf, pages
 from .ui import BG, BLUE, FONT, INK, LINE, MUTED, PANEL, SOFT
 
@@ -112,7 +113,10 @@ class PageOrganizer(ttk.Frame):
         top = ttk.Frame(panel, style="Panel.TFrame")
         top.pack(fill="x", pady=(0, 8))
         self.filename = ttk.Label(
-            top, text="왼쪽에서 PDF·이미지를 선택하세요.", font=(FONT, 11, "bold"), wraplength=480
+            top,
+            text="왼쪽에서 PDF·이미지를 선택하세요.",
+            font=(theme.BOLD_FAMILY, 15, "bold"),
+            wraplength=480,
         )
         self.filename.pack(side="left")
         ttk.Button(top, text="설정", command=app.organizer_settings).pack(side="right")

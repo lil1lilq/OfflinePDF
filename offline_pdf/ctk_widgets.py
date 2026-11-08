@@ -8,6 +8,10 @@ from . import theme
 from .localization import tr
 from .theme import colors
 
+# CustomTkinter font sizes are pixels, not points: 14px is about 10.5pt, a
+# comfortable reading size at 100% Windows scaling.
+BODY_SIZE = 14
+
 
 def _palette():
     return colors("default"), colors("dark")
@@ -78,7 +82,7 @@ class Label(_Text, ctk.CTkLabel):
         if font is not None:
             kwargs["font"] = font
         else:
-            kwargs.setdefault("font", (theme.FONT_FAMILY, 12))
+            kwargs.setdefault("font", (theme.FONT_FAMILY, BODY_SIZE))
         super().__init__(master, **kwargs)
 
 
@@ -89,7 +93,7 @@ class Button(_Text, ctk.CTkButton):
         kwargs.setdefault("height", 36)
         kwargs.setdefault("corner_radius", 10)
         kwargs.setdefault("border_width", 1)
-        kwargs.setdefault("font", (theme.FONT_FAMILY, 12))
+        kwargs.setdefault("font", (theme.FONT_FAMILY, BODY_SIZE))
         if width is not None:
             kwargs["width"] = max(36, width * 10)
         else:
@@ -115,7 +119,7 @@ class Entry(ctk.CTkEntry):
         if width is not None:
             kwargs["width"] = max(90, width * 10)
         kwargs.setdefault("height", 36)
-        kwargs.setdefault("font", (theme.FONT_FAMILY, 12))
+        kwargs.setdefault("font", (theme.FONT_FAMILY, BODY_SIZE))
         kwargs.setdefault("corner_radius", 9)
         kwargs.setdefault("fg_color", _pair("PANEL"))
         kwargs.setdefault("border_color", _pair("LINE"))
@@ -133,7 +137,7 @@ class Combobox(ctk.CTkComboBox):
         if width is not None:
             kwargs["width"] = max(110, width * 10)
         kwargs.setdefault("height", 36)
-        kwargs.setdefault("font", (theme.FONT_FAMILY, 12))
+        kwargs.setdefault("font", (theme.FONT_FAMILY, BODY_SIZE))
         kwargs.setdefault("corner_radius", 9)
         kwargs.setdefault("fg_color", _pair("PANEL"))
         kwargs.setdefault("border_color", _pair("LINE"))
@@ -169,7 +173,7 @@ class Radiobutton(_Text, ctk.CTkRadioButton):
         kwargs.setdefault("border_width_unchecked", 2)
         kwargs.setdefault("border_width_checked", 5)
         kwargs.setdefault("width", 105)
-        kwargs.setdefault("font", (theme.FONT_FAMILY, 12))
+        kwargs.setdefault("font", (theme.FONT_FAMILY, BODY_SIZE))
         super().__init__(master, **kwargs)
 
 
@@ -190,7 +194,7 @@ class Checkbutton(_Text, ctk.CTkCheckBox):
         self.source_text = kwargs.get("text", "")
         kwargs["text"] = tr(self.source_text)
         kwargs.setdefault("text_color", _pair("INK"))
-        kwargs.setdefault("font", (theme.FONT_FAMILY, 12))
+        kwargs.setdefault("font", (theme.FONT_FAMILY, BODY_SIZE))
         for key, value in CHECKBOX_STYLE.items():
             kwargs.setdefault(key, value)
         super().__init__(master, **kwargs)
