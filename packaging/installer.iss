@@ -43,7 +43,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
-Name: "explorermenu"; Description: "탐색기 PDF 우클릭 메뉴 추가 / Add Explorer PDF menu"; Flags: unchecked
+Name: "explorermenu"; Description: "탐색기 PDF 우클릭 메뉴 추가 / Add Explorer PDF menu"
 
 [Registry]
 Root: HKA; Subkey: "Software\Classes\SystemFileAssociations\.pdf\shell\OfflinePDF"; ValueType: string; ValueName: "MUIVerb"; ValueData: "OfflinePDF"; Tasks: explorermenu; Flags: uninsdeletekey

@@ -77,7 +77,7 @@ Notices for third-party components and models are in [THIRD_PARTY_NOTICES.md](TH
 
 ## Explorer context menu
 
-Select the optional Explorer PDF menu during installation. Select PDFs and use
+The Explorer PDF menu is checked by default during installation; uncheck it to opt out. Select PDFs and use
 OfflinePDF → Merge / Split / Compress / AI upscale (under Show more options on
 Windows 11). Review settings and file order before running. Files are loaded in
 name order. Per-page splitting processes all listed PDFs; custom boundaries
