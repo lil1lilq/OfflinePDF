@@ -304,10 +304,23 @@ class QuickWindow:
             self.error.configure(
                 text="임시자료가 남았습니다. 저장 폴더의 .offline-pdf- 폴더를 확인하세요."
             )
-        self.actions(
-            ("닫기", self.request_close),
-            *(([("결과 폴더 열기", self.open_result)]) if self.folder else []),
-        )
+        actions = [("닫기", self.request_close)]
+        if self.folder:
+            actions.append(("결과 폴더 열기", self.open_result))
+        elif state == "error":
+            actions.append(("다시 시도", self.retry))
+        self.actions(*actions)
+
+    def retry(self):
+        try:
+            self.begin(self.action, list(self.files))
+        except Exception as exc:
+            self.finish(
+                "error",
+                str(exc)
+                if isinstance(exc, UserError)
+                else "파일을 열 수 없습니다. 손상 여부와 읽기 권한을 확인하세요.",
+            )
 
     def open_result(self):
         try:
