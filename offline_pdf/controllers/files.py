@@ -99,26 +99,6 @@ class FileController:
             details.append("이미지는 자동으로 PDF로 변경되어 작업이 수행됩니다.")
         self.status.set(" · ".join(details))
 
-    def replace_converted_inputs(self, mapping):
-        selected = self.file_list.curselection()
-        self.converted_count = len(mapping)
-        self.save_mode.set("지정한 폴더")
-        self.output.set(self.result_output or self.output.get())
-        self.files = [mapping.get(path, path) for path in self.files]
-        self.regions = {mapping.get(path, path): regions for path, regions in self.regions.items()}
-        self.sync_list()
-        self.file_list.selection_clear(0, "end")
-        for i in selected:
-            self.file_list.selection_set(i)
-        self.feedback.file_added(i for i, path in enumerate(self.files) if path in mapping.values())
-        if self.tool == "extract":
-            self.refresh_organizer()
-        else:
-            self.hide_preview(restore=False)
-        if self.tool == "split":
-            self.update_split_preview()
-        self.refresh_preview(reset=True)
-
     def sync_list(self, animate=False):
         self.password_cache = {p: v for p, v in self.password_cache.items() if p in self.files}
         self.metadata_cache.clear()

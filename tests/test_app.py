@@ -223,7 +223,9 @@ class AppTests(unittest.TestCase):
         self.assertTrue(self.app.work.winfo_ismapped())
         # Redaction edits on its preview, which is its main screen: back goes home.
         self.assertEqual(self.app.screen, "work")
-        self.assertTrue(self.app.columns.winfo_ismapped())
+        # Redaction has no options, so no empty settings panel above the page.
+        self.assertFalse(self.app.columns.winfo_ismapped())
+        self.assertTrue(self.app.region_status.winfo_ismapped())
         self.app.home_button.invoke()
         self.root.update()
         self.assertTrue(self.app.home.winfo_ismapped())
@@ -1048,7 +1050,7 @@ class AppTests(unittest.TestCase):
 
         self.assertIn(__version__, self.root.title())
 
-    def test_ze_mixed_import_replaces_sidebar_only_after_success(self):
+    def test_ze_mixed_import_keeps_original_images_in_sidebar(self):
         from PIL import Image
 
         self.app.cancel_continue()
@@ -1067,14 +1069,12 @@ class AppTests(unittest.TestCase):
         ):
             self.app.run()
             self.wait_for_job()
-        self.assertEqual(self.app.files[0], str(self.source.resolve()))
-        self.assertEqual(Path(self.app.files[1]).suffix, ".pdf")
-        self.assertTrue(Path(self.app.files[1]).is_file())
+        self.assertEqual(self.app.files, [str(self.source.resolve()), str(image.resolve())])
         self.assertEqual(image.read_bytes(), before)
+        self.assertEqual(len(self.app.result_files), 1)
         with pdf.open(self.app.result_files[0]) as doc:
             self.assertEqual(len(doc), 3)
-        self.assertEqual(self.app.file_list.rows[1][2], self.app.files[1])
-        # A failed selected operation must leave the image in the sidebar.
+        # A failed selected operation must leave the image in the sidebar too.
         self.app.select_tool("compress")
         self.app.clear_files()
         self.app.add_paths([str(image)])

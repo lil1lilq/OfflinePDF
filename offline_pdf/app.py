@@ -60,7 +60,6 @@ class App(NavigationController, FileController, FormController, PreviewControlle
         self.job_passwords = {}
         self.preview_job = False
         self.comparison_folder = None
-        self.converted_count = 0
         self.screen = "home"
         self.preview_origin = None
         self.chain_return_screen = "work"

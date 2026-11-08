@@ -200,6 +200,38 @@ class Checkbutton(_Text, ctk.CTkCheckBox):
         super().__init__(master, **kwargs)
 
 
+class SegmentedChoice(ctk.CTkSegmentedButton):
+    """A segmented toggle; the selected segment is filled and its text inverted."""
+
+    def __init__(self, master, values, command=None, **kwargs):
+        self._on_choose = command
+        kwargs.setdefault("font", (theme.FONT_FAMILY, BODY_SIZE))
+        kwargs.setdefault("height", 36)
+        kwargs.setdefault("corner_radius", 10)
+        kwargs.setdefault("border_width", 3)
+        kwargs.setdefault("fg_color", ("#e6eaf1", "#2b3442"))
+        kwargs.setdefault("unselected_color", ("#e6eaf1", "#2b3442"))
+        kwargs.setdefault("unselected_hover_color", ("#d7deea", "#36414f"))
+        kwargs.setdefault("selected_color", _pair("BLUE"))
+        kwargs.setdefault("selected_hover_color", ("#2948c3", "#c3d0ff"))
+        kwargs.setdefault("text_color", _pair("INK"))
+        super().__init__(master, values=list(values), command=self._chosen, **kwargs)
+
+    def _chosen(self, value):
+        self._paint()
+        if self._on_choose:
+            self._on_choose(value)
+
+    def set(self, value, *args, **kwargs):
+        super().set(value, *args, **kwargs)
+        self._paint()
+
+    def _paint(self):
+        for name, button in self._buttons_dict.items():
+            selected = name == self.get()
+            button.configure(text_color=("#ffffff", "#172135") if selected else _pair("INK"))
+
+
 class Progressbar(ctk.CTkProgressBar):
     def __init__(self, master, mode="determinate", **kwargs):
         kwargs.setdefault("progress_color", _pair("BLUE"))

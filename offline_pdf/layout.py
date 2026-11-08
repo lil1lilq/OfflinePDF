@@ -18,9 +18,10 @@ from .ui import (
     LINE,
     MUTED,
     PANEL,
-    SOFT,
+    RED,
     ScrollPane,
     ToolCard,
+    Tooltip,
     setup_style,
 )
 from .workspace import FileList, StatusFeedback, WindowDropHover
@@ -54,6 +55,8 @@ def build(app):
     ctk.ThemeManager.theme["CTkFont"]["size"] = ttk.BODY_SIZE
     setup_style(root)
     app.auto_open = tk.BooleanVar(value=True)
+    # Deletes pages, so it starts off on every launch and is never saved.
+    app.remove_blank = tk.BooleanVar(value=False)
     header = ctk.CTkFrame(root, fg_color=("#ffffff", "#222a36"), corner_radius=0)
     header.pack(fill="x", ipady=9)
     logo = tk.Canvas(header, width=32, height=32, bg=BLUE, highlightthickness=0)
@@ -186,6 +189,23 @@ def build(app):
         hover_color=("#eaf0ff", "#303b53"),
         text_color=("#111827", "#f8fafc"),
     ).pack(fill="x", pady=(6, 0))
+    app.blank_check = ctk.CTkCheckBox(
+        controls,
+        text="흰 빈 페이지 삭제",
+        variable=app.remove_blank,
+        command=app.update_blank_option,
+        font=(FONT, 13),
+        text_color=("#111827", "#f8fafc"),
+        text_color_disabled=("#8a93a3", "#7d889a"),
+        **ttk.CHECKBOX_STYLE,
+    )
+    app.blank_check.pack(anchor="w", pady=(8, 0))
+    app.blank_tooltip = Tooltip(
+        app.blank_check,
+        "결과물에서 아무것도 없는 흰 페이지를 지웁니다. 글자·선·이미지가 있는 페이지는 남깁니다.",
+    )
+    app.blank_check.bind("<Enter>", lambda e: app.blank_tooltip.schedule(), add="+")
+    app.blank_check.bind("<Leave>", lambda e: app.blank_tooltip.hide(), add="+")
     ctk.CTkCheckBox(
         controls,
         text="완료 후 폴더 열기",
@@ -262,6 +282,10 @@ def build(app):
         actions, text="PDF병합  →", style="Run.TButton", command=app.run, state="disabled"
     )
     app.run_button.pack(side="right")
+    # Shown beside the run button while blank-page removal applies to the tool.
+    app.blank_badge = ttk.Label(
+        actions, text="빈 페이지 삭제 켜짐", foreground=RED, font=(theme.BOLD_FAMILY, 13, "bold")
+    )
     app.cancel_button = ttk.Button(
         actions, text="작업 취소", command=app.cancel_job, state="disabled"
     )
@@ -283,8 +307,12 @@ def build(app):
     title_row = ttk.Frame(app.header_task, style="Panel.TFrame")
     app.task_title_row = title_row
     title_row.pack(fill="x")
-    app.task_icon = tk.Canvas(title_row, width=38, height=38, bg=SOFT, highlightthickness=0)
+    # The same icon chip as the tool's card on the home screen.
+    app.task_icon = ctk.CTkFrame(title_row, width=40, height=40, corner_radius=10)
     app.task_icon.pack(side="left", padx=(0, 10))
+    app.task_icon.pack_propagate(False)
+    app.task_icon_label = ctk.CTkLabel(app.task_icon, text="", width=24, height=24)
+    app.task_icon_label.place(relx=0.5, rely=0.5, anchor="center")
     title_text = ttk.Frame(title_row, style="Panel.TFrame")
     title_text.pack(side="left", fill="x", expand=True)
     app.title = ttk.Label(
@@ -348,12 +376,6 @@ def build(app):
     )
     app.output_password_button.pack(side="left", padx=(8, 0))
     app.security = ttk.Label(settings, text="", style="PanelMuted.TLabel", wraplength=800)
-    # Redaction: how many regions are marked. Clearing them is on the preview bar.
-    app.region_controls = ttk.Frame(app.side_controls, style="Panel.TFrame")
-    app.region_status = ttk.Label(
-        app.region_controls, text="삭제 영역 0개", style="PanelMuted.TLabel"
-    )
-    app.region_status.pack(side="bottom", anchor="e", pady=(0, 8))
     app.split_summary = ttk.Label(settings, text="", style="PanelMuted.TLabel", wraplength=800)
     workspace = ttk.Frame(app.body)
     app.document_host = workspace
@@ -404,9 +426,14 @@ def build(app):
     # Packed first so it keeps its room when DPI scaling crowds the toolbar.
     app.preview_region_row = ttk.Frame(zoom, style="Panel.TFrame")
     app.clear_preview_regions = ttk.Button(
-        app.preview_region_row, text="영역 지우기", command=app.clear_regions
+        app.preview_region_row, text="이 페이지 선택 초기화", command=app.clear_regions
     )
     app.clear_preview_regions.pack(side="right")
+    # Redaction: how many regions are marked, beside the button that clears them.
+    app.region_status = ttk.Label(
+        app.preview_region_row, text="선택 영역 0개", style="PanelMuted.TLabel"
+    )
+    app.region_status.pack(side="right", padx=(0, 8))
     app.preview_nav = ttk.Frame(zoom, style="Panel.TFrame")
     app.preview_nav.pack(side="right")
     ttk.Button(app.preview_nav, text="다음 ›", command=lambda: app.turn(1), width=7).pack(

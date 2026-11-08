@@ -51,17 +51,15 @@ class MixedInputTests(unittest.TestCase):
         )
         return folder, events
 
-    def test_mixed_order_frames_and_published_input_files(self):
+    def test_mixed_order_frames_and_only_results_published(self):
         folder, events = self.run_tool("merge", [self.image, self.pdf, self.frames])
         with pdf.open(next(folder.glob("*.pdf"))) as doc:
             self.assertEqual(len(doc), 4)
             self.assertIn("ORIGINAL", doc[1].get_text())
             self.assertEqual(doc[0].rect, pdf.Rect(0, 0, 60, 40))
-        mapping = next(e["files"] for e in events if e["type"] == "converted")
-        self.assertEqual(set(mapping), {str(self.image), str(self.frames)})
-        for path in mapping.values():
-            self.assertTrue(Path(path).is_file())
-            self.assertTrue(Path(path).is_relative_to(folder / "입력PDF"))
+        # The PDFs converted from images are working copies, not results.
+        self.assertEqual([p.name for p in folder.iterdir()], [next(folder.glob("*.pdf")).name])
+        self.assertFalse(any(e["type"] == "converted" for e in events))
 
     def test_rotate_and_split_operate_on_converted_image_frames(self):
         folder, _ = self.run_tool("rotate", [self.frames], angle="90")

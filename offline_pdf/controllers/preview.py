@@ -38,7 +38,7 @@ class PreviewController:
         self.canvas.xview_moveto(0)
         self.organizer.pack_forget()
         self.file_overview.pack_forget()
-        if inline:
+        if inline and self.settings_panel_needed():
             self.columns.pack(fill="x", before=self.document_host)
         else:
             self.columns.pack_forget()
@@ -84,7 +84,8 @@ class PreviewController:
         if self.tool == "extract":
             self.organizer.pack(fill="both", expand=True)
         else:
-            self.columns.pack(fill="x", before=self.document_host)
+            if self.settings_panel_needed():
+                self.columns.pack(fill="x", before=self.document_host)
             if self.files:
                 self.file_overview.pack(fill="both", expand=True)
                 self.overview_title.config(
@@ -436,4 +437,4 @@ class PreviewController:
 
     def update_region_status(self):
         count = sum(len(rects) for regions in self.regions.values() for rects in regions.values())
-        self.region_status.config(text=f"삭제 영역 {count}개 · 영구 삭제는 한 파일씩 처리합니다.")
+        self.region_status.config(text=f"선택 영역 {count}개")
