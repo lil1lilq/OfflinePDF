@@ -1,4 +1,4 @@
-"""Local Tk widgets for the card home and task workspace. No assets or downloads."""
+"""Local Tk widgets for the card home and task workspace."""
 
 from __future__ import annotations
 
@@ -35,13 +35,45 @@ CARD_SUMMARIES = {
     "text": "PDF 글자를 TXT로 저장합니다",
     "redact": "선택 영역의 내용을 영구 삭제합니다",
     "clean": "문서에 포함된 부가정보를 정리합니다",
-    "ocr": "한글, 영어 지원 · 검색·복사 가능한 PDF",
+    "ocr": "스캔 문서의 글자를 인식합니다",
 }
 CARD_TEXT = {key: (title, CARD_SUMMARIES[key]) for key, (title, _) in TOOLS.items()}
 
 
-def icon(canvas, key, x, y, color=BLUE):
+def tool_color(key):
+    from .appearance import palette
+    from .effects import mix
+
+    dark = palette()["PANEL"] != "#ffffff"
+    group = (
+        "teal"
+        if key in ("extract", "nup", "rotate", "crop", "number")
+        else "orange"
+        if key == "compress"
+        else "purple"
+        if key in ("pdf_images", "images_pdf", "watermark", "text")
+        else "indigo"
+        if key in ("ocr", "upscale")
+        else "red"
+        if key in ("protect", "unlock", "redact", "clean")
+        else "blue"
+    )
+    colors = {
+        "blue": ("#2464e8", "#91b4ff"),
+        "teal": ("#087f86", "#5dd6ce"),
+        "orange": ("#c45c08", "#ffb276"),
+        "purple": ("#8041c3", "#cbabff"),
+        "indigo": ("#5146bd", "#b5adff"),
+        "red": ("#b13a42", "#ffa0a6"),
+    }
+    color = colors[group][int(dark)]
+    return color, mix(palette()["PANEL"], color, 0.12)
+
+
+def icon(canvas, key, x, y, color=BLUE, scale=1):
     """Draw small original line icons with Tk primitives (24 by 24 units)."""
+
+    before = set(canvas.find_all())
 
     def line(*coords, **kwargs):
         points = [v + (x if i % 2 == 0 else y) for i, v in enumerate(coords)]
@@ -137,6 +169,11 @@ def icon(canvas, key, x, y, color=BLUE):
         line(16, 22, 22, 22, 22, 16)
         line(6, 9, 18, 9)
         line(6, 14, 18, 14)
+
+    if scale != 1:
+        for item in set(canvas.find_all()) - before:
+            canvas.scale(item, x, y, scale, scale)
+            canvas.itemconfigure(item, width=1.8 * scale)
 
 
 class ScrollPane(ttk.Frame):
@@ -368,8 +405,15 @@ class ToolCard(tk.Canvas):
         )
         if self.compact:
             y = h / 2
-            self.create_rectangle(10, y - 16, 42, y + 16, fill=SOFT, outline=SOFT)
-            icon(self, self.key, 14, y - 12, BLUE if self.enabled else MUTED)
+            self.create_rectangle(
+                10,
+                y - 16,
+                42,
+                y + 16,
+                fill=tool_color(self.key)[1],
+                outline=tool_color(self.key)[1],
+            )
+            icon(self, self.key, 14, y - 12, tool_color(self.key)[0] if self.enabled else MUTED)
             title, description = CARD_TEXT[self.key]
             self.create_text(
                 52,
@@ -381,23 +425,22 @@ class ToolCard(tk.Canvas):
                 width=max(75, w - 62),
             )
             return
-        self.create_rectangle(20, 20, 60, 60, fill=SOFT, outline=SOFT)
-        icon(self, self.key, 28, 28, BLUE if self.enabled else MUTED)
-        self.create_line(w - 33, 31, w - 23, 21, w - 23, 29, fill=MUTED, width=1.5)
-        self.create_line(w - 23, 21, w - 31, 21, fill=MUTED, width=1.5)
+        color, tint = tool_color(self.key)
+        self.create_rectangle(20, 18, 72, 70, fill=tint, outline=tint)
+        icon(self, self.key, 28, 26, color if self.enabled else MUTED, scale=1.5)
         title, description = CARD_TEXT[self.key]
         self.create_text(
             20,
-            78,
+            83,
             anchor="nw",
             text=title,
-            font=(FONT, 10 if self.key == "ocr" else 13, "bold"),
+            font=(FONT, 12, "bold"),
             fill=INK if self.enabled else MUTED,
             width=max(100, w - 40),
         )
         self.create_text(
             20,
-            112,
+            122,
             anchor="nw",
             text=description if self.enabled else "현재 결과의 파일 형식은 지원하지 않습니다",
             font=(FONT, 9),
@@ -468,22 +511,30 @@ def setup_style(root):
         font=(FONT, 11, "bold"),
         padding=(22, 12),
         background=BLUE,
-        foreground=PANEL,
+        foreground="#ffffff",
         bordercolor=BLUE,
     )
     style.map(
         "Run.TButton",
         background=[("disabled", "#ccd5e8"), ("active", "#1e4fc9")],
-        foreground=[("disabled", MUTED), ("!disabled", PANEL)],
+        foreground=[("disabled", MUTED), ("!disabled", "#ffffff")],
     )
     style.configure(
         "TEntry",
         fieldbackground=PANEL,
+        foreground=INK,
+        insertcolor=INK,
         padding=7,
         bordercolor=LINE,
         lightcolor=LINE,
         darkcolor=LINE,
     )
+    style.configure("Settings.TRadiobutton", background=BG, foreground=INK)
+    style.map("Settings.TRadiobutton", background=[("active", SOFT)])
+    style.configure("TRadiobutton", background=PANEL, foreground=INK)
+    style.map("TRadiobutton", background=[("active", SOFT)])
+    style.configure("TScrollbar", background=PANEL, troughcolor=BG, arrowcolor=INK)
+    style.configure("Treeview", background=PANEL, fieldbackground=PANEL, foreground=INK)
     style.configure("TCombobox", fieldbackground=PANEL, padding=7, bordercolor=LINE, arrowsize=14)
     style.map("TCombobox", fieldbackground=[("readonly", PANEL)], foreground=[("readonly", INK)])
     style.configure("TCheckbutton", background=PANEL)
@@ -508,15 +559,18 @@ def setup_style(root):
                     (size * 0.43, size * 0.70),
                     (size * 0.78, size * 0.29),
                 ],
-                fill=PANEL,
+                fill="#ffffff",
                 width=max(2, size // 8),
             )
         images.append(ImageTk.PhotoImage(image, master=root))
         image.close()
     root.checkbox_images = images
-    style.element_create(
-        "OfflineCheck.indicator", "image", images[0], ("selected", images[1]), sticky=""
-    )
+    element = "OfflineCheck" + PANEL.replace("#", "") + ".indicator"
+    if not hasattr(root, "all_checkbox_images"):
+        root.all_checkbox_images = []
+    root.all_checkbox_images.extend(images)
+    if element not in style.element_names():
+        style.element_create(element, "image", images[0], ("selected", images[1]), sticky="")
     style.layout(
         "TCheckbutton",
         [
@@ -525,7 +579,7 @@ def setup_style(root):
                 {
                     "sticky": "nswe",
                     "children": [
-                        ("OfflineCheck.indicator", {"side": "left", "sticky": ""}),
+                        (element, {"side": "left", "sticky": ""}),
                         ("Checkbutton.label", {"side": "left", "sticky": "nswe"}),
                     ],
                 },

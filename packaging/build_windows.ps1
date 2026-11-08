@@ -21,7 +21,8 @@ Invoke-Checked $Python @('packaging/collect_licenses.py')
 if ($Offline) { Invoke-Checked $Python @('packaging/prepare_dependency_sources.py','--offline') }
 else { Invoke-Checked $Python @('packaging/prepare_dependency_sources.py') }
 $bundleArgs = @('-m','PyInstaller','--noconfirm','--clean','--onedir','--windowed','--name','OfflinePDF',
-    '--version-file','packaging/windows-version.txt',
+    '--version-file','packaging/windows-version.txt','--icon','assets/app.ico',
+    '--add-data','assets;assets','--add-data','offline_pdf/translations.json;offline_pdf',
     '--collect-all','pymupdf','--collect-all','PIL','--collect-all','pillow_heif',
     '--collect-binaries','onnxruntime','--collect-data','onnxruntime',
     '--hidden-import','onnxruntime.capi.onnxruntime_pybind11_state','--exclude-module','onnx','--exclude-module','torch',

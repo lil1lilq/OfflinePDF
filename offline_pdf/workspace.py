@@ -5,8 +5,8 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import font as tkfont
 
-from .effects import Tween, mix
-from .ui import BG, BLUE, FONT, INK, LINE, MUTED, PANEL, RED, SOFT
+from .effects import mix
+from .ui import BG, BLUE, FONT, INK, LINE, MUTED, PANEL, RED, SOFT, Tooltip
 
 
 class FileList(tk.Canvas):
@@ -39,7 +39,20 @@ class FileList(tk.Canvas):
         self.bind("<Button-5>", self.wheel)
         self.bind("<Up>", lambda e: self.key(-1))
         self.bind("<Down>", lambda e: self.key(1))
+        self.name_tooltip = Tooltip(self, "")
+        self.tooltip_row = None
+        self.bind("<Motion>", self.show_filename)
+        self.bind("<Leave>", lambda event: self.name_tooltip.hide())
         self.name_font = tkfont.Font(family=FONT, size=9, weight="bold")
+
+    def show_filename(self, event):
+        index = int(self.canvasy(event.y) // self.row_height)
+        if index != self.tooltip_row:
+            self.tooltip_row = index
+            self.name_tooltip.hide()
+            if 0 <= index < len(self.rows):
+                self.name_tooltip.text = self.rows[index][0]
+                self.name_tooltip.schedule()
 
     def insert(self, index, text):
         self.rows.append((str(text), "", None))
@@ -205,19 +218,6 @@ class FileList(tk.Canvas):
                 (row, i * self.row_height, 1.0, row[2] in selected_paths)
                 for i, row in enumerate(self.rows)
             ]
-        hint_y = max(extent + 26, self.winfo_height() / 2)
-        if hint_y + 55 <= self.winfo_height() or not self.rows:
-            self.create_text(
-                w / 2,
-                hint_y,
-                anchor="center",
-                text="파일을 여기에\n끌어다 놓으세요",
-                width=w - 24,
-                justify="center",
-                font=(FONT, 10),
-                fill=mix(MUTED, BLUE, self.drop_hover),
-                tags=("drop_hint",),
-            )
         # Draw the moving selected row on top while adjacent rows pass it.
         records.sort(key=lambda record: record[3])
         background = self.cget("bg")
@@ -289,6 +289,7 @@ class FileList(tk.Canvas):
         tick()
 
     def close(self):
+        self.name_tooltip.hide()
         if self.timer:
             self.after_cancel(self.timer)
             self.timer = None
@@ -312,8 +313,9 @@ class StatusFeedback:
         text = self.app.status.get()
         warning = any(word in text for word in ("제외", "0개 추가", "선택하세요", "불가"))
         error = any(word in text for word in ("실패", "못했", "오류"))
-        color = RED if error else "#965b18" if warning else BLUE
-        fill = "#fdeced" if error else "#fff0da" if warning else SOFT
+        dark = PANEL != "#ffffff"
+        color = RED if error else ("#ffbf75" if dark else "#965b18") if warning else BLUE
+        fill = mix(PANEL, color, 0.14) if warning or error else SOFT
         mark = "!  " if warning or error else "↻  " if self.app.busy() else "✓  "
         self.label.config(text=mark + text, fg=color)
         if self.timer:
@@ -355,72 +357,68 @@ class StatusFeedback:
 
 
 class WindowDropHover:
-    """Poll the pointer so Explorer drags also animate the shared file sidebar."""
+    """Visual feedback follows native file drag events, never ordinary pointer hover."""
 
     def __init__(self, app):
         self.app = app
         self.active = False
-        self.sidebar_active = False
         self.timer = None
         self.closed = False
-        app.sidebar.configure(highlightthickness=2, highlightbackground=LINE)
-        self.add_text = app.add_button.cget("text")
-        self.sidebar_tween = Tween(app.sidebar, self.paint_sidebar)
-        self.tween = Tween(
-            app.host, lambda value: app.host.config(highlightbackground=mix(LINE, BLUE, value))
+        self.notice = tk.Label(
+            app.root,
+            text="놓으면 파일 목록에 추가됩니다",
+            bg=PANEL,
+            fg=INK,
+            font=(FONT, 14, "bold"),
+            padx=24,
+            pady=18,
+            highlightthickness=2,
+            highlightbackground=BLUE,
         )
+        self.edges = [tk.Frame(app.root, bg=BLUE) for _ in range(4)]
         self.poll()
 
-    def paint_sidebar(self, value):
-        background = mix(PANEL, SOFT, value)
-        self.app.sidebar.configure(bg=background, highlightbackground=mix(LINE, BLUE, value))
-        self.app.file_count.configure(bg=background)
-        self.app.file_list.configure(bg=background)
-        self.app.file_list.drop_hover = value
-        self.app.file_list.itemconfigure("drop_hint", fill=mix(MUTED, BLUE, value))
-
-    @staticmethod
-    def contains(widget, x, y):
-        """Use desktop coordinates: an Explorer drag may obscure Tk hit testing."""
-        return bool(
-            widget.winfo_ismapped()
-            and widget.winfo_rootx() <= x < widget.winfo_rootx() + widget.winfo_width()
-            and widget.winfo_rooty() <= y < widget.winfo_rooty() + widget.winfo_height()
+    def update_hover(self, active, sidebar_active=False):
+        active = bool(active and not self.app.busy())
+        if active == self.active:
+            return
+        self.active = active
+        self.app.host.configure(
+            highlightthickness=2 if active else 1, highlightbackground=BLUE if active else LINE
         )
+        if active:
+            self.notice.place(relx=0.5, rely=0.5, anchor="center")
+            self.notice.lift()
+            self.edges[0].place(x=0, y=0, relwidth=1, height=2)
+            self.edges[1].place(x=0, rely=1, anchor="sw", relwidth=1, height=2)
+            self.edges[2].place(x=0, y=0, width=2, relheight=1)
+            self.edges[3].place(relx=1, y=0, anchor="ne", width=2, relheight=1)
+            for edge in self.edges:
+                edge.lift()
+        else:
+            self.notice.place_forget()
+            for edge in self.edges:
+                edge.place_forget()
 
     def poll(self):
         self.timer = None
         if self.closed:
             return
         try:
-            x, y = self.app.root.winfo_pointerxy()
-            active = self.contains(self.app.host, x, y) and not self.app.busy()
-            sidebar_active = active and self.contains(self.app.sidebar, x, y)
-            self.update_hover(active, sidebar_active)
+            self.app.root.offline_pdf_busy = self.app.busy()
+            native = getattr(self.app, "file_drop", None)
+            active = bool(native and getattr(native, "_drag_active", False))
+            self.update_hover(active)
         except tk.TclError:
-            # A transient map/unmap during a screen change must not stop polling.
             pass
         finally:
             if not self.closed:
-                try:
-                    self.timer = self.app.root.after(70, self.poll)
-                except tk.TclError:
-                    self.closed = True
-
-    def update_hover(self, active, sidebar_active):
-        if active != self.active:
-            self.active = active
-            self.tween.to(1 if active else 0)
-        if sidebar_active != self.sidebar_active:
-            self.sidebar_active = sidebar_active
-            self.sidebar_tween.to(1 if sidebar_active else 0)
-            self.app.add_button.configure(
-                text="↓  여기에 놓아 파일 추가" if sidebar_active else self.add_text
-            )
+                self.timer = self.app.root.after(50, self.poll)
 
     def close(self):
         self.closed = True
-        self.tween.close()
-        self.sidebar_tween.close()
         if self.timer:
             self.app.root.after_cancel(self.timer)
+        self.notice.destroy()
+        for edge in self.edges:
+            edge.destroy()

@@ -5,6 +5,8 @@ from pathlib import Path
 from tkinter import ttk
 
 from . import __version__
+from .localization import ChoiceVar, DisplayVar
+from .settings import show_settings
 from .ui import (
     BG,
     BLUE,
@@ -17,7 +19,6 @@ from .ui import (
     SOFT,
     ScrollPane,
     ToolCard,
-    icon,
     setup_style,
 )
 from .workspace import FileList, StatusFeedback, WindowDropHover
@@ -40,7 +41,9 @@ def build(app):
     header.pack(fill="x")
     logo = tk.Canvas(header, width=32, height=32, bg=BLUE, highlightthickness=0)
     logo.pack(side="left", padx=(0, 10))
-    icon(logo, "merge", 4, 4, PANEL)
+    from .branding import set_brand
+
+    set_brand(root, logo)
     tk.Label(header, text="OfflinePDF", bg=PANEL, fg=INK, font=(FONT, 16, "bold")).pack(side="left")
     tk.Label(header, text=__version__, bg=PANEL, fg=MUTED, font=(FONT, 9)).pack(side="left", padx=9)
     app.home_button = ttk.Button(header, text="뒤로가기", command=app.go_back, style="Back.TButton")
@@ -50,7 +53,9 @@ def build(app):
     status_box = tk.Frame(root, bg=PANEL, height=43)
     status_box.pack(side="bottom", fill="x")
     status_box.pack_propagate(False)
-    app.status = tk.StringVar(value="파일을 추가하거나 작업할 도구를 선택하세요.")
+    app.status = DisplayVar(value="파일을 추가하거나 작업할 도구를 선택하세요.")
+    app.settings_button = ttk.Button(status_box, text="설정", command=lambda: show_settings(app))
+    app.settings_button.pack(side="right", padx=(0, 8), pady=4)
     ttk.Button(status_box, text="도움말", command=app.help).pack(side="right", padx=8, pady=4)
     status = tk.Label(status_box, text="", anchor="w", bg=PANEL, fg=MUTED, font=(FONT, 9), padx=16)
     status.pack(fill="both", expand=True)
@@ -70,7 +75,7 @@ def build(app):
     app.add_button.pack(fill="x", pady=(0, 10))
     controls = tk.Frame(app.sidebar, bg=PANEL)
     controls.pack(side="bottom", fill="x", pady=(9, 0))
-    app.sidebar_total = tk.StringVar(value="파일 없음")
+    app.sidebar_total = DisplayVar(value="파일 없음")
     tk.Label(
         controls,
         textvariable=app.sidebar_total,
@@ -149,7 +154,7 @@ def build(app):
     app.work = ttk.Frame(app.content_host)
     footer = ttk.Frame(app.work, padding=(18, 8))
     footer.pack(side="bottom", fill="x")
-    app.summary = tk.StringVar(value="파일을 추가해 주세요.")
+    app.summary = DisplayVar(value="파일을 추가해 주세요.")
     actions = ttk.Frame(footer)
     actions.pack(fill="x")
     app.run_button = ttk.Button(
@@ -190,7 +195,9 @@ def build(app):
     )
     app.save_bar = ttk.Frame(actions)
     app.save_bar.pack(side="left", fill="x", expand=True, padx=(0, 10))
-    app.save_mode = tk.StringVar(value="원본 파일과 같은 폴더")
+    app.save_mode = ChoiceVar(
+        value="원본 파일과 같은 폴더", choices=("원본 파일과 같은 폴더", "지정한 폴더")
+    )
     app.save_mode_combo = ttk.Combobox(
         app.save_bar,
         textvariable=app.save_mode,

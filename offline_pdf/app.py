@@ -18,6 +18,13 @@ from .windows_drop import NativeFileDrop
 
 class App(NavigationController, FileController, FormController, PreviewController, JobController):
     def __init__(self, root):
+        from .appearance import apply_theme
+        from .localization import apply_language, install
+        from .preferences import load_preferences
+
+        install()
+        self.preferences = load_preferences()
+        apply_language(root, self.preferences["language"])
         self.root = root
         self.files = []
         self.regions = {}
@@ -56,6 +63,9 @@ class App(NavigationController, FileController, FormController, PreviewControlle
         from .layout import build
 
         build(self)
+        apply_theme(root, self.preferences["theme"])
+        for card in self.cards.values():
+            card.paint()
         self.file_drop = None
         try:
             self.file_drop = NativeFileDrop(
@@ -114,6 +124,9 @@ class App(NavigationController, FileController, FormController, PreviewControlle
         self.password_cache.clear()
         self.result_passwords.clear()
         self.job_passwords.clear()
+        # Cancel every queued UI callback before destroying its Tcl commands.
+        for timer in self.root.tk.call("after", "info"):
+            self.root.tk.call("after", "cancel", timer)
         self.root.destroy()
 
     def help(self):

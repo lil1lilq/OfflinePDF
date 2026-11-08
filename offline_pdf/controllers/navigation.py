@@ -17,7 +17,7 @@ class NavigationController:
 
     def arrange_cards(self, width, force=False):
         width = max(160, width)
-        columns = max(1, min(6, int(width / (195 if self.show_all_tools else 230))))
+        columns = max(1, min(6, int(width / (195 if self.show_all_tools else 270))))
         available = max(200, self.home.canvas.winfo_height() - 170)
         keys = (
             list(POPULAR) + [key for key in CARD_TEXT if key not in POPULAR]
@@ -34,7 +34,7 @@ class NavigationController:
             rows = (len(keys) + columns - 1) // columns
             height = max(46, min(68, int(available / rows) - 6))
         else:
-            height = 142
+            height = 185
         layout = (columns, height, self.show_all_tools)
         if layout == self.card_layout and not force:
             return

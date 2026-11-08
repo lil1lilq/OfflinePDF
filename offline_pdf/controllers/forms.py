@@ -9,6 +9,7 @@ from tkinter import filedialog, ttk
 
 from ..engine import UserError, open_pdf, split_ranges
 from ..images import EXPORT_FORMATS, IMAGE_EXTENSIONS, IMAGE_PATTERN, open_image_document
+from ..localization import ChoiceVar
 from ..passwords import ask_password, cached_password, ensure_password
 from ..tools import TOOLS
 from ..ui import BLUE, CARD_TEXT, MUTED, RED, icon
@@ -77,7 +78,7 @@ class FormController:
             self.choose_output()
 
     def field(self, label, key, default="", choices=None, secret=False, browse=None):
-        var = tk.StringVar(value=default)
+        var = ChoiceVar(value=default, choices=choices) if choices else tk.StringVar(value=default)
         self.options[key] = var
         cell = ttk.Frame(self.form, style="Panel.TFrame")
         self.form_cells.append((key, cell))

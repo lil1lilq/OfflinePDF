@@ -43,6 +43,9 @@ class NativeFileDrop:
         self._closing = False
         self._pending = deque()
         self._timer_id = None
+        self._drag_active = False
+        self.ole = None
+        self._poll_count = 0
         if sys.platform != "win32":
             return
 
@@ -86,6 +89,17 @@ class NativeFileDrop:
                 self._shell.DragAcceptFiles(hwnd, True)
             self.enabled = bool(self.handles)
             if self.enabled:
+                try:
+                    from .ole_drop import OleDrop
+
+                    self.ole = OleDrop(self)
+                    for handle in tuple(self.handles):
+                        try:
+                            self.ole.register(handle)
+                        except OSError:
+                            pass
+                except OSError:
+                    self.ole = None
                 self._timer_id = self.root.after(75, self._poll_files)
         except BaseException:
             self.close()
@@ -103,6 +117,37 @@ class NativeFileDrop:
         if self._closing:
             return
         try:
+            if getattr(self, "ole", None):
+                self.ole.allowed = (
+                    not getattr(self.root, "offline_pdf_busy", False)
+                    and self.root.grab_current() is None
+                )
+                self._poll_count += 1
+                if self._poll_count % 12 == 0:
+                    # Forms and dialogs create widgets after initial registration.
+                    def register(widget):
+                        if widget.winfo_toplevel() != self.root:
+                            return
+                        try:
+                            handle = widget.winfo_id()
+                            if handle not in self.ole.handles:
+                                self.ole.register(handle)
+                                if handle in self.ole.handles:
+                                    widget.bind(
+                                        "<Destroy>",
+                                        lambda event, item=widget, hwnd=handle: (
+                                            self.ole.unregister(hwnd)
+                                            if event.widget is item
+                                            else None
+                                        ),
+                                        add="+",
+                                    )
+                        except OSError:
+                            pass
+                        for child in widget.winfo_children():
+                            register(child)
+
+                    register(self.root)
             # One batch per tick keeps the UI responsive during repeated drops.
             if self._pending:
                 self.on_files(list(self._pending.popleft()))
@@ -123,6 +168,8 @@ class NativeFileDrop:
                 self._shell.DragFinish(wparam)
             return 0
         if message == WM_NCDESTROY:
+            if getattr(self, "ole", None):
+                self.ole.unregister(hwnd)
             self._comctl.RemoveWindowSubclass(hwnd, self._callback, self._subclass_id)
             self.handles.discard(hwnd)
         return self._comctl.DefSubclassProc(hwnd, message, wparam, lparam)
@@ -138,6 +185,8 @@ class NativeFileDrop:
                 pass
             self._timer_id = None
         self._pending.clear()
+        if getattr(self, "ole", None):
+            self.ole.close()
         for hwnd in tuple(self.handles):
             self._shell.DragAcceptFiles(hwnd, False)
             self._comctl.RemoveWindowSubclass(hwnd, self._callback, self._subclass_id)

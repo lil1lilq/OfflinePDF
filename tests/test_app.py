@@ -587,24 +587,24 @@ class AppTests(unittest.TestCase):
         self.app.hide_preview()
         self.root.update()
         self.assertGreaterEqual(self.app.home_button.winfo_height(), 40)
-        # The shared sidebar remains a drop target with or without loaded files.
-        for loaded in (False, True):
-            if loaded:
-                self.app.add_paths([str(self.source)])
-            self.app.file_list.event_generate("<Motion>", warp=True, x=15, y=15)
-            self.pump(0.3)
-            hover = self.app.window_drop_hover
-            self.assertTrue(hover.sidebar_active)
-            self.assertGreater(hover.sidebar_tween.value, 0.9)
-            self.assertIn("여기에 놓아", self.app.add_button.cget("text"))
-            self.app.title.event_generate("<Motion>", warp=True, x=5, y=5)
-            self.pump(0.3)
-            self.assertFalse(hover.sidebar_active)
-            self.assertLess(hover.sidebar_tween.value, 0.1)
+        hover = self.app.window_drop_hover
+        original_button = self.app.add_button.cget("text")
+        self.app.file_list.event_generate("<Motion>", warp=True, x=15, y=15)
+        self.pump(0.2)
+        self.assertFalse(hover.active)
+        self.assertEqual(self.app.add_button.cget("text"), original_button)
+        self.app.file_drop._drag_active = True
+        self.pump(0.2)
+        self.assertTrue(hover.active)
+        self.assertTrue(hover.notice.winfo_ismapped())
+        self.assertEqual(hover.notice.cget("text"), "놓으면 파일 목록에 추가됩니다")
+        self.assertEqual(self.app.add_button.cget("text"), original_button)
+        self.app.file_drop._drag_active = False
+        self.pump(0.2)
+        self.assertFalse(hover.active)
         with patch.object(self.app, "busy", return_value=True):
-            self.app.file_list.event_generate("<Motion>", warp=True, x=15, y=15)
-            self.pump(0.3)
-            self.assertFalse(self.app.window_drop_hover.sidebar_active)
+            hover.update_hover(True)
+            self.assertFalse(hover.active)
 
     def test_v_encrypted_organizer_settings_and_source_replacement(self):
         source = self.folder / "암호 페이지.pdf"
@@ -959,7 +959,7 @@ class AppTests(unittest.TestCase):
         with pdf.open(self.app.result_files[0]) as doc:
             self.assertIn("RETAIN TEXT", doc[0].get_text())
             self.assertEqual(doc[0].get_images()[0][2:4], (64, 48))
-        self.assertIn("0.8.6", self.root.title())
+        self.assertIn("0.8.7", self.root.title())
 
     def test_ze_mixed_import_replaces_sidebar_only_after_success(self):
         from PIL import Image
@@ -1007,7 +1007,7 @@ class AppTests(unittest.TestCase):
         self.pump(0.35)
         self.assertEqual(str(self.app.home_button.cget("state")), "disabled")
         self.assertFalse(self.app.file_scroll.winfo_ismapped())
-        self.assertTrue(self.app.file_list.find_withtag("drop_hint"))
+        self.assertFalse(self.app.file_list.find_withtag("drop_hint"))
         card = self.app.cards["compress"]
         card.highlight(True)
         self.pump(0.55)
@@ -1017,7 +1017,7 @@ class AppTests(unittest.TestCase):
         self.assertIsNone(card.tooltip.window)
         style = tk.ttk.Style(self.root)
         self.assertEqual(int(style.lookup("Quiet.TButton", "borderwidth")), 1)
-        self.assertIn("OfflineCheck.indicator", style.element_names())
+        self.assertTrue(any(name.startswith("OfflineCheck") for name in style.element_names()))
         paths = []
         for i in range(16):
             path = self.folder / f"스크롤{i}.pdf"
