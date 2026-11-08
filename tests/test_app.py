@@ -13,6 +13,7 @@ import customtkinter as ctk
 import pymupdf as pdf
 
 from offline_pdf.app import TOOLS, App
+from offline_pdf.ui import CARD_MAX_HEIGHT, CARD_MIN_HEIGHT
 
 
 class CardLayoutTests(unittest.TestCase):
@@ -83,7 +84,8 @@ class CardLayoutTests(unittest.TestCase):
             self.assertEqual(card.grid.call_count, 2)
             compact, height = card.set_compact.call_args.args
             self.assertFalse(compact)
-            self.assertGreaterEqual(height, 158)
+            self.assertGreaterEqual(height, CARD_MIN_HEIGHT)
+            self.assertLessEqual(height, CARD_MAX_HEIGHT)
 
 
 class AppTests(unittest.TestCase):
@@ -208,7 +210,7 @@ class AppTests(unittest.TestCase):
         sizes = {(card.winfo_width(), card.winfo_height()) for card in self.app.cards.values()}
         # One-pixel rounding across equal grid columns is normal.
         self.assertLessEqual(max(w for w, h in sizes) - min(w for w, h in sizes), 1)
-        self.assertTrue(all(h >= 158 for w, h in sizes))
+        self.assertTrue(all(CARD_MIN_HEIGHT <= h <= CARD_MAX_HEIGHT for w, h in sizes))
         self.app.select_tool("redact")
         self.root.update()
         self.assertTrue(self.app.work.winfo_ismapped())
@@ -219,14 +221,36 @@ class AppTests(unittest.TestCase):
             self.app.select_tool("merge")
         self.assertEqual(self.app.tool, "redact")
         self.assertTrue(self.app.work.winfo_ismapped())
-        self.app.home_button.invoke()
-        self.root.update()
-        self.assertTrue(self.app.work.winfo_ismapped())
+        # Redaction edits on its preview, which is its main screen: back goes home.
+        self.assertEqual(self.app.screen, "work")
+        self.assertTrue(self.app.columns.winfo_ismapped())
         self.app.home_button.invoke()
         self.root.update()
         self.assertTrue(self.app.home.winfo_ismapped())
         self.root.update()
         self.assertEqual(sum(card.winfo_ismapped() for card in self.app.cards.values()), 16)
+
+    def test_i2_card_opens_only_on_its_own_click_and_clears_hover(self):
+        self.app.show_home()
+        self.root.update()
+        card = self.app.cards["merge"]
+        opened = []
+        with patch.object(card, "command", side_effect=opened.append):
+            # A release left over from a dialog button that closed above the card.
+            card._release(None)
+            self.assertEqual(opened, [])
+            card.highlight(True)
+            card._press(None)
+            with patch.object(card, "_pointer_inside", return_value=True):
+                card._release(None)
+        self.assertEqual(opened, ["merge"])
+        self.assertFalse(card.active)
+        card.highlight(True)
+        self.app.select_tool("split")
+        self.app.show_home()
+        # Checked before events run: a pointer resting on a card may hover it again.
+        self.assertFalse(any(c.active for c in self.app.cards.values()))
+        self.root.update()
 
     def test_j_switch_tools_preserves_pdf_and_accepts_mixed_inputs(self):
         self.app.select_tool("merge")

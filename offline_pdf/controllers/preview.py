@@ -27,22 +27,33 @@ class PreviewController:
             self.show_preview()
 
     def show_preview(self):
-        if self.screen != "preview":
+        # Redaction is drawn on the preview itself, so that preview is the tool's
+        # main work screen: keep its settings visible and let "back" go home.
+        inline = self.tool == "redact"
+        if self.screen != "preview" and not inline:
             self.preview_origin = self.capture_preview_origin()
         self.preview_mode = "width"
         self.preview_zoom = 1.0
         self.canvas.xview_moveto(0)
-        self.columns.pack_forget()
         self.organizer.pack_forget()
         self.file_overview.pack_forget()
+        if inline:
+            self.columns.pack(fill="x", before=self.document_host)
+        else:
+            self.columns.pack_forget()
         self.preview_panel.pack(fill="both", expand=True, pady=(8, 0))
         self.preview_button.config(text="미리보기 접기")
         self.schedule_preview()
         if self.work.winfo_manager():
-            self.screen = "preview"
+            self.screen = "work" if inline else "preview"
         self.update_back_state()
 
     def hide_preview(self, restore=True):
+        if self.tool == "redact" and self.work.winfo_manager():
+            # Redaction always works on the preview; never swap it for the overview.
+            self.preview_origin = None
+            self.show_preview()
+            return
         origin = self.preview_origin if restore else None
         self.preview_origin = None
         if origin:

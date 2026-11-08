@@ -85,9 +85,19 @@ class FormController:
         self.options[key] = var
         cell = ttk.Frame(self.form, style="Panel.TFrame")
         self.form_cells.append((key, cell))
-        ttk.Label(cell, text=label, style="Panel.TLabel").pack(anchor="w", pady=(0, 3))
+        caption = ttk.Label(cell, text=label, style="Panel.TLabel", wraplength=80, justify="left")
+        caption.pack(anchor="w", fill="x", pady=(0, 3))
+        # Every option shares one row, so captions wrap instead of widening the cell.
+        cell.bind(
+            "<Configure>",
+            lambda e, c=caption: (
+                c.configure(wraplength=max(50, e.width - 4)) if e.widget is cell else None
+            ),
+            add="+",
+        )
         controls = ttk.Frame(cell, style="Panel.TFrame")
-        controls.pack(fill="x")
+        # Bottom-aligned, so inputs line up even when a neighbouring caption wraps.
+        controls.pack(side="bottom", fill="x")
         if key == "compression":
             for i, choice in enumerate(choices):
                 controls.columnconfigure(i, weight=1)
@@ -97,14 +107,16 @@ class FormController:
                     variable=var,
                     value=choice,
                     style="Compression.TRadiobutton",
-                ).grid(row=0, column=i, sticky="ew", padx=(0, 6), ipady=9)
+                    width=40,
+                ).grid(row=0, column=i, sticky="w", padx=(0, 6), pady=6)
             return
         if choices:
-            widget = ttk.Combobox(
-                controls, textvariable=var, values=choices, state="readonly", width=12
-            )
+            widget = ttk.Combobox(controls, textvariable=var, values=choices, state="readonly")
         else:
-            widget = ttk.Entry(controls, textvariable=var, width=12, show="●" if secret else "")
+            widget = ttk.Entry(controls, textvariable=var, show="●" if secret else "")
+        # A small natural width lets the shared row shrink; the cell's weight
+        # stretches the control to fill whatever room the row has.
+        widget.configure(width=70)
         widget.pack(side="left", fill="x", expand=True)
         if key == "input_password":
             widget.bind("<FocusOut>", lambda e: self.refresh_preview())
@@ -124,15 +136,7 @@ class FormController:
             ttk.Button(controls, text="선택", command=pick).pack(side="right", padx=(4, 0))
 
     def arrange_fields(self, width=None):
-        width = max(200, width or self.form.winfo_width())
-        columns = max(1, min(4, int(width / 180)))
-        for col in range(4):
-            self.form.columnconfigure(
-                col,
-                weight=1 if col < columns else 0,
-                uniform="fields" if col < columns else "",
-                minsize=0,
-            )
+        """Lay every visible option out side by side on a single row."""
         visible = []
         n_split = (
             self.tool == "split"
@@ -140,7 +144,6 @@ class FormController:
             and self.options["split_mode"].get() == "N개 파일로 나누기"
         )
         for key, cell in self.form_cells:
-            cell.grid_forget()
             if key in ("target_mb", "min_dpi", "min_quality") and self.tool == "compress":
                 if self.options["compression"].get() != "목표 용량":
                     continue
@@ -158,17 +161,38 @@ class FormController:
                     not image and key in ("stamp_path", "stamp_width")
                 ):
                     continue
-            visible.append(cell)
-        for i, cell in enumerate(visible):
-            wide = self.tool == "compress" and i == 0
-            offset = i - 1 if self.tool == "compress" else i
+            visible.append((key, cell))
+        # One row does not depend on the width, so resizes need no new layout.
+        signature = tuple(id(cell) for _, cell in visible)
+        if signature == getattr(self, "form_signature", None):
+            return
+        self.form_signature = signature
+        previous = getattr(self, "form_columns", 0) or 0
+        for col in range(max(previous, len(visible))):
+            self.form.columnconfigure(col, weight=0, uniform="", minsize=0)
+        # With only a few options, an empty trailing column keeps each one at
+        # about a quarter of the row instead of stretching across all of it.
+        spare = max(0, 4 - len(visible))
+        self.form_columns = len(visible) + 1
+        # Tk counts weight 0 as 1 inside a uniform group, so join it only when needed.
+        self.form.columnconfigure(
+            len(visible), weight=spare, uniform="fields" if spare else "", minsize=0
+        )
+        for _, cell in self.form_cells:
+            cell.grid_forget()
+        for i, (key, cell) in enumerate(visible):
+            # The five compression levels need roughly three option widths.
+            wide = key == "compression"
+            self.form.columnconfigure(
+                i, weight=3 if wide else 1, uniform="" if wide else "fields", minsize=0
+            )
             cell.grid(
-                row=0 if wide else offset // columns + int(self.tool == "compress"),
-                column=0 if wide else offset % columns,
-                columnspan=columns if wide else 1,
-                sticky="ew",
-                padx=(0, 10),
-                pady=5,
+                row=0,
+                column=i,
+                columnspan=1,
+                sticky="nsew",
+                padx=(0, 10 if i < len(visible) - 1 else 0),
+                pady=4,
             )
 
     def update_split_preview(self, *_):

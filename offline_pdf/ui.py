@@ -20,14 +20,17 @@ from .tools import TOOLS
 
 BG = "#f4f6fa"
 PANEL = "#ffffff"
-INK = "#202a3a"
-MUTED = "#526078"
+INK = "#111827"
+MUTED = "#374151"
 RED = "#b3384a"
 LINE = "#dfe5ef"
 BLUE = "#3759da"
 SOFT = "#eaf0ff"
 FONT = "맑은 고딕"
 
+# Card heights sized for 16:9 desktop windows: all 16 tools fit on one screen.
+CARD_MIN_HEIGHT = 140
+CARD_MAX_HEIGHT = 168
 POPULAR = ("merge", "split", "extract", "compress", "ocr", "pdf_images")
 # Titles share one source; compact summaries fit the basic cards.
 CARD_SUMMARIES = {
@@ -173,7 +176,7 @@ class ScrollPane(ctk.CTkScrollableFrame):
             fg_color=("#f4f6fa", "#171c25"),
             corner_radius=0,
             scrollbar_button_color=("#8390a4", "#8793a5"),
-            scrollbar_button_hover_color=("#526078", "#b7c2d2"),
+            scrollbar_button_hover_color=("#374151", "#d5dce6"),
             **kwargs,
         )
         self.inner = self
@@ -265,7 +268,7 @@ class ToolCard(ctk.CTkFrame):
         super().__init__(
             master,
             width=220,
-            height=230,
+            height=CARD_MIN_HEIGHT,
             corner_radius=CARD_RADIUS,
             border_width=1,
             fg_color=("#ffffff", "#222a36"),
@@ -274,6 +277,7 @@ class ToolCard(ctk.CTkFrame):
         self.key = key
         self.command = command
         self.active = False
+        self.pressed = False
         self.hover_amount = 0.0
         self.enabled = True
         self.compact = False
@@ -283,12 +287,12 @@ class ToolCard(ctk.CTkFrame):
         light, dark = colors("default")[group], colors("dark")[group]
         self.chip = ctk.CTkFrame(
             self,
-            width=48,
-            height=48,
+            width=40,
+            height=40,
             corner_radius=10,
             fg_color=(light[0], dark[0]),
         )
-        self.chip.pack(anchor="w", padx=CARD_PADDING, pady=(16, 0))
+        self.chip.pack(anchor="w", padx=CARD_PADDING, pady=(14, 0))
         self.chip.pack_propagate(False)
         with Image.open(resource_path("lucide", f"{key}.png")) as image:
             mask = image.getchannel("A")
@@ -300,9 +304,9 @@ class ToolCard(ctk.CTkFrame):
                 return result
 
             self.icon_image = ctk.CTkImage(
-                light_image=tinted(light[1]), dark_image=tinted(dark[1]), size=(28, 28)
+                light_image=tinted(light[1]), dark_image=tinted(dark[1]), size=(24, 24)
             )
-        self.icon = ctk.CTkLabel(self.chip, text="", image=self.icon_image, width=28, height=28)
+        self.icon = ctk.CTkLabel(self.chip, text="", image=self.icon_image, width=24, height=24)
         self.icon.place(relx=0.5, rely=0.5, anchor="center")
         title, description = CARD_TEXT[key]
         self.title_label = ctk.CTkLabel(
@@ -311,20 +315,20 @@ class ToolCard(ctk.CTkFrame):
             anchor="w",
             justify="left",
             height=0,
-            text_color=("#202a3a", "#eff3fa"),
+            text_color=("#111827", "#f8fafc"),
             font=(FONT, 14, "bold"),
         )
-        self.title_label.pack(fill="x", anchor="w", padx=CARD_PADDING, pady=(12, 0))
+        self.title_label.pack(fill="x", anchor="w", padx=CARD_PADDING, pady=(10, 0))
         self.description_label = ctk.CTkLabel(
             self,
             text=description,
             anchor="nw",
             justify="left",
             height=0,
-            text_color=("#526078", "#b7c2d2"),
+            text_color=("#374151", "#d5dce6"),
             font=(FONT, 12),
         )
-        self.description_label.pack(fill="x", anchor="w", padx=CARD_PADDING, pady=(6, 12))
+        self.description_label.pack(fill="x", anchor="w", padx=CARD_PADDING, pady=(4, 10))
         self.bind("<Configure>", self._resize_text, add="+")
         self._bind_tree(self)
         self.bind("<Unmap>", lambda e: self.tooltip.hide(), add="+")
@@ -333,7 +337,8 @@ class ToolCard(ctk.CTkFrame):
     def _bind_tree(self, widget):
         widget.bind("<Enter>", self._enter, add="+")
         widget.bind("<Leave>", self._leave, add="+")
-        widget.bind("<ButtonRelease-1>", lambda e: self.activate(), add="+")
+        widget.bind("<ButtonPress-1>", self._press, add="+")
+        widget.bind("<ButtonRelease-1>", self._release, add="+")
         widget.bind("<Return>", lambda e: self.activate(), add="+")
         widget.bind("<space>", lambda e: self.activate(), add="+")
         for child in widget.winfo_children():
@@ -341,17 +346,29 @@ class ToolCard(ctk.CTkFrame):
         if widget is self:
             widget._canvas.configure(takefocus=True)
 
+    def _pointer_inside(self):
+        x, y = self.winfo_pointerxy()
+        return (
+            self.winfo_rootx() <= x < self.winfo_rootx() + self.winfo_width()
+            and self.winfo_rooty() <= y < self.winfo_rooty() + self.winfo_height()
+        )
+
+    def _press(self, event):
+        self.pressed = True
+
+    def _release(self, event):
+        # Only a click that started on this card opens it. A release left over
+        # from a button in a dialog that just closed above the card is ignored.
+        pressed, self.pressed = self.pressed, False
+        if pressed and self._pointer_inside():
+            self.activate()
+
     def _enter(self, event):
         self.highlight(True)
 
     def _leave(self, event):
         # Child-to-child crossings should not flash the border.
-        x, y = self.winfo_pointerxy()
-        inside = (
-            self.winfo_rootx() <= x < self.winfo_rootx() + self.winfo_width()
-            and self.winfo_rooty() <= y < self.winfo_rooty() + self.winfo_height()
-        )
-        if not inside:
+        if not self._pointer_inside():
             self.highlight(False)
 
     def highlight(self, active):
@@ -372,7 +389,10 @@ class ToolCard(ctk.CTkFrame):
         self.description_label.configure(wraplength=width)
 
     def activate(self):
-        self.tooltip.hide()
+        # The card is hidden while its tool opens, so no <Leave> event arrives.
+        # Clear the hover state now so it is not still shown on return.
+        self.pressed = False
+        self.highlight(False)
         if self.enabled:
             self.command(self.key)
 
@@ -393,7 +413,7 @@ class ToolCard(ctk.CTkFrame):
             else ("#dfe5ef", "#394557")
         )
         self.title_label.configure(
-            text_color=("#202a3a", "#eff3fa") if self.enabled else ("#526078", "#b7c2d2")
+            text_color=("#111827", "#f8fafc") if self.enabled else ("#374151", "#d5dce6")
         )
         self.description_label.configure(
             text=CARD_TEXT[self.key][1]
