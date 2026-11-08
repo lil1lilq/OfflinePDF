@@ -1,6 +1,6 @@
 """One version everywhere, in the project's MAJOR.MINOR.PATCH[.FIX] scheme.
 
-Bump rule (see CLAUDE.md and BUILDING.md):
+Bump rule (see AGENTS.md and BUILDING.md):
   substantial update -> second number  (1.0.0 -> 1.1.0)
   small update       -> third number   (1.0.0 -> 1.0.1)
   bug fix            -> fourth number  (1.0.0 -> 1.0.0.1)
