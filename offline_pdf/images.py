@@ -6,14 +6,10 @@ from pathlib import Path
 
 import pymupdf as pdf
 from PIL import Image, ImageOps
-from pillow_heif import register_heif_opener
 
-register_heif_opener(thumbnails=False)
-
-IMAGE_EXTENSIONS = frozenset(
-    {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff", ".webp", ".heic", ".heif"}
-)
-IMAGE_LABEL = "JPG·PNG·BMP·GIF·TIF·TIFF·WebP·HEIC·HEIF"
+# HEIC/HEIF is not supported: its HEVC codec carries patent-licensing questions.
+IMAGE_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff", ".webp"})
+IMAGE_LABEL = "JPG·PNG·BMP·GIF·TIF·TIFF·WebP"
 IMAGE_PATTERN = " ".join("*" + ext for ext in sorted(IMAGE_EXTENSIONS))
 EXPORT_FORMATS = ("JPG", "PNG", "BMP", "GIF", "TIFF", "WEBP")
 MAX_IMAGE_PIXELS = 60_000_000
@@ -31,7 +27,7 @@ def iter_frames(path, check=lambda: None):
         with warnings.catch_warnings():
             warnings.simplefilter("error", Image.DecompressionBombWarning)
             with Image.open(path) as source:
-                if source.format not in {"JPEG", "PNG", "BMP", "GIF", "TIFF", "WEBP", "HEIF"}:
+                if source.format not in {"JPEG", "PNG", "BMP", "GIF", "TIFF", "WEBP"}:
                     raise ImageReadError("지원하지 않는 이미지 형식입니다.")
                 for index in range(getattr(source, "n_frames", 1)):
                     check()

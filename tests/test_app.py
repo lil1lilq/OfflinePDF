@@ -887,8 +887,6 @@ class AppTests(unittest.TestCase):
             ("tif", "TIFF"),
             ("tiff", "TIFF"),
             ("webp", "WEBP"),
-            ("heic", "HEIF"),
-            ("heif", "HEIF"),
         ]:
             path = self.folder / ("추가한 이미지." + extension.upper())
             with Image.new("RGB", (64, 32), "red") as im:
@@ -897,7 +895,8 @@ class AppTests(unittest.TestCase):
         self.app.add_paths(paths)
         self.assertEqual(self.app.files, paths)
         self.app.file_list.selection_clear(0, "end")
-        self.app.file_list.selection_set(5)
+        # The last one: WebP.
+        self.app.file_list.selection_set(4)
         self.app.refresh_preview(reset=True)
         self.root.update()
         self.assertIsNotNone(self.app.preview_rect)

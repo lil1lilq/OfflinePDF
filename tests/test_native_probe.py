@@ -1,13 +1,28 @@
-"""Check native diagnostic control flow; actual WFP checks run on Windows CI."""
+"""Check the build-only firewall canary; actual WFP checks run on Windows CI."""
 
 import ctypes
+import importlib.util
+from pathlib import Path
 from unittest import TestCase
 from unittest.mock import Mock, patch
 
-from offline_pdf.diagnostics import native_tcp_probe
+# The canary is a build-only script under packaging/, not part of the app package.
+_spec = importlib.util.spec_from_file_location(
+    "network_canary", Path(__file__).resolve().parents[1] / "packaging" / "network_canary.py"
+)
+_canary = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_canary)
+native_tcp_probe = _canary.native_tcp_probe
 
 
 class NativeProbeTests(TestCase):
+    def test_canary_is_not_part_of_the_application(self):
+        import offline_pdf.diagnostics as diagnostics
+
+        self.assertFalse(hasattr(diagnostics, "native_tcp_probe"))
+        main = (Path(__file__).resolve().parents[1] / "main.py").read_text(encoding="utf-8")
+        self.assertNotIn("--network-probe", main)
+
     def library(self, connect_error):
         api = Mock()
         api.WSAStartup.return_value = 0

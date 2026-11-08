@@ -1,6 +1,7 @@
 param(
     [string]$PortableArchive = 'release/OfflinePDF-Windows-x64-portable.zip',
     [string]$Executable = '',
+    [string]$Python = 'python',
     [switch]$SkipFirewall
 )
 $ErrorActionPreference = 'Stop'
@@ -42,19 +43,21 @@ function Invoke-NativeChecked([string]$Program, [string[]]$Arguments) {
     if ($LASTEXITCODE -ne 0) { throw "Verification command failed: $Program ($LASTEXITCODE)" }
 }
 
-function Invoke-Diagnostic([string]$Program, [string]$Command, [string]$Report) {
+function Invoke-Diagnostic([string]$Program, [string[]]$Arguments, [string]$Report) {
     Remove-Item $Report -Force -ErrorAction SilentlyContinue
-    $process = Start-Process -FilePath $Program -ArgumentList @($Command, "`"$Report`"") -PassThru
+    # Start-Process joins arguments with spaces, so quote each one for paths.
+    $quoted = @($Arguments + $Report | ForEach-Object { "`"$_`"" })
+    $process = Start-Process -FilePath $Program -ArgumentList $quoted -PassThru
     if (-not $process.WaitForExit(180000)) {
         $process.Kill()
-        throw "Executable diagnostic timed out: $Command"
+        throw "Executable diagnostic timed out: $Arguments"
     }
     $process.Refresh()
     if ($process.ExitCode -ne 0) {
         $detail = if (Test-Path $Report) { Get-Content $Report -Raw } else { 'No report was produced.' }
-        throw "Executable diagnostic failed: $Command`n$detail"
+        throw "Executable diagnostic failed: $Arguments`n$detail"
     }
-    if (-not (Test-Path $Report)) { throw "Missing executable report: $Command" }
+    if (-not (Test-Path $Report)) { throw "Missing executable report: $Arguments" }
     return Get-Content $Report -Raw | ConvertFrom-Json
 }
 
@@ -82,24 +85,30 @@ function Verify-Program([string]$Program, [string]$Name) {
     # TEMP may contain RUNNER~1; audit events use the expanded filesystem name.
     $Program = Get-ProgramPath $Program
     if ($SkipFirewall) {
-        $result = Invoke-Diagnostic $Program '--self-test' (Join-Path $reports "$Name-self-test.json")
+        $result = Invoke-Diagnostic $Program @('--self-test') (Join-Path $reports "$Name-self-test.json")
         if (-not $result.ok) { throw "Self-test failed: $Name" }
         return
     }
-    # This explicit developer-only canary sends no documents: TCP handshake only.
-    $baseline = Invoke-Diagnostic $Program '--network-probe' (Join-Path $temporary "$Name-before.json")
+    # The canary is a build-only script run by the build Python, never part of the
+    # release executable. It proves that a firewall rule blocks native TCP and that
+    # the audit log records it, so the zero-connection result below is meaningful.
+    $canaryPython = Get-ProgramPath (Get-Command $Python).Source
+    $canary = Join-Path (Get-Location) 'packaging/network_canary.py'
+    $baseline = Invoke-Diagnostic $canaryPython @($canary) (Join-Path $temporary "$Name-before.json")
     if (-not $baseline.connected) {
         throw 'Native TCP baseline unavailable. Firewall verification is inconclusive, not a pass.'
     }
-    $rule = 'OfflinePDF-Verification-' + [guid]::NewGuid()
-    New-NetFirewallRule -Name $rule -DisplayName $rule -Direction Outbound `
-        -Program $Program -Action Block -Enabled True -Profile Any | Out-Null
-    $script:rules += $rule
+    foreach ($blockedProgram in @($canaryPython, $Program)) {
+        $rule = 'OfflinePDF-Verification-' + [guid]::NewGuid()
+        New-NetFirewallRule -Name $rule -DisplayName $rule -Direction Outbound `
+            -Program $blockedProgram -Action Block -Enabled True -Profile Any | Out-Null
+        $script:rules += $rule
+    }
     $marker = (Get-WinEvent -LogName Security -MaxEvents 1).RecordId
-    $blocked = Invoke-Diagnostic $Program '--network-probe' (Join-Path $temporary "$Name-blocked.json")
+    $blocked = Invoke-Diagnostic $canaryPython @($canary) (Join-Path $temporary "$Name-blocked.json")
     $controlEvents = @()
     for ($attempt = 0; $attempt -lt 30; $attempt++) {
-        $controlEvents = @(Read-AppConnections $Program $marker)
+        $controlEvents = @(Read-AppConnections $canaryPython $marker)
         if ($controlEvents | Where-Object event -eq 5157) { break }
         Start-Sleep -Milliseconds 100
     }
@@ -107,7 +116,7 @@ function Verify-Program([string]$Program, [string]$Name) {
         throw 'OS firewall did not produce confirmed native TCP block evidence.'
     }
     $marker = (Get-WinEvent -LogName Security -MaxEvents 1).RecordId
-    $result = Invoke-Diagnostic $Program '--self-test' (Join-Path $reports "$Name-self-test.json")
+    $result = Invoke-Diagnostic $Program @('--self-test') (Join-Path $reports "$Name-self-test.json")
     Start-Sleep -Milliseconds 1500
     $connections = @(Read-AppConnections $Program $marker)
     $report = [ordered]@{

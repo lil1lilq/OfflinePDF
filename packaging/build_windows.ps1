@@ -1,4 +1,4 @@
-param([switch]$Offline, [switch]$FixFormat, [string]$Python = 'python')
+param([switch]$Offline, [switch]$FixFormat, [switch]$SkipInstaller, [string]$Python = 'python')
 $ErrorActionPreference = 'Stop'
 Set-Location (Split-Path $PSScriptRoot -Parent)
 function Invoke-Checked {
@@ -24,12 +24,12 @@ else { Invoke-Checked $Python @('packaging/prepare_dependency_sources.py') }
 $bundleArgs = @('-m','PyInstaller','--noconfirm','--clean','--onedir','--windowed','--name','OfflinePDF',
     '--version-file','packaging/windows-version.txt','--icon','assets/app.ico',
     '--add-data','assets;assets','--add-data','offline_pdf/translations.json;offline_pdf',
-    '--collect-all','pymupdf','--collect-all','PIL','--collect-all','pillow_heif','--collect-all','customtkinter',
+    '--collect-all','pymupdf','--collect-all','PIL','--collect-all','customtkinter',
     '--collect-binaries','onnxruntime','--collect-data','onnxruntime',
     '--hidden-import','onnxruntime.capi.onnxruntime_pybind11_state','--exclude-module','onnx','--exclude-module','torch',
     '--exclude-module','onnxruntime.transformers','--exclude-module','onnxruntime.tools','--exclude-module','onnxruntime.quantization',
     '--add-data','models;models',
-    '--additional-hooks-dir','packaging/hooks','--add-data','licenses;licenses','--add-data','LICENSE;.',
+    '--add-data','licenses;licenses','--add-data','LICENSE;.',
     '--add-data','README.md;.','main.py')
 if (Test-Path 'tessdata') { $bundleArgs += @('--add-data','tessdata;tessdata') }
 Invoke-Checked $Python $bundleArgs
@@ -44,9 +44,28 @@ Invoke-Checked $Python @('packaging/make_source_archive.py', "$destination/Corre
 New-Item -ItemType Directory -Force 'release' | Out-Null
 Compress-Archive -Path $destination -DestinationPath 'release/OfflinePDF-Windows-x64-portable.zip' -Force
 # Do not carry a generated setup file from an earlier local build into a release.
-Remove-Item -LiteralPath 'release/OfflinePDF-Setup-Windows-x64.exe' -Force -ErrorAction SilentlyContinue
-$portable = 'release/OfflinePDF-Windows-x64-portable.zip'
-$hash = Get-FileHash -LiteralPath $portable -Algorithm SHA256
-"$($hash.Hash)  $([IO.Path]::GetFileName($portable))" |
-    Set-Content -Encoding utf8 'release/SHA256SUMS.txt'
-Write-Host 'Portable build completed. See release/OfflinePDF-Windows-x64-portable.zip.'
+$setup = 'release/OfflinePDF-Setup-Windows-x64.exe'
+Remove-Item -LiteralPath $setup -Force -ErrorAction SilentlyContinue
+$outputs = @('release/OfflinePDF-Windows-x64-portable.zip')
+if (-not $SkipInstaller) {
+    # The installer packs exactly the dist/OfflinePDF folder of the portable ZIP.
+    $iscc = @(
+        (Get-Command 'ISCC.exe' -ErrorAction SilentlyContinue).Source,
+        "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+        "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
+        "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
+    ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
+    if (-not $iscc) {
+        throw 'Inno Setup 6 (ISCC.exe) was not found. Install it, or pass -SkipInstaller for a portable-only build.'
+    }
+    $version = (& $Python -c 'import offline_pdf; print(offline_pdf.__version__)').Trim()
+    if ($LASTEXITCODE -ne 0 -or $version -notmatch '^\d+\.\d+\.\d+$') { throw "Unexpected app version: $version" }
+    Invoke-Checked $iscc @('/Qp', "/DAppVersion=$version", "/DAppVersionNumeric=$version.0", 'packaging/installer.iss')
+    if (-not (Test-Path -LiteralPath $setup)) { throw "Installer was not created: $setup" }
+    $outputs += $setup
+}
+$outputs | ForEach-Object {
+    $hash = Get-FileHash -LiteralPath $_ -Algorithm SHA256
+    "$($hash.Hash)  $([IO.Path]::GetFileName($_))"
+} | Set-Content -Encoding utf8 'release/SHA256SUMS.txt'
+Write-Host "Build completed: $($outputs -join ', ')"
