@@ -25,6 +25,26 @@ jobs:
             choco install innosetup --yes --no-progress
             if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed.' }
           }
+      # The AGPL dependency sources (PyMuPDF, Pillow and the ~60 MB MuPDF source)
+      # are downloaded once and reused, so a build does not depend on mupdf.com
+      # being up. The key changes whenever the source list in the script changes.
+      - name: Restore dependency sources
+        id: dependency-sources
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: dependency-sources
+          key: dependency-sources-${{ hashFiles('packaging/prepare_dependency_sources.py') }}
+      - name: Prepare dependency sources
+        shell: pwsh
+        run: |
+          python packaging/prepare_dependency_sources.py
+          if ($LASTEXITCODE -ne 0) { throw 'Preparing dependency sources failed.' }
+      - name: Save dependency sources for later builds
+        if: steps.dependency-sources.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: dependency-sources
+          key: dependency-sources-${{ hashFiles('packaging/prepare_dependency_sources.py') }}
       - name: Test and build
         shell: pwsh
         run: ./packaging/build_windows.ps1

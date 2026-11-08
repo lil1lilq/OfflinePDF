@@ -1,5 +1,6 @@
 ﻿; Windows installer for the folder that build_windows.ps1 creates in dist\OfflinePDF.
-; build_windows.ps1 passes the version: ISCC /DAppVersion=1.0.0 /DAppVersionNumeric=1.0.0.0
+; build_windows.ps1 passes the version: ISCC /DAppVersion=1.0.1 /DAppVersionNumeric=1.0.1.0
+; (a bug-fix version such as 1.0.0.1 is passed unchanged in both)
 #ifndef AppVersion
   #error Pass /DAppVersion=x.y.z (build_windows.ps1 does this).
 #endif

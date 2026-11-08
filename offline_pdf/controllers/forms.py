@@ -18,27 +18,26 @@ from ..tools import TOOLS
 from ..ui import BLUE, CARD_TEXT, MUTED, RED, chip_color, tool_icon
 
 
-def wrap_captions(form, visible, width=None):
-    """Wrap captions to an equal share of the form's width (its parent sets it)."""
-    if not visible:
-        return
+def wrap_captions(form, rows, columns, width=None):
+    """Wrap captions to the cell's share of the form's width (its parent sets it)."""
     width = width or form.winfo_width()
-    if not isinstance(width, int) or width <= 1:
+    if not isinstance(width, int) or width <= 1 or not columns:
         return
-    # Same weights as the grid: compression 3, others 1, padded to 4 columns.
-    weights = [3 if key == "compression" else 1 for key, _ in visible]
-    share = width / (sum(weights) + max(0, 4 - len(visible)))
-    for (key, cell), weight in zip(visible, weights):
-        caption = getattr(cell, "caption", None)
-        if caption is None:
-            continue
-        wrap = max(60, int(share * weight) - 14)
-        if getattr(cell, "caption_wrap", None) != wrap:
-            cell.caption_wrap = wrap
-            caption.configure(wraplength=wrap)
+    share = width / columns
+    for row in rows:
+        for key, cell in row:
+            caption = getattr(cell, "caption", None)
+            if caption is None:
+                continue
+            wrap = max(60, int(share * WIDE_FIELDS.get(key, 1)) - 14)
+            if getattr(cell, "caption_wrap", None) != wrap:
+                cell.caption_wrap = wrap
+                caption.configure(wraplength=wrap)
 
 
-UPSCALE_ADVANCED = ("max_output_mb", "min_dpi", "min_quality")
+# Options made of several side-by-side choices need more than one column.
+WIDE_FIELDS = {"compression": 3, "scale": 3}
+UPSCALE_ADVANCED = ("scale4", "max_output_mb", "min_dpi", "min_quality")
 
 
 class FormController:
@@ -111,8 +110,9 @@ class FormController:
         # Bottom-aligned, so inputs line up even when a neighbouring caption wraps.
         controls.pack(side="bottom", fill="x")
         if key == "scale":
-            # Two plain choices instead of a numeric dropdown.
-            labels = {"2배 (권장)": "2", "4배 (더 선명·느림)": "4"}
+            # Plain choices instead of a numeric dropdown. "Same size" only
+            # sharpens; 4x, far larger and slower, is under advanced options.
+            labels = {"원본 크기로 선명하게": "1", "1.5배 (권장)": "1.5", "2배": "2"}
             toggle = ttk.SegmentedChoice(
                 controls, values=labels, command=lambda label: var.set(labels[label])
             )
@@ -159,7 +159,7 @@ class FormController:
             ttk.Button(controls, text="선택", command=pick).pack(side="right", padx=(4, 0))
 
     def arrange_fields(self, width=None):
-        """Lay every visible option out side by side on a single row."""
+        """Lay the visible options out side by side, advanced ones on a row below."""
         visible = []
         n_split = (
             self.tool == "split"
@@ -187,39 +187,51 @@ class FormController:
                 ):
                     continue
             visible.append((key, cell))
-        wrap_captions(self.form, visible, width)
-        # One row does not depend on the width, so resizes need no new layout.
-        signature = tuple(id(cell) for _, cell in visible)
+        # Options sit on one row; opened advanced options go on a row below it.
+        below = UPSCALE_ADVANCED if self.tool == "upscale" else ()
+        rows = [
+            [(key, cell) for key, cell in visible if key not in below],
+            [(key, cell) for key, cell in visible if key in below],
+        ]
+        rows = [row for row in rows if row]
+        # Every cell spans equal columns (wide choices span 3); at least four
+        # columns, so a few options keep a quarter of the row each.
+        columns = max([4] + [sum(WIDE_FIELDS.get(key, 1) for key, _ in row) for row in rows])
+        wrap_captions(self.form, rows, columns, width)
+        if not visible:
+            # A tool without options (merge has only the file name beside it).
+            # An empty CTkFrame claims 200 px, and Tk keeps an emptied grid at
+            # its last size, so request almost nothing; cells regrow it.
+            self.form.configure(height=1)
+        # The layout does not depend on the width, so resizes need no new layout.
+        signature = tuple((id(cell), number) for number, row in enumerate(rows) for _, cell in row)
         if signature == getattr(self, "form_signature", None):
             return
         self.form_signature = signature
         previous = getattr(self, "form_columns", 0) or 0
-        for col in range(max(previous, len(visible))):
-            self.form.columnconfigure(col, weight=0, uniform="", minsize=0)
-        # With only a few options, an empty trailing column keeps each one at
-        # about a quarter of the row instead of stretching across all of it.
-        spare = max(0, 4 - len(visible))
-        self.form_columns = len(visible) + 1
-        # Tk counts weight 0 as 1 inside a uniform group, so join it only when needed.
-        self.form.columnconfigure(
-            len(visible), weight=spare, uniform="fields" if spare else "", minsize=0
-        )
+        for col in range(max(previous, columns)):
+            # Tk counts weight 0 as 1 inside a uniform group, so leave unused
+            # columns out of the group.
+            used = col < columns
+            self.form.columnconfigure(
+                col, weight=1 if used else 0, uniform="fields" if used else "", minsize=0
+            )
+        self.form_columns = columns
         for _, cell in self.form_cells:
             cell.grid_forget()
-        for i, (key, cell) in enumerate(visible):
-            # The five compression levels need roughly three option widths.
-            wide = key == "compression"
-            self.form.columnconfigure(
-                i, weight=3 if wide else 1, uniform="" if wide else "fields", minsize=0
-            )
-            cell.grid(
-                row=0,
-                column=i,
-                columnspan=1,
-                sticky="nsew",
-                padx=(0, 10 if i < len(visible) - 1 else 0),
-                pady=4,
-            )
+        for number, row in enumerate(rows):
+            column = 0
+            for index, (key, cell) in enumerate(row):
+                span = WIDE_FIELDS.get(key, 1)
+                cell.grid(
+                    row=number,
+                    column=column,
+                    columnspan=span,
+                    sticky="nsew",
+                    padx=(0, 10 if index < len(row) - 1 else 0),
+                    pady=4,
+                )
+                column += span
 
     def update_split_preview(self, *_):
         if self.tool != "split" or self.split_updating:
@@ -343,8 +355,9 @@ class FormController:
             self.field("최소 JPEG 품질 (30~95)", "min_quality", "50")
             self.options["compression"].trace_add("write", self.compression_note)
         if self.tool == "upscale":
-            self.field("확대 배율", "scale", "2")
-            # Size limits are rarely needed; they stay behind "advanced options".
+            self.field("확대 배율", "scale", "1.5")
+            # 4x and size limits are rarely needed; they stay behind "advanced options".
+            self.scale4_cell()
             self.field("최대 용량 MB (공란=무제한)", "max_output_mb", "")
             self.field("최소 이미지 DPI", "min_dpi", "96")
             self.field("최소 JPEG 품질 (30~95)", "min_quality", "50")
@@ -439,6 +452,25 @@ class FormController:
             # Distinct from "clear this page's selection" on the preview toolbar.
             self.run_button.config(text="선택 영역 영구 삭제  →")
             self.show_preview()
+
+    def scale4_cell(self):
+        var = tk.BooleanVar(value=False)
+        self.options["scale4"] = var
+        cell = ttk.Frame(self.form, style="Panel.TFrame")
+        self.form_cells.append(("scale4", cell))
+        caption = ttk.Label(cell, text="큰 확대", style="Panel.TLabel", wraplength=80)
+        caption.pack(anchor="w", fill="x", pady=(0, 3))
+        cell.caption = caption
+        box = ttk.Checkbutton(
+            cell, text="4배 (용량·시간 매우 큼)", variable=var, command=self.update_scale4
+        )
+        box.pack(side="bottom", anchor="w", pady=6)
+        self.option_widgets["scale4"] = box
+
+    def update_scale4(self):
+        """4x replaces the main choice, so grey that out while it is on."""
+        on = self.options["scale4"].get()
+        self.option_widgets["scale"].configure(state="disabled" if on else "normal")
 
     def advanced_toggle_cell(self):
         cell = ttk.Frame(self.form, style="Panel.TFrame")

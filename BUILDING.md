@@ -91,14 +91,29 @@ OfflinePDF-Setup-Windows-x64.exe /VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS
 빌드는 `README.md`, `README.en.md`, `CHANGELOG.md`, `BUILDING.md`, `LICENSE`, `THIRD_PARTY_NOTICES.md`를 배포본에 복사합니다.
 `README.md`는 PyInstaller 데이터에도 포함됩니다.
 
-버전은 다음 위치에서 관리합니다.
+### 버전 규칙
+
+버전은 `주.부.작은.수정` 형식이며, 변경의 크기에 따라 올리는 자리가 정해져 있습니다.
+한 자리를 올리면 그보다 아래 자리는 0으로 돌리고, 넷째 자리가 0이면 적지 않습니다.
+
+| 변경 | 올리는 자리 | 예 (1.0.0 기준) |
+| --- | --- | --- |
+| 꽤 큰 업데이트(새 기능, 화면 구성 변경 등) | 둘째 | `1.1.0` |
+| 작은 업데이트(기능 개선, 배포 방식 변경 등) | 셋째 | `1.0.1` |
+| 버그 수정만 | 넷째 | `1.0.0.1` |
+
+첫째 자리는 담당자가 따로 정할 때만 올립니다.
+
+버전을 바꿀 때는 다음을 모두 같은 값으로 고칩니다. `tests/test_version.py`가 서로 다르면 빌드를 실패시킵니다.
 
 | 위치 | 값의 형식 |
 | --- | --- |
-| `offline_pdf/__init__.py` | 앱 표시 버전, 예: `1.0.0` |
-| `packaging/windows-version.txt` | 실행파일 제품·파일 버전, 숫자 버전은 4자리 |
+| `offline_pdf/__init__.py` | 앱 표시 버전, 예: `1.0.1`, `1.0.0.1` |
+| `packaging/windows-version.txt` | 실행파일 버전. 숫자는 항상 4자리(`1.0.1` → `(1, 0, 1, 0)`) |
+| `README.md`, `README.en.md` | "현재 소스 버전" 표기 |
+| `CHANGELOG.md` | `## <버전> · <날짜>` 제목 |
 
-소스 버전을 바꿀 때 관련 검사와 문서의 버전 표기도 함께 갱신합니다.
+설치 파일에 들어가는 4자리 숫자 버전은 빌드 스크립트가 자동으로 맞춥니다.
 
 ## GitHub Actions와 릴리스
 

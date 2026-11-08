@@ -48,6 +48,60 @@ class EnhancementTests(unittest.TestCase):
             }
         )
 
+    def image_sizes(self, folder):
+        with pdf.open(next(folder.glob("*.pdf"))) as doc:
+            return {(info[2], info[3]) for info in doc[0].get_images()}
+
+    def test_same_size_and_1_5x_and_4x_checkbox(self):
+        self.assertEqual(self.image_sizes(self.run_tool("upscale", scale="1")), {(80, 64)})
+        self.assertEqual(self.image_sizes(self.run_tool("upscale", scale="1.5")), {(120, 96)})
+        # The advanced 4x checkbox overrides the main choice.
+        folder = self.run_tool("upscale", scale="1", scale4=True)
+        self.assertEqual(self.image_sizes(folder), {(320, 256)})
+
+    def test_1_5x_tiles_join_without_gaps(self):
+        from offline_pdf.enhance import Upscaler
+
+        # Wider and taller than one 128 px tile, with odd sizes for rounding.
+        with Image.new("RGB", (301, 203), (200, 30, 30)) as image:
+            with Upscaler().image(image, 1.5) as result:
+                self.assertEqual(result.size, (452, 304))
+                pixels = np.asarray(result)
+        # A gap between tiles would leave the black background of the canvas.
+        self.assertGreater(pixels[..., 0].min(), 100)
+
+    def test_jpeg_scans_stay_jpeg_and_grayscale(self):
+        rng = np.random.default_rng(7)
+        cases = {
+            "color.jpg": (Image.fromarray(rng.integers(0, 256, (64, 80, 3), np.uint8)), 3),
+            "gray.jpg": (Image.fromarray(rng.integers(0, 256, (64, 80), np.uint8)), 1),
+        }
+        for name, (image, channels) in cases.items():
+            with self.subTest(name):
+                stream = BytesIO()
+                image.save(stream, format="JPEG", quality=80)
+                source = self.root / (name + ".pdf")
+                with pdf.open() as doc:
+                    page = doc.new_page(width=240, height=200)
+                    page.insert_image(pdf.Rect(0, 0, 160, 128), stream=stream.getvalue())
+                    doc.save(source)
+                folder = execute(
+                    {
+                        "tool": "upscale",
+                        "files": [str(source)],
+                        "output": str(self.root),
+                        "options": {"scale": "1.5"},
+                    }
+                )
+                with pdf.open(next(folder.glob("*.pdf"))) as doc:
+                    data = doc.extract_image(doc[0].get_images()[0][0])
+                self.assertEqual(data["ext"], "jpeg")
+                self.assertEqual(data["colorspace"], channels)
+                self.assertEqual((data["width"], data["height"]), (120, 96))
+        # The default test scan is a PNG: lossless sources stay lossless.
+        with pdf.open(next(self.run_tool("upscale", scale="1.5").glob("*.pdf"))) as doc:
+            self.assertEqual(doc.extract_image(doc[0].get_images()[0][0])["ext"], "png")
+
     def test_real_cpu_model_2x_4x_preserves_pdf_text_and_shared_image(self):
         for scale in (2, 4):
             folder = self.run_tool("upscale", scale=str(scale))

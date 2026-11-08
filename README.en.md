@@ -18,7 +18,7 @@ Documents are processed on your PC. Files are never uploaded to an external conv
 Two downloads are available: an installer, and a portable ZIP that needs no installation. Windows 10 and 11, 64-bit, are supported. Everything the program needs is included, so Python does not have to be installed.
 Keep the portable version's folder together with the executable.
 
-The current source version is **1.0.0**. Check the version shown on Releases for the downloaded files.
+The current source version is **1.0.1**. Check the version shown on Releases for the downloaded files.
 Features or fixes added to the source may not be in earlier releases.
 
 ## Features
@@ -34,7 +34,7 @@ Features or fixes added to the source may not be in earlier releases.
 | Text and image overlay · Page numbers | Add text, signature or stamp images, and page numbers |
 | Crop margins · Redact | Cover page edges; permanently delete the content of selected areas |
 | Extract text · Scan OCR | Save text; recognize Korean and English text in scanned documents |
-| AI enhancement | Upscale scanned images 2x or 4x, compare a before/after detail, optional maximum MB per file |
+| AI enhancement | Sharpen scanned images at the same size, or upscale them 1.5x or 2x (4x under advanced options); compare a before/after detail |
 | Clean metadata | Clean document properties, attachments and similar data |
 
 Tick **Remove plain white pages** in the sidebar to drop blank pages from PDF results. It is off every time the program starts. Pages with any text, shapes, annotations, form fields or image traces are kept.
