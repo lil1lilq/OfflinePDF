@@ -43,7 +43,9 @@ Copy-Item 'licenses' "$destination/licenses" -Recurse -Force
 # The Corresponding Source is a separate release file (see below), not part of
 # every download; SOURCE_CODE.txt in the program folder says where it is.
 $version = (& $Python -c 'import offline_pdf; print(offline_pdf.__version__)').Trim()
-if ($LASTEXITCODE -ne 0 -or $version -notmatch '^\d+\.\d+\.\d+$') { throw "Unexpected app version: $version" }
+if ($LASTEXITCODE -ne 0 -or $version -notmatch '^\d+\.\d+\.\d+(\.\d+)?$') { throw "Unexpected app version: $version" }
+# Windows version resources always have four numbers: 1.0.1 -> 1.0.1.0, 1.0.0.1 stays.
+$numericVersion = (@($version.Split('.')) + @('0', '0', '0', '0'))[0..3] -join '.'
 New-Item -ItemType Directory -Force 'release' | Out-Null
 Get-ChildItem 'release' -Filter 'OfflinePDF-*-source.zip' | Remove-Item -Force
 Compress-Archive -Path $destination -DestinationPath 'release/OfflinePDF-Windows-x64-portable.zip' -Force
@@ -62,7 +64,7 @@ if (-not $SkipInstaller) {
     if (-not $iscc) {
         throw 'Inno Setup 6 (ISCC.exe) was not found. Install it, or pass -SkipInstaller for a portable-only build.'
     }
-    Invoke-Checked $iscc @('/Qp', "/DAppVersion=$version", "/DAppVersionNumeric=$version.0", 'packaging/installer.iss')
+    Invoke-Checked $iscc @('/Qp', "/DAppVersion=$version", "/DAppVersionNumeric=$numericVersion", 'packaging/installer.iss')
     if (-not (Test-Path -LiteralPath $setup)) { throw "Installer was not created: $setup" }
     $outputs += $setup
 }
