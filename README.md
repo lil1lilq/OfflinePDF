@@ -11,9 +11,10 @@ Windows에서 PDF를 병합·분할·편집하는 데스크톱 프로그램입�
 
 | 파일 | 실행 방법 |
 | --- | --- |
-| `OfflinePDF-Setup-Windows-x64.exe` | 실행해 설치(관리자 권한 불필요). 시작 메뉴에서 실행하고 '앱 및 기능'에서 제거 |
-| `OfflinePDF-Windows-x64-portable.zip` | 압축을 풀고 폴더 안의 `OfflinePDF.exe` 실행 |
-| `OfflinePDF-<버전>-source.zip` | 프로그램과 구성요소의 소스 코드(AGPL-3.0). 실행에는 필요하지 않습니다 |
+| OfflinePDF-Setup-Windows-x64.exe | 설치버전(권장) |
+| OfflinePDF-Windows-x64-portable.zip | 무설치버전. 압축을 풀고 폴더 안의 `OfflinePDF.exe` 실행 |
+| OfflinePDF-1.2.2-source.zip | 프로그램과 구성요소의 소스 코드(AGPL-3.0). 실행에는 필요하지 않습니다 |
+| SHA256SUMS.txt | 파일 무결성 확인용 해시. 실행에는 필요하지 않습니다 |
 
 설치 파일과 설치 없이 쓰는 포터블 ZIP 두 가지로 제공합니다. Windows 10·11의 64비트 환경을 지원합니다. 배포본에는 실행에 필요한 구성요소가 포함되어 있어 Python을 별도로 설치할 필요가 없습니다.
 포터블 버전은 실행파일과 함께 들어 있는 폴더를 그대로 유지해야 합니다.
