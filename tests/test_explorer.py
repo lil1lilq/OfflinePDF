@@ -62,9 +62,29 @@ class ExplorerTests(unittest.TestCase):
                 register_menu()
                 with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key) as handle:
                     self.assertIn(",0", winreg.QueryValueEx(handle, "Icon")[0])
-                for mode in ("quick", "open"):
-                    for action in ACTIONS:
-                        verb = key + "\\shell\\" + mode + "\\shell\\" + action
+                for mode in ("01quick", "02open"):
+                    parent = key + "\\shell\\" + mode + "\\shell"
+                    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, parent) as handle:
+                        names = sorted(winreg.EnumKey(handle, i) for i in range(len(ACTIONS)))
+                    labels = []
+                    for name in names:
+                        with winreg.OpenKey(
+                            winreg.HKEY_CURRENT_USER, parent + "\\" + name
+                        ) as handle:
+                            labels.append(winreg.QueryValueEx(handle, "MUIVerb")[0])
+                    self.assertEqual(
+                        labels,
+                        [
+                            "PDF 병합",
+                            "PDF 분할",
+                            "PDF 압축",
+                            "AI 업스케일",
+                            "비밀번호 설정",
+                            "비밀번호 해제",
+                        ],
+                    )
+                    for index, action in enumerate(ACTIONS, 1):
+                        verb = parent + "\\" + f"{index:02d}{action}"
                         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, verb) as handle:
                             self.assertEqual(
                                 winreg.QueryValueEx(handle, "MultiSelectModel")[0], "Player"
@@ -72,7 +92,7 @@ class ExplorerTests(unittest.TestCase):
                         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, verb + "\\command") as handle:
                             command = winreg.QueryValueEx(handle, "")[0]
                             self.assertIn("--explorer " + action, command)
-                            self.assertEqual("--quick" in command, mode == "quick")
+                            self.assertEqual("--quick" in command, mode == "01quick")
                             self.assertTrue(command.endswith('"%1"'))
             finally:
                 register_menu(remove=True)

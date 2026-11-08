@@ -18,7 +18,7 @@ Documents are processed on your PC. Files are never uploaded to an external conv
 Two downloads are available: an installer, and a portable ZIP that needs no installation. Windows 10 and 11, 64-bit, are supported. Everything the program needs is included, so Python does not have to be installed.
 Keep the portable version's folder together with the executable.
 
-The current source version is **1.2.0**. Check the version shown on Releases for the downloaded files.
+The current source version is **1.2.1**. Check the version shown on Releases for the downloaded files.
 Features or fixes added to the source may not be in earlier releases.
 
 ## Features

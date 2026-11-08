@@ -19,8 +19,8 @@ ACTIONS = {
     "split": "PDF 분할",
     "compress": "PDF 압축",
     "upscale": "AI 업스케일",
-    "unlock": "비밀번호 해제",
     "protect": "비밀번호 설정",
+    "unlock": "비밀번호 해제",
 }
 KEY = r"Software\Classes\SystemFileAssociations\.pdf\shell\OfflinePDF"
 
@@ -57,14 +57,14 @@ def register_menu(remove=False):
 
     icon = f'"{sys.executable}",0'
     write(KEY, {"MUIVerb": "OfflinePDF", "SubCommands": "", "Icon": icon})
-    for mode, title in (("quick", "바로 실행"), ("open", "OfflinePDF에서 열기")):
+    for mode, title in (("01quick", "바로 실행"), ("02open", "OfflinePDF에서 열기")):
         parent = KEY + "\\shell\\" + mode
         write(parent, {"MUIVerb": title, "SubCommands": "", "Icon": icon})
-        for action, label in ACTIONS.items():
-            key = parent + "\\shell\\" + action
+        for index, (action, label) in enumerate(ACTIONS.items(), 1):
+            key = parent + "\\shell\\" + f"{index:02d}{action}"
             write(key, {"MUIVerb": label, "MultiSelectModel": "Player", "Icon": icon})
             args = command + ["--explorer", action]
-            if mode == "quick":
+            if mode == "01quick":
                 args.append("--quick")
             write(key + "\\command", {"": subprocess.list2cmdline(args) + ' "%1"'})
 
