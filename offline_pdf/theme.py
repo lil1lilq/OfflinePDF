@@ -69,6 +69,7 @@ FONT_SIZES = {"title": 20, "card_title": 14, "body": 12, "caption": 11}
 FALLBACK_FONTS = ("맑은 고딕", "Malgun Gothic", "Segoe UI")
 _registered = []
 FONT_FAMILY = "맑은 고딕"
+BOLD_FAMILY = "맑은 고딕"
 
 
 def resource_path(*parts):
@@ -89,13 +90,18 @@ def register_fonts():
 
 
 def font_family(root):
-    global FONT_FAMILY
+    """Pick the body family; bold text uses BOLD_FAMILY for a real bold face."""
+    global FONT_FAMILY, BOLD_FAMILY
     installed = set(tkfont.families(root))
     for family in ("Pretendard", *FALLBACK_FONTS):
         if family in installed:
-            FONT_FAMILY = family
-            return family
-    FONT_FAMILY = "TkDefaultFont"
+            FONT_FAMILY = BOLD_FAMILY = family
+            # Pretendard Regular is thin on screen; Medium reads clearly. Bold
+            # stays on the base family, whose own Bold face is used.
+            if family == "Pretendard" and "Pretendard Medium" in installed:
+                FONT_FAMILY = "Pretendard Medium"
+            return FONT_FAMILY
+    FONT_FAMILY = BOLD_FAMILY = "TkDefaultFont"
     return FONT_FAMILY
 
 

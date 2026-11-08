@@ -8,6 +8,7 @@ from tkinter import ttk
 import customtkinter as ctk
 from PIL import Image, ImageDraw, ImageTk
 
+from . import theme
 from .theme import (
     BUTTON_RADIUS,
     CARD_GROUP,
@@ -316,7 +317,7 @@ class ToolCard(ctk.CTkFrame):
             justify="left",
             height=0,
             text_color=("#111827", "#f8fafc"),
-            font=(FONT, 14, "bold"),
+            font=(theme.BOLD_FAMILY, 16, "bold"),
         )
         self.title_label.pack(fill="x", anchor="w", padx=CARD_PADDING, pady=(10, 0))
         self.description_label = ctk.CTkLabel(
@@ -326,7 +327,7 @@ class ToolCard(ctk.CTkFrame):
             justify="left",
             height=0,
             text_color=("#374151", "#d5dce6"),
-            font=(FONT, 12),
+            font=(FONT, 13),
         )
         self.description_label.pack(fill="x", anchor="w", padx=CARD_PADDING, pady=(4, 10))
         self.bind("<Configure>", self._resize_text, add="+")
@@ -434,9 +435,9 @@ def setup_style(root):
     style.configure("Panel.TLabel", background=PANEL)
     style.configure("Muted.TLabel", foreground=MUTED)
     style.configure("PanelMuted.TLabel", background=PANEL, foreground=MUTED, font=(FONT, 9))
-    style.configure("Title.TLabel", font=(FONT, 20, "bold"))
-    style.configure("Task.TLabel", font=(FONT, 16, "bold"))
-    style.configure("Section.TLabel", font=(FONT, 10, "bold"), background=PANEL)
+    style.configure("Title.TLabel", font=(theme.BOLD_FAMILY, 20, "bold"))
+    style.configure("Task.TLabel", font=(theme.BOLD_FAMILY, 16, "bold"))
+    style.configure("Section.TLabel", font=(theme.BOLD_FAMILY, 10, "bold"), background=PANEL)
     # Image elements are stretched through their centre, preserving 10px corners.
     # Retain the PhotoImage references for the entire lifetime of the window.
     if not hasattr(root, "button_images"):
@@ -525,8 +526,8 @@ def setup_style(root):
                 borderwidth=1,
             )
             style.map(style_name, foreground=[("disabled", MUTED), ("!disabled", fg)])
-    style.configure("Back.TButton", padding=(20, 12), font=(FONT, 11, "bold"))
-    style.configure("Run.TButton", padding=(22, 12), font=(FONT, 11, "bold"))
+    style.configure("Back.TButton", padding=(20, 12), font=(theme.BOLD_FAMILY, 11, "bold"))
+    style.configure("Run.TButton", padding=(22, 12), font=(theme.BOLD_FAMILY, 11, "bold"))
     style.configure(
         "TEntry",
         fieldbackground=PANEL,
