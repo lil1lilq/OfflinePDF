@@ -782,7 +782,9 @@ class AppTests(unittest.TestCase):
             "tkinter.messagebox.showerror", side_effect=AssertionError("Unexpected UI error")
         ):
             self.app.run()
-            self.root.update()
+            # Settle geometry without dispatching the job poll timer: a fast
+            # worker may already finish before update() returns on Windows CI.
+            self.root.update_idletasks()
 
             def layout(widget):
                 return (

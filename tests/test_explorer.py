@@ -46,7 +46,7 @@ class ExplorerTests(unittest.TestCase):
             app.busy.return_value = False
             poll()
         self.assertEqual(app.files, ["/tmp/a.pdf", "/tmp/z.pdf"])
-        app.output.set.assert_called_with("/tmp")
+        app.output.set.assert_called_with(str(Path("/tmp")))
         app.select_tool.assert_called_once_with("merge")
 
     @unittest.skipUnless(os.name == "nt", "Windows registry required")
