@@ -185,12 +185,12 @@ class DisplaySettingsTests(unittest.TestCase):
         self.assertIn("어떠한 보증도 제공하지 않습니다", shown)
         self.assertEqual(
             {path.name for path in dialog.links.values()},
-            {"LICENSE", "THIRD_PARTY_NOTICES.md", about.program_folder().name},
+            {"LICENSE", "THIRD_PARTY_NOTICES.md", "SOURCE_CODE.txt"},
         )
         buttons = [w for w in dialog.winfo_children()[0].winfo_children()[-1].winfo_children()]
         with patch("offline_pdf.about.open_path") as opened:
             for button in buttons:
-                if button.cget("text") in ("라이선스 전문", "오픈소스 고지", "소스 코드 폴더"):
+                if button.cget("text") in ("라이선스 전문", "오픈소스 고지", "소스 코드 안내"):
                     self.assertEqual(str(button.cget("state")), "normal")
                     button.invoke()
         self.assertEqual(

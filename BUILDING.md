@@ -67,12 +67,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File packaging\build_windows.ps1 
 4. PyInstaller 포터블 프로그램 생성
 5. 포터블 ZIP 압축
 6. 설치 파일 생성(Inno Setup 6, `packaging/installer.iss`)
-7. SHA256 기록
+7. 대응 소스 묶음 생성(`packaging/make_source_archive.py`)
+8. SHA256 기록
 
 | 출력 | 파일 |
 | --- | --- |
 | 포터블 | `release/OfflinePDF-Windows-x64-portable.zip` |
 | 설치 파일 | `release/OfflinePDF-Setup-Windows-x64.exe` |
+| 대응 소스 | `release/OfflinePDF-<버전>-source.zip` |
 | 해시 목록 | `release/SHA256SUMS.txt` |
 
 설치 파일은 포터블 폴더와 같은 파일을 설치합니다. 기본은 관리자 권한이 필요 없는 사용자별 설치이며,
@@ -103,11 +105,11 @@ OfflinePDF-Setup-Windows-x64.exe /VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS
 **Actions → Build Windows x64 → Run workflow**에서 수동 실행하거나 `v*` 태그를 푸시하면 빌드가 시작됩니다.
 워크플로는 포터블 ZIP을 압축 해제해 검사하고 다음 아티팩트를 업로드합니다.
 
-- `OfflinePDF-Windows-x64`: 배포 파일(포터블 ZIP, 설치 파일, SHA256 목록)
+- `OfflinePDF-Windows-x64`: 배포 파일(포터블 ZIP, 설치 파일, 대응 소스 묶음, SHA256 목록)
 - `OfflinePDF-validation`: 검증 보고서
 
 현재 워크플로는 GitHub Release를 자동 게시하지 않습니다.
-공개 배포 시 검증을 마친 버전의 태그로 Release를 만들고 포터블 ZIP, 설치 파일과 SHA256 파일을 첨부합니다.
+공개 배포 시 검증을 마친 버전의 태그로 Release를 만들고 포터블 ZIP, 설치 파일, 대응 소스 묶음과 SHA256 파일을 첨부합니다.
 소스의 버전과 사용자가 내려받는 Release의 버전은 별도로 확인해야 합니다.
 
 ## 오프라인 빌드
@@ -144,7 +146,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File packaging\build_windows.ps1 
 변환에는 NumPy·ONNX를 사용합니다. 실행 프로그램은 ONNX Runtime CPU를 사용하며 PyTorch·CUDA를 요구하지 않습니다.
 AI·OCR 모델은 배포본에 포함되며 문서 처리 중 다운로드하지 않습니다.
 
-배포본에는 앱 소스인 `CorrespondingSource.zip`, 구성요소 고지인 `licenses`, 의존성 소스인 `dependency-sources`가 포함됩니다.
+배포본(설치 파일·포터블 ZIP)에는 구성요소 고지인 `licenses`와, 소스를 받는 곳을 알려 주는 `SOURCE_CODE.txt`가 들어갑니다.
+AGPL-3.0의 대응 소스(앱 소스와 PyMuPDF·MuPDF·Pillow 원본 소스)는 용량을 줄이기 위해 배포본에서 빼고
+`OfflinePDF-<버전>-source.zip` 한 파일로 따로 만듭니다.
+
+**배포할 때 반드시 지킬 점:** 설치 파일이나 포터블 ZIP을 올리는 곳(GitHub Release, 사내 파일 서버 등)에
+같은 버전의 `-source.zip`도 **항상 함께** 올리고, 그 버전을 배포하는 동안 계속 받을 수 있게 둡니다.
+이렇게 실행 파일과 같은 곳에서 소스를 함께 제공하는 방식이 AGPL-3.0 제6조 (d)항의 제공 방식입니다.
 라이선스 원문과 구성요소별 안내는 [LICENSE](LICENSE), [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)에 있습니다.
 
 ## Windows 배포본 검사

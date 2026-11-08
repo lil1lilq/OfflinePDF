@@ -49,6 +49,9 @@ Source: "..\dist\OfflinePDF\*"; DestDir: "{app}"; Flags: ignoreversion recursesu
 [InstallDelete]
 ; Drop files of an earlier version that this version no longer ships.
 Type: filesandordirs; Name: "{app}\_internal"
+; 1.0.0 carried the sources inside the program folder; they are now a separate download.
+Type: filesandordirs; Name: "{app}\dependency-sources"
+Type: files; Name: "{app}\CorrespondingSource.zip"
 
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\OfflinePDF.exe"

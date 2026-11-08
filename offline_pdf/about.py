@@ -28,9 +28,9 @@ WARRANTY = (
     "확인하세요."
 )
 SOURCES = (
-    "함께 사용한 오픈소스 구성요소의 저작권과 라이선스는 '오픈소스 고지'와 licenses 폴더에, "
-    "프로그램과 구성요소의 소스 코드는 프로그램 폴더의 CorrespondingSource.zip과 "
-    "dependency-sources 폴더에 있습니다."
+    "함께 사용한 오픈소스 구성요소의 저작권과 라이선스는 '오픈소스 고지'와 licenses 폴더에 있습니다. "
+    "프로그램과 구성요소의 소스 코드는 이 프로그램을 받은 곳에서 "
+    f"OfflinePDF-{__version__}-source.zip으로 함께 제공합니다. 자세한 내용은 '소스 코드 안내'를 확인하세요."
 )
 
 
@@ -75,7 +75,7 @@ def show_about(app):
     for label, target in (
         ("라이선스 전문", folder / "LICENSE"),
         ("오픈소스 고지", folder / "THIRD_PARTY_NOTICES.md"),
-        ("소스 코드 폴더", folder),
+        ("소스 코드 안내", folder / "SOURCE_CODE.txt"),
     ):
         button = ttk.Button(
             links,

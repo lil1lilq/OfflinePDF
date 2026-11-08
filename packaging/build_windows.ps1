@@ -35,14 +35,17 @@ $bundleArgs = @('-m','PyInstaller','--noconfirm','--clean','--onedir','--windowe
 if (Test-Path 'tessdata') { $bundleArgs += @('--add-data','tessdata;tessdata') }
 Invoke-Checked $Python $bundleArgs
 $destination = 'dist/OfflinePDF'
-Copy-Item 'README.md','README.en.md','LICENSE','THIRD_PARTY_NOTICES.md' $destination
+Copy-Item 'README.md','README.en.md','LICENSE','THIRD_PARTY_NOTICES.md','SOURCE_CODE.txt' $destination
 Copy-Item 'CHANGELOG.md' $destination
 Copy-Item 'BUILDING.md' $destination
 Copy-Item 'assets' "$destination/assets" -Recurse -Force
 Copy-Item 'licenses' "$destination/licenses" -Recurse -Force
-Copy-Item 'dependency-sources' "$destination/dependency-sources" -Recurse -Force
-Invoke-Checked $Python @('packaging/make_source_archive.py', "$destination/CorrespondingSource.zip")
+# The Corresponding Source is a separate release file (see below), not part of
+# every download; SOURCE_CODE.txt in the program folder says where it is.
+$version = (& $Python -c 'import offline_pdf; print(offline_pdf.__version__)').Trim()
+if ($LASTEXITCODE -ne 0 -or $version -notmatch '^\d+\.\d+\.\d+$') { throw "Unexpected app version: $version" }
 New-Item -ItemType Directory -Force 'release' | Out-Null
+Get-ChildItem 'release' -Filter 'OfflinePDF-*-source.zip' | Remove-Item -Force
 Compress-Archive -Path $destination -DestinationPath 'release/OfflinePDF-Windows-x64-portable.zip' -Force
 # Do not carry a generated setup file from an earlier local build into a release.
 $setup = 'release/OfflinePDF-Setup-Windows-x64.exe'
@@ -59,12 +62,15 @@ if (-not $SkipInstaller) {
     if (-not $iscc) {
         throw 'Inno Setup 6 (ISCC.exe) was not found. Install it, or pass -SkipInstaller for a portable-only build.'
     }
-    $version = (& $Python -c 'import offline_pdf; print(offline_pdf.__version__)').Trim()
-    if ($LASTEXITCODE -ne 0 -or $version -notmatch '^\d+\.\d+\.\d+$') { throw "Unexpected app version: $version" }
     Invoke-Checked $iscc @('/Qp', "/DAppVersion=$version", "/DAppVersionNumeric=$version.0", 'packaging/installer.iss')
     if (-not (Test-Path -LiteralPath $setup)) { throw "Installer was not created: $setup" }
     $outputs += $setup
 }
+# Publish this next to the installer and portable ZIP, and keep it available for
+# as long as those are offered (AGPL-3.0 section 6(d)).
+$source = "release/OfflinePDF-$version-source.zip"
+Invoke-Checked $Python @('packaging/make_source_archive.py', $source, 'dependency-sources')
+$outputs += $source
 $outputs | ForEach-Object {
     $hash = Get-FileHash -LiteralPath $_ -Algorithm SHA256
     "$($hash.Hash)  $([IO.Path]::GetFileName($_))"

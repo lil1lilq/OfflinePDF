@@ -34,6 +34,12 @@ jobs:
           @('release/OfflinePDF-Windows-x64-portable.zip','release/OfflinePDF-Setup-Windows-x64.exe','release/SHA256SUMS.txt') | ForEach-Object {
             if (!(Test-Path $_)) { throw "Missing artifact: $_" }
           }
+          # The AGPL Corresponding Source, published beside the program files.
+          $source = @(Get-ChildItem 'release' -Filter 'OfflinePDF-*-source.zip')
+          if ($source.Count -ne 1) { throw 'Expected exactly one source archive.' }
+          if ((Get-Content 'release/SHA256SUMS.txt' -Raw) -notmatch [regex]::Escape($source[0].Name)) {
+            throw 'The source archive is missing from SHA256SUMS.txt.'
+          }
       - name: Verify portable ZIP and offline firewall behavior
         shell: pwsh
         run: ./packaging/verify_windows_build.ps1
@@ -54,6 +60,7 @@ jobs:
           path: |
             release/OfflinePDF-Windows-x64-portable.zip
             release/OfflinePDF-Setup-Windows-x64.exe
+            release/OfflinePDF-*-source.zip
             release/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 30
