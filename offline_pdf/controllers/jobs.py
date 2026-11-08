@@ -111,6 +111,7 @@ class JobController:
             "output": self.output.get(),
             "options": {k: v.get() for k, v in self.options.items() if k != "hint"},
         }
+        job["options"]["remove_blank"] = self.blank_mode()
         job["passwords"] = {p: cached_password(self, p) for p in active_files}
         if actual_tool == "unlock":
             job["options"].pop("output_password", None)
@@ -133,7 +134,6 @@ class JobController:
             job["options"]["preview_only"] = True
         self.preview_job = preview
         self.output_summary = ""
-        self.converted_count = 0
         self.job_passwords = {}
         if not preview and actual_tool not in ("unlock", "text", "pdf_images"):
             for i, path in enumerate(active_files):
@@ -243,8 +243,6 @@ class JobController:
                     kind = event["type"]
                     if kind == "stage":
                         self.stage = event["folder"]
-                    elif kind == "converted":
-                        self.replace_converted_inputs(event["files"])
                     elif kind == "progress":
                         self.progress["value"] = 100 * event["current"] / max(1, event["total"])
                         self.status.set(event["label"])
@@ -266,10 +264,6 @@ class JobController:
                             self.show_ai_comparison(event["folder"])
                         else:
                             self.remember_result(event["folder"])
-                            if self.converted_count:
-                                self.status.set(
-                                    f"이미지 {self.converted_count}개를 PDF로 변경하고 작업을 완료했습니다."
-                                )
                             self.progress["value"] = 100
                             if self.output_summary:
                                 self.status.set("완료 · " + self.output_summary)

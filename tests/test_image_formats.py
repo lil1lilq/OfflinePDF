@@ -39,8 +39,6 @@ class ImageFormatTests(unittest.TestCase):
             ("tif", "TIFF"),
             ("tiff", "TIFF"),
             ("webp", "WEBP"),
-            ("heic", "HEIF"),
-            ("heif", "HEIF"),
         ]
         for extension, image_format in formats:
             with self.subTest(extension=extension):
@@ -119,8 +117,8 @@ class ImageFormatTests(unittest.TestCase):
         good = self.root / "정상.bmp"
         with Image.new("RGB", (10, 10), "red") as im:
             im.save(good)
-        bad = self.root / "손상.heic"
-        bad.write_bytes(b"not a HEIC file")
+        bad = self.root / "손상.webp"
+        bad.write_bytes(b"not a WebP file")
         with self.assertRaises(UserError):
             self.run_tool("images_pdf", [good, bad])
         self.assertFalse(list(self.root.glob(".offline-pdf-*")))

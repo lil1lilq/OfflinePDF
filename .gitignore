@@ -10,3 +10,7 @@ release/
 PDF결과_*/
 *.pdf
 dependency-sources/
+
+# Local crash dumps can contain user names and paths.
+crash-log*.txt
+*.dmp

@@ -7,8 +7,9 @@ import customtkinter as ctk
 import pymupdf as pdf
 
 from . import ctk_widgets as ttk
+from . import theme
 from .engine import UserError, open_pdf
-from .ui import FONT, RED
+from .ui import RED
 
 
 def fingerprint(path):
@@ -31,7 +32,9 @@ def ask_password(app, path=None, *, output=False, explanation=""):
     body = ttk.Frame(dialog, padding=24)
     body.pack(fill="both", expand=True)
     ttk.Label(
-        body, text="결과 PDF 암호 설정" if output else "PDF 암호 입력", font=(FONT, 13, "bold")
+        body,
+        text="결과 PDF 암호 설정" if output else "PDF 암호 입력",
+        font=(theme.BOLD_FAMILY, 16, "bold"),
     ).pack(anchor="w")
     ttk.Label(
         body,
@@ -134,18 +137,10 @@ def ensure_password(app, path):
     if not path or Path(path).suffix.lower() != ".pdf":
         return True
     try:
+        # Only an opening password is asked for. An owner password that merely
+        # restricts editing or copying does not stop any tool.
         with pdf.open(path) as probe:
-            encrypted = bool(probe.needs_pass or (probe.metadata or {}).get("encryption"))
             needs_password = bool(probe.needs_pass)
-            if encrypted and not needs_password:
-                permission = (
-                    pdf.PDF_PERM_COPY
-                    if app.tool in ("text", "pdf_images", "ocr")
-                    else pdf.PDF_PERM_MODIFY
-                )
-                needs_password = requested_tool(app) == "unlock" or not bool(
-                    probe.permissions & permission
-                )
         if not needs_password:
             return True
         password = cached_password(app, path)

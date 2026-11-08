@@ -61,14 +61,26 @@ powershell -NoProfile -ExecutionPolicy Bypass -File packaging\build_windows.ps1 
 2. 코드·형식 검사와 자동 검사
 3. 구성요소 고지와 의존성 소스 수집
 4. PyInstaller 포터블 프로그램 생성
-5. 포터블 ZIP 압축 및 SHA256 기록
-
-배포 결과물은 포터블 ZIP과 SHA256 목록입니다. Inno Setup은 필요하지 않습니다.
+5. 포터블 ZIP 압축
+6. 설치 파일 생성(Inno Setup 6, `packaging/installer.iss`)
+7. SHA256 기록
 
 | 출력 | 파일 |
 | --- | --- |
 | 포터블 | `release/OfflinePDF-Windows-x64-portable.zip` |
+| 설치 파일 | `release/OfflinePDF-Setup-Windows-x64.exe` |
 | 해시 목록 | `release/SHA256SUMS.txt` |
+
+설치 파일은 포터블 폴더와 같은 파일을 설치합니다. 기본은 관리자 권한이 필요 없는 사용자별 설치이며,
+전산 담당자는 PC의 모든 사용자에게 설치할 수 있습니다.
+
+```powershell
+OfflinePDF-Setup-Windows-x64.exe /VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS
+```
+
+`Build-Portable.cmd`는 포터블 ZIP만 만듭니다(`-SkipInstaller`). 설치 파일까지 만들려면 Inno Setup 6을 설치한 뒤
+`packaging/build_windows.ps1`을 옵션 없이 실행합니다. GitHub Actions는 항상 두 가지를 모두 만들고,
+설치 파일을 조용히 설치해 자체 검사를 실행한 뒤 제거까지 확인합니다.
 
 빌드는 `README.md`, `USER_GUIDE_KO.txt`, `CHANGELOG.md`, `BUILDING.md`, `LICENSE`, `THIRD_PARTY_NOTICES.md`를 배포본에 복사합니다.
 `README.md`는 PyInstaller 데이터에도 포함됩니다.
@@ -78,7 +90,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File packaging\build_windows.ps1 
 
 | 위치 | 값의 형식 |
 | --- | --- |
-| `offline_pdf/__init__.py` | 앱 표시 버전, 예: `0.8.10.4` |
+| `offline_pdf/__init__.py` | 앱 표시 버전, 예: `1.0.0` |
 | `packaging/windows-version.txt` | 실행파일 제품·파일 버전, 숫자 버전은 4자리 |
 
 소스 버전을 바꿀 때 관련 검사와 문서의 버전 표기도 함께 갱신합니다.
@@ -88,11 +100,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File packaging\build_windows.ps1 
 **Actions → Build Windows x64 → Run workflow**에서 수동 실행하거나 `v*` 태그를 푸시하면 빌드가 시작됩니다.
 워크플로는 포터블 ZIP을 압축 해제해 검사하고 다음 아티팩트를 업로드합니다.
 
-- `OfflinePDF-Windows-x64`: 배포 파일
+- `OfflinePDF-Windows-x64`: 배포 파일(포터블 ZIP, 설치 파일, SHA256 목록)
 - `OfflinePDF-validation`: 검증 보고서
 
 현재 워크플로는 GitHub Release를 자동 게시하지 않습니다.
-공개 배포 시 검증을 마친 버전의 태그로 Release를 만들고 포터블 ZIP과 SHA256 파일을 첨부합니다.
+공개 배포 시 검증을 마친 버전의 태그로 Release를 만들고 포터블 ZIP, 설치 파일과 SHA256 파일을 첨부합니다.
 소스의 버전과 사용자가 내려받는 Release의 버전은 별도로 확인해야 합니다.
 
 ## 오프라인 빌드
@@ -119,7 +131,6 @@ powershell -NoProfile -ExecutionPolicy Bypass -File packaging\build_windows.ps1 
 | `models/manifest.json` | 모델 출처와 SHA256 |
 | `tessdata/eng.traineddata`, `tessdata/kor.traineddata` | OCR 언어자료 |
 | `tessdata/models.json` | OCR 자료 출처·커밋·SHA256 |
-| `packaging/hooks/hook-pillow_heif.py` | Windows 이미지 코덱 DLL 수집 |
 
 일반 빌드는 포함된 AI 모델을 검증합니다. 모델 재생성이 필요한 경우 다음 명령을 사용합니다.
 
@@ -148,8 +159,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File packaging/verify_windows_bui
 - 포터블 ZIP에서 추출한 실행파일의 동작
 - 방화벽 차단 상태의 처리와 지정 실행파일의 연결 이벤트
 
-`--network-probe`는 일반 문서 처리와 분리된 개발용 통신 검사입니다.
-기본 대상 `1.1.1.1:443`에 TCP 연결을 시도하며 문서나 HTTP 요청은 보내지 않습니다.
+방화벽 검증용 통신 검사는 배포 실행파일에 들어 있지 않습니다. 빌드용 Python이
+`packaging/network_canary.py`를 실행해 `1.1.1.1:443`에 TCP 연결만 시도하고(문서나 HTTP 요청은
+보내지 않음), 방화벽 차단과 감사 기록이 실제로 동작하는지 먼저 확인합니다. 그다음 배포
+실행파일의 `--self-test`가 통신을 한 번도 시도하지 않았는지 검사합니다.
 검사에서 추가한 방화벽 규칙과 변경한 감사 설정은 종료 시 복원합니다.
 
 관리자 권한 없이 자체 검사만 실행할 때는 `-SkipFirewall`을 지정할 수 있습니다.

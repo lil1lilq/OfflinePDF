@@ -6,6 +6,7 @@ import os
 import re
 import shutil
 import socket
+import sys
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -146,14 +147,14 @@ def open_pdf(path, password="", *, extraction=False):
         if not doc.is_pdf:
             raise UserError("PDF 파일을 선택하세요.")
         encrypted = bool((doc.metadata or {}).get("encryption")) or doc.needs_pass
-        if encrypted:
-            if doc.needs_pass and not password:
+        # A PDF with only an owner password opens for anyone, as in a browser.
+        # Its permission flags (no editing, no copying) are not enforced here.
+        if doc.needs_pass:
+            if not password:
                 raise UserError("암호화된 PDF입니다. 입력 암호를 입력하세요.")
-            auth = 0
-            if password:
-                auth = doc.authenticate(password)
-                if not auth:
-                    raise UserError("PDF 암호가 올바르지 않습니다.")
+            auth = doc.authenticate(password)
+            if not auth:
+                raise UserError("PDF 암호가 올바르지 않습니다.")
             permission = pdf.PDF_PERM_COPY if extraction else pdf.PDF_PERM_MODIFY
             if not auth & 4 and not doc.permissions & permission:
                 raise UserError("이 작업의 권한이 없습니다. 소유자 암호를 사용하세요.")
@@ -161,6 +162,17 @@ def open_pdf(path, password="", *, extraction=False):
     except BaseException:
         doc.close()
         raise
+
+
+def bundled_tessdata():
+    """The Korean/English OCR language data shipped beside the program."""
+    return Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1])) / "tessdata"
+
+
+def requires_open_password(path):
+    """True when the PDF cannot be opened without a password."""
+    with pdf.open(path) as probe:
+        return bool(probe.needs_pass)
 
 
 def save_pdf(doc, target, password=""):
@@ -214,21 +226,13 @@ def execute(job: dict, emit=lambda message: None, cancel=None) -> Path:
     final = out / ("PDF결과_" + datetime.now().strftime("%Y%m%d_%H%M%S_") + uuid.uuid4().hex[:8])
     try:
         emit({"type": "stage", "folder": str(stage)})
-        prepared_paths, converted = prepare_image_inputs(job, paths, stage, emit, cancel)
+        prepared_paths = prepare_image_inputs(job, paths, stage, emit, cancel)
         _process(job, prepared_paths, stage, emit, cancel)
         finalize_outputs(job, prepared_paths, stage, emit, cancel)
         check_cancel(cancel)
+        # Images were converted only to run the job; publish just the results.
+        shutil.rmtree(stage / CONVERTED_INPUTS, ignore_errors=True)
         os.rename(stage, final)
-        if converted and not job.get("options", {}).get("preview_only"):
-            emit(
-                {
-                    "type": "converted",
-                    "files": {
-                        str(original): str(final / generated.relative_to(stage))
-                        for original, generated in converted.items()
-                    },
-                }
-            )
         return final
     finally:
         if stage.exists():
@@ -240,11 +244,14 @@ def execute(job: dict, emit=lambda message: None, cancel=None) -> Path:
                 ) from None
 
 
-def prepare_image_inputs(job, paths, stage, emit, cancel):
-    """Convert images transactionally and keep their positions in mixed inputs.
+CONVERTED_INPUTS = ".converted-inputs"
 
-    Converted inputs are published only after the selected operation succeeds.
-    Original images are never overwritten. All frames become PDF pages.
+
+def prepare_image_inputs(job, paths, stage, emit, cancel):
+    """Convert images inside the stage and keep their positions in mixed inputs.
+
+    The converted PDFs are working copies, removed before results are
+    published. Original images are never overwritten. All frames become pages.
     """
     prepared = []
     converted = {}
@@ -255,7 +262,7 @@ def prepare_image_inputs(job, paths, stage, emit, cancel):
         if path.suffix.lower() not in IMAGE_EXTENSIONS:
             raise UserError("PDF 또는 지원하는 이미지 파일을 선택하세요.")
         if path not in converted:
-            folder = stage / "입력PDF"
+            folder = stage / CONVERTED_INPUTS
             folder.mkdir(exist_ok=True)
             target = folder / f"{index + 1:03d}_{safe_stem(path)}.pdf"
             _tick(emit, cancel, index, len(paths), "이미지를 PDF로 자동 변환 중")
@@ -276,7 +283,7 @@ def prepare_image_inputs(job, paths, stage, emit, cancel):
                     raise UserError(str(exc)) from None
             converted[path] = target
         prepared.append(converted[path])
-    return prepared, converted
+    return prepared
 
 
 def _process(job, paths, stage, emit, cancel):
@@ -369,7 +376,9 @@ def _process(job, paths, stage, emit, cancel):
             )
             store_password = output_password or (password if encrypted else "")
             if tool == "unlock":
-                if encrypted and not doc.authenticate(password) & 4:
+                # Only an opening password needs the owner password to remove;
+                # owner-only restrictions are removed like any other edit.
+                if requires_open_password(path) and not doc.authenticate(password) & 4:
                     raise UserError("암호 해제에는 소유자 암호가 필요합니다.")
                 save_pdf(doc, target)
             elif tool == "split":
@@ -477,10 +486,9 @@ def _process(job, paths, stage, emit, cancel):
                         _tick(emit, cancel, n, doc.page_count, f"페이지 {n + 1} 문자 추출")
                         output.write(f"\n--- {n + 1}쪽 ---\n" + doc[n].get_text(sort=True))
             elif tool == "ocr":
-                tessdata = Path(opt.get("tessdata", ""))
+                # The bundled data unless a caller (tests, diagnostics) names a folder.
+                tessdata = Path(str(opt.get("tessdata") or "").strip() or bundled_tessdata())
                 language = opt.get("language", "kor+eng")
-                if not str(opt.get("tessdata", "")).strip():
-                    raise UserError("오프라인 OCR 언어자료 폴더를 선택하세요.")
                 try:
                     with model_directory(tessdata, language) as model_path, pdf.open() as dst:
                         for n in selected:

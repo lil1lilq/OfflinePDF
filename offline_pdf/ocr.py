@@ -45,7 +45,9 @@ def model_directory(source, language, *, windows=None):
     if not languages or any(lang not in {"kor", "eng"} for lang in languages):
         raise OCRSetupError("OCR 언어는 한국어·영어 중 선택하세요.")
     if not source.is_dir():
-        raise OCRSetupError("OCR 언어자료 폴더를 찾을 수 없습니다. 폴더를 다시 선택하세요.")
+        raise OCRSetupError(
+            "OCR 언어자료를 찾을 수 없습니다. 배포본 전체를 다시 압축 해제한 뒤 실행하세요."
+        )
     for lang in languages:
         path = source / (lang + ".traineddata")
         check_local_path(path)

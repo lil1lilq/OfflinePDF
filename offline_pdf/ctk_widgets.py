@@ -8,6 +8,10 @@ from . import theme
 from .localization import tr
 from .theme import colors
 
+# CustomTkinter font sizes are pixels, not points: 14px is about 10.5pt, a
+# comfortable reading size at 100% Windows scaling.
+BODY_SIZE = 14
+
 
 def _palette():
     return colors("default"), colors("dark")
@@ -31,6 +35,8 @@ def _style(name):
 
 
 class _Text:
+    translates_text = True
+
     def configure(self, **kwargs):
         if "foreground" in kwargs:
             kwargs["text_color"] = _semantic_color(kwargs.pop("foreground"))
@@ -45,7 +51,14 @@ class _Text:
 class Frame(ctk.CTkFrame):
     def __init__(self, master, style=None, padding=None, **kwargs):
         kwargs.setdefault("corner_radius", 0)
-        kwargs.setdefault("fg_color", _pair("PANEL") if _style(style) == "panel" else "transparent")
+        if _style(style) == "panel":
+            kwargs.setdefault("fg_color", _pair("PANEL"))
+        elif not isinstance(master, (ctk.CTkBaseClass, ctk.CTk, ctk.CTkToplevel)):
+            # "transparent" under a plain Tk frame freezes that frame's current
+            # colour, which then stays light in dark mode. Use the themed pair.
+            kwargs.setdefault("fg_color", _pair("BG"))
+        else:
+            kwargs.setdefault("fg_color", "transparent")
         super().__init__(master, **kwargs)
         self.padding = padding
 
@@ -69,7 +82,7 @@ class Label(_Text, ctk.CTkLabel):
         if font is not None:
             kwargs["font"] = font
         else:
-            kwargs.setdefault("font", (theme.FONT_FAMILY, 12))
+            kwargs.setdefault("font", (theme.FONT_FAMILY, BODY_SIZE))
         super().__init__(master, **kwargs)
 
 
@@ -80,7 +93,7 @@ class Button(_Text, ctk.CTkButton):
         kwargs.setdefault("height", 36)
         kwargs.setdefault("corner_radius", 10)
         kwargs.setdefault("border_width", 1)
-        kwargs.setdefault("font", (theme.FONT_FAMILY, 12))
+        kwargs.setdefault("font", (theme.FONT_FAMILY, BODY_SIZE))
         if width is not None:
             kwargs["width"] = max(36, width * 10)
         else:
@@ -90,7 +103,10 @@ class Button(_Text, ctk.CTkButton):
             kwargs.setdefault("hover_color", ("#2948c3", "#c3d0ff"))
             kwargs.setdefault("text_color", ("#ffffff", "#172135"))
             kwargs.setdefault("border_color", _pair("BLUE"))
+            kwargs.setdefault("text_color_disabled", ("#e3e9ff", "#46546f"))
         else:
+            # CustomTkinter's default disabled text (gray74) is barely readable.
+            kwargs.setdefault("text_color_disabled", ("#8a93a3", "#7d889a"))
             kwargs.setdefault("fg_color", _pair("PANEL"))
             kwargs.setdefault("hover_color", _pair("SOFT"))
             kwargs.setdefault("text_color", _pair("INK"))
@@ -103,7 +119,7 @@ class Entry(ctk.CTkEntry):
         if width is not None:
             kwargs["width"] = max(90, width * 10)
         kwargs.setdefault("height", 36)
-        kwargs.setdefault("font", (theme.FONT_FAMILY, 12))
+        kwargs.setdefault("font", (theme.FONT_FAMILY, BODY_SIZE))
         kwargs.setdefault("corner_radius", 9)
         kwargs.setdefault("fg_color", _pair("PANEL"))
         kwargs.setdefault("border_color", _pair("LINE"))
@@ -121,7 +137,7 @@ class Combobox(ctk.CTkComboBox):
         if width is not None:
             kwargs["width"] = max(110, width * 10)
         kwargs.setdefault("height", 36)
-        kwargs.setdefault("font", (theme.FONT_FAMILY, 12))
+        kwargs.setdefault("font", (theme.FONT_FAMILY, BODY_SIZE))
         kwargs.setdefault("corner_radius", 9)
         kwargs.setdefault("fg_color", _pair("PANEL"))
         kwargs.setdefault("border_color", _pair("LINE"))
@@ -150,9 +166,27 @@ class Radiobutton(_Text, ctk.CTkRadioButton):
         kwargs["text"] = tr(self.source_text)
         kwargs.setdefault("text_color", _pair("INK"))
         kwargs.setdefault("fg_color", _pair("BLUE"))
+        kwargs.setdefault("hover_color", ("#2948c3", "#c3d0ff"))
+        kwargs.setdefault("border_color", ("#9aa3b2", "#7d889a"))
+        kwargs.setdefault("radiobutton_width", 18)
+        kwargs.setdefault("radiobutton_height", 18)
+        kwargs.setdefault("border_width_unchecked", 2)
+        kwargs.setdefault("border_width_checked", 5)
         kwargs.setdefault("width", 105)
-        kwargs.setdefault("font", (theme.FONT_FAMILY, 12))
+        kwargs.setdefault("font", (theme.FONT_FAMILY, BODY_SIZE))
         super().__init__(master, **kwargs)
+
+
+CHECKBOX_STYLE = dict(
+    checkbox_width=18,
+    checkbox_height=18,
+    corner_radius=5,
+    border_width=2,
+    fg_color=("#3759da", "#a9bcff"),
+    hover_color=("#2948c3", "#c3d0ff"),
+    border_color=("#9aa3b2", "#7d889a"),
+    checkmark_color=("#ffffff", "#172135"),
+)
 
 
 class Checkbutton(_Text, ctk.CTkCheckBox):
@@ -160,9 +194,42 @@ class Checkbutton(_Text, ctk.CTkCheckBox):
         self.source_text = kwargs.get("text", "")
         kwargs["text"] = tr(self.source_text)
         kwargs.setdefault("text_color", _pair("INK"))
-        kwargs.setdefault("fg_color", _pair("BLUE"))
-        kwargs.setdefault("font", (theme.FONT_FAMILY, 12))
+        kwargs.setdefault("font", (theme.FONT_FAMILY, BODY_SIZE))
+        for key, value in CHECKBOX_STYLE.items():
+            kwargs.setdefault(key, value)
         super().__init__(master, **kwargs)
+
+
+class SegmentedChoice(ctk.CTkSegmentedButton):
+    """A segmented toggle; the selected segment is filled and its text inverted."""
+
+    def __init__(self, master, values, command=None, **kwargs):
+        self._on_choose = command
+        kwargs.setdefault("font", (theme.FONT_FAMILY, BODY_SIZE))
+        kwargs.setdefault("height", 36)
+        kwargs.setdefault("corner_radius", 10)
+        kwargs.setdefault("border_width", 3)
+        kwargs.setdefault("fg_color", ("#e6eaf1", "#2b3442"))
+        kwargs.setdefault("unselected_color", ("#e6eaf1", "#2b3442"))
+        kwargs.setdefault("unselected_hover_color", ("#d7deea", "#36414f"))
+        kwargs.setdefault("selected_color", _pair("BLUE"))
+        kwargs.setdefault("selected_hover_color", ("#2948c3", "#c3d0ff"))
+        kwargs.setdefault("text_color", _pair("INK"))
+        super().__init__(master, values=list(values), command=self._chosen, **kwargs)
+
+    def _chosen(self, value):
+        self._paint()
+        if self._on_choose:
+            self._on_choose(value)
+
+    def set(self, value, *args, **kwargs):
+        super().set(value, *args, **kwargs)
+        self._paint()
+
+    def _paint(self):
+        for name, button in self._buttons_dict.items():
+            selected = name == self.get()
+            button.configure(text_color=("#ffffff", "#172135") if selected else _pair("INK"))
 
 
 class Progressbar(ctk.CTkProgressBar):

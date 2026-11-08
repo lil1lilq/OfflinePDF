@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import sys
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog
@@ -13,9 +12,33 @@ from .. import ctk_widgets as ttk
 from ..engine import UserError, open_pdf, split_ranges
 from ..images import EXPORT_FORMATS, IMAGE_EXTENSIONS, IMAGE_PATTERN, open_image_document
 from ..localization import ChoiceVar
+from ..output_options import BLANK_MODE
 from ..passwords import ask_password, cached_password, ensure_password
 from ..tools import TOOLS
-from ..ui import BLUE, CARD_TEXT, MUTED, RED, icon
+from ..ui import BLUE, CARD_TEXT, MUTED, RED, chip_color, tool_icon
+
+
+def wrap_captions(form, visible, width=None):
+    """Wrap captions to an equal share of the form's width (its parent sets it)."""
+    if not visible:
+        return
+    width = width or form.winfo_width()
+    if not isinstance(width, int) or width <= 1:
+        return
+    # Same weights as the grid: compression 3, others 1, padded to 4 columns.
+    weights = [3 if key == "compression" else 1 for key, _ in visible]
+    share = width / (sum(weights) + max(0, 4 - len(visible)))
+    for (key, cell), weight in zip(visible, weights):
+        caption = getattr(cell, "caption", None)
+        if caption is None:
+            continue
+        wrap = max(60, int(share * weight) - 14)
+        if getattr(cell, "caption_wrap", None) != wrap:
+            cell.caption_wrap = wrap
+            caption.configure(wraplength=wrap)
+
+
+UPSCALE_ADVANCED = ("max_output_mb", "min_dpi", "min_quality")
 
 
 class FormController:
@@ -47,13 +70,6 @@ class FormController:
         ttk.Button(body, text="페이지 번호로 지정", command=self.organizer.apply_text).grid(
             row=5, column=0, sticky="w", pady=6
         )
-        ttk.Label(body, text="결과물 빈 페이지").grid(row=6, column=0, sticky="w")
-        ttk.Combobox(
-            body,
-            textvariable=self.options["remove_blank"],
-            values=["사용 안 함", "흰 빈 페이지 삭제"],
-            state="readonly",
-        ).grid(row=7, column=0, sticky="ew", pady=6)
 
         def done():
             dialog.destroy()
@@ -85,9 +101,25 @@ class FormController:
         self.options[key] = var
         cell = ttk.Frame(self.form, style="Panel.TFrame")
         self.form_cells.append((key, cell))
-        ttk.Label(cell, text=label, style="Panel.TLabel").pack(anchor="w", pady=(0, 3))
+        caption = ttk.Label(cell, text=label, style="Panel.TLabel", wraplength=80, justify="left")
+        caption.pack(anchor="w", fill="x", pady=(0, 3))
+        # Every option shares one row, so captions wrap instead of widening the cell.
+        # arrange_fields sets the wrap width from the form's width, never from the
+        # cell's own width: that would feed back into the cell size and relayout.
+        cell.caption = caption
         controls = ttk.Frame(cell, style="Panel.TFrame")
-        controls.pack(fill="x")
+        # Bottom-aligned, so inputs line up even when a neighbouring caption wraps.
+        controls.pack(side="bottom", fill="x")
+        if key == "scale":
+            # Two plain choices instead of a numeric dropdown.
+            labels = {"2배 (권장)": "2", "4배 (더 선명·느림)": "4"}
+            toggle = ttk.SegmentedChoice(
+                controls, values=labels, command=lambda label: var.set(labels[label])
+            )
+            toggle.set(next(label for label, value in labels.items() if value == default))
+            toggle.pack(side="left", fill="x", expand=True)
+            self.option_widgets[key] = toggle
+            return
         if key == "compression":
             for i, choice in enumerate(choices):
                 controls.columnconfigure(i, weight=1)
@@ -97,15 +129,18 @@ class FormController:
                     variable=var,
                     value=choice,
                     style="Compression.TRadiobutton",
-                ).grid(row=0, column=i, sticky="ew", padx=(0, 6), ipady=9)
+                    width=40,
+                ).grid(row=0, column=i, sticky="w", padx=(0, 6), pady=6)
             return
         if choices:
-            widget = ttk.Combobox(
-                controls, textvariable=var, values=choices, state="readonly", width=12
-            )
+            widget = ttk.Combobox(controls, textvariable=var, values=choices, state="readonly")
         else:
-            widget = ttk.Entry(controls, textvariable=var, width=12, show="●" if secret else "")
+            widget = ttk.Entry(controls, textvariable=var, show="●" if secret else "")
+        # A small natural width lets the shared row shrink; the cell's weight
+        # stretches the control to fill whatever room the row has.
+        widget.configure(width=70)
         widget.pack(side="left", fill="x", expand=True)
+        self.option_widgets[key] = widget
         if key == "input_password":
             widget.bind("<FocusOut>", lambda e: self.refresh_preview())
         if browse:
@@ -124,15 +159,7 @@ class FormController:
             ttk.Button(controls, text="선택", command=pick).pack(side="right", padx=(4, 0))
 
     def arrange_fields(self, width=None):
-        width = max(200, width or self.form.winfo_width())
-        columns = max(1, min(4, int(width / 180)))
-        for col in range(4):
-            self.form.columnconfigure(
-                col,
-                weight=1 if col < columns else 0,
-                uniform="fields" if col < columns else "",
-                minsize=0,
-            )
+        """Lay every visible option out side by side on a single row."""
         visible = []
         n_split = (
             self.tool == "split"
@@ -140,7 +167,6 @@ class FormController:
             and self.options["split_mode"].get() == "N개 파일로 나누기"
         )
         for key, cell in self.form_cells:
-            cell.grid_forget()
             if key in ("target_mb", "min_dpi", "min_quality") and self.tool == "compress":
                 if self.options["compression"].get() != "목표 용량":
                     continue
@@ -148,6 +174,8 @@ class FormController:
                 (key == "pages" and n_split)
                 or (key in ("split_count", "split_starts") and not n_split)
             ):
+                continue
+            if self.tool == "upscale" and key in UPSCALE_ADVANCED and not self.show_advanced:
                 continue
             if self.tool == "protect" and key == "output_password":
                 if self.options["password_mode"].get() == "암호 제거":
@@ -158,17 +186,39 @@ class FormController:
                     not image and key in ("stamp_path", "stamp_width")
                 ):
                     continue
-            visible.append(cell)
-        for i, cell in enumerate(visible):
-            wide = self.tool == "compress" and i == 0
-            offset = i - 1 if self.tool == "compress" else i
+            visible.append((key, cell))
+        wrap_captions(self.form, visible, width)
+        # One row does not depend on the width, so resizes need no new layout.
+        signature = tuple(id(cell) for _, cell in visible)
+        if signature == getattr(self, "form_signature", None):
+            return
+        self.form_signature = signature
+        previous = getattr(self, "form_columns", 0) or 0
+        for col in range(max(previous, len(visible))):
+            self.form.columnconfigure(col, weight=0, uniform="", minsize=0)
+        # With only a few options, an empty trailing column keeps each one at
+        # about a quarter of the row instead of stretching across all of it.
+        spare = max(0, 4 - len(visible))
+        self.form_columns = len(visible) + 1
+        # Tk counts weight 0 as 1 inside a uniform group, so join it only when needed.
+        self.form.columnconfigure(
+            len(visible), weight=spare, uniform="fields" if spare else "", minsize=0
+        )
+        for _, cell in self.form_cells:
+            cell.grid_forget()
+        for i, (key, cell) in enumerate(visible):
+            # The five compression levels need roughly three option widths.
+            wide = key == "compression"
+            self.form.columnconfigure(
+                i, weight=3 if wide else 1, uniform="" if wide else "fields", minsize=0
+            )
             cell.grid(
-                row=0 if wide else offset // columns + int(self.tool == "compress"),
-                column=0 if wide else offset % columns,
-                columnspan=columns if wide else 1,
-                sticky="ew",
-                padx=(0, 10),
-                pady=5,
+                row=0,
+                column=i,
+                columnspan=1,
+                sticky="nsew",
+                padx=(0, 10 if i < len(visible) - 1 else 0),
+                pady=4,
             )
 
     def update_split_preview(self, *_):
@@ -224,28 +274,30 @@ class FormController:
         for w in self.form.winfo_children():
             w.destroy()
         self.options = {}
+        self.option_widgets = {}
         self.form_cells = []
+        self.show_advanced = False
         title, desc = TOOLS[self.tool]
         self.title.config(text=title)
         self.description.config(text=desc)
         self.description.config(foreground=MUTED)
-        self.task_icon.delete("all")
-        icon(self.task_icon, self.tool, 12, 12)
+        self.task_icon.configure(fg_color=chip_color(self.tool))
+        self.task_icon_label.configure(image=tool_icon(self.tool))
         self.run_button.config(text=CARD_TEXT[self.tool][0] + "  →")
         self.preview_button.config(state="normal")
         if self.tool == "redact":
-            self.preview_region_row.pack(fill="x", after=self.preview_zoom_row)
+            self.preview_region_row.pack(side="right", padx=(12, 0), before=self.preview_nav)
         else:
             self.preview_region_row.pack_forget()
         self.output_name.set("합친문서.pdf" if self.tool == "merge" else "이미지문서.pdf")
         if self.tool in ("merge", "images_pdf"):
-            self.name_frame.pack(fill="x", pady=(7, 0))
+            self.name_frame.pack(side="right", fill="y", padx=(10, 0), pady=4)
         else:
             self.name_frame.pack_forget()
-        if self.tool == "redact":
-            self.region_controls.pack(fill="x")
+        if self.tool in ("merge", "images_pdf"):
+            self.side_controls.pack(side="right", fill="y", before=self.form)
         else:
-            self.region_controls.pack_forget()
+            self.side_controls.pack_forget()
         if self.tool not in (
             "merge",
             "images_pdf",
@@ -267,7 +319,7 @@ class FormController:
             self.field("다음 파일의 시작 쪽 (예: 5,8)", "split_starts", "")
             for key in ("split_mode", "split_count", "split_starts"):
                 self.options[key].trace_add("write", self.update_split_preview)
-            self.split_summary.pack(fill="x", pady=(7, 0))
+            self.split_summary.pack(fill="x", pady=(4, 0))
             self.update_split_preview()
         else:
             self.split_summary.pack_forget()
@@ -291,10 +343,14 @@ class FormController:
             self.field("최소 JPEG 품질 (30~95)", "min_quality", "50")
             self.options["compression"].trace_add("write", self.compression_note)
         if self.tool == "upscale":
-            self.field("확대 배율 (배)", "scale", "2", ["2", "4"])
+            self.field("확대 배율", "scale", "2")
+            # Size limits are rarely needed; they stay behind "advanced options".
             self.field("최대 용량 MB (공란=무제한)", "max_output_mb", "")
             self.field("최소 이미지 DPI", "min_dpi", "96")
             self.field("최소 JPEG 품질 (30~95)", "min_quality", "50")
+            self.advanced_toggle_cell()
+            self.options["max_output_mb"].trace_add("write", self.update_size_floor_state)
+            self.update_size_floor_state()
             self.ai_preview_button.pack(side="left", padx=8)
         if self.tool == "nup":
             self.field("한 장당 쪽수 (1~64)", "nup_count", "4")
@@ -349,23 +405,16 @@ class FormController:
         if self.tool == "crop":
             self.field("여백 mm", "margin", "10")
         if self.tool == "ocr":
-            root = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
-            self.field("언어자료 폴더", "tessdata", str(root / "tessdata"), browse="dir")
+            # Korean and English language data ship with the program.
             self.field(
                 "문서 언어", "language", "한국어 + 영어", ["한국어 + 영어", "한국어", "영어"]
             )
-        if self.tool not in ("text", "pdf_images"):
-            self.field(
-                "결과물 빈 페이지",
-                "remove_blank",
-                "사용 안 함",
-                ["사용 안 함", "흰 빈 페이지 삭제"],
-            )
+        self.update_blank_option()
         self.security.config(
             text="페이지를 비워 두면 전체 페이지를 처리합니다." if "pages" in self.options else ""
         )
         if "pages" in self.options:
-            self.security.pack(anchor="w", pady=(12, 0))
+            self.security.pack(anchor="w", pady=(4, 0))
         else:
             self.security.pack_forget()
         self.update_file_summary()
@@ -375,22 +424,73 @@ class FormController:
         if self.tool == "compress":
             self.compression_note()
         if self.tool == "upscale":
-            self.security.config(
-                text="용량 제한 시 이미지 화질이 낮아질 수 있습니다. 최대 용량은 이미지 크기·메모리 제한과 별개입니다."
-            )
-            self.security.pack(anchor="w", pady=(8, 0))
+            self.update_advanced_note()
         if self.tool == "nup":
             self.security.config(
                 text="파일별 저장 · 원본의 흰 여백은 유지됩니다. 꽉 채우기는 가장자리를 가리며 영구 삭제하지 않습니다."
             )
-            self.security.pack(anchor="w", pady=(8, 0))
+            self.security.pack(anchor="w", pady=(4, 0))
         self.update_region_status()
         self.hide_preview(restore=False)
         if self.tool == "extract":
             self.refresh_organizer()
             self.run_button.config(text="정리한 PDF 저장  →")
         elif self.tool == "redact":
+            # Distinct from "clear this page's selection" on the preview toolbar.
+            self.run_button.config(text="선택 영역 영구 삭제  →")
             self.show_preview()
+
+    def advanced_toggle_cell(self):
+        cell = ttk.Frame(self.form, style="Panel.TFrame")
+        self.form_cells.append(("advanced", cell))
+        self.advanced_button = ttk.Button(
+            cell, text="상세 옵션 ▾", command=self.toggle_advanced, width=13
+        )
+        self.advanced_button.pack(side="bottom", anchor="w")
+
+    def toggle_advanced(self):
+        self.show_advanced = not self.show_advanced
+        self.advanced_button.config(
+            text="상세 옵션 접기 ▴" if self.show_advanced else "상세 옵션 ▾"
+        )
+        self.arrange_fields()
+        self.update_advanced_note()
+
+    def update_advanced_note(self):
+        if self.show_advanced:
+            self.security.config(
+                text="최소 DPI·품질은 최대 용량을 입력했을 때만 사용합니다. 용량을 맞추느라 화질이 낮아질 수 있습니다."
+            )
+            self.security.pack(anchor="w", pady=(4, 0))
+        else:
+            self.security.pack_forget()
+
+    def update_size_floor_state(self, *_):
+        limited = bool(self.options["max_output_mb"].get().strip())
+        for key in ("min_dpi", "min_quality"):
+            self.option_widgets[key].configure(state="normal" if limited else "disabled")
+
+    def settings_panel_needed(self):
+        """Tools without options (cleaning, redaction) skip the empty panel."""
+        return bool(self.form_cells) or self.tool in ("merge", "images_pdf")
+
+    def blank_option_applies(self):
+        """Text and image exports have no PDF pages to drop."""
+        return self.tool not in ("text", "pdf_images")
+
+    def update_blank_option(self):
+        applies = self.blank_option_applies()
+        self.blank_check.configure(state="normal" if applies else "disabled")
+        if applies and self.remove_blank.get():
+            self.blank_badge.pack(side="right", padx=(0, 12), after=self.run_button)
+        else:
+            self.blank_badge.pack_forget()
+
+    def blank_mode(self):
+        """The worker's remove_blank value for the sidebar checkbox."""
+        return (
+            BLANK_MODE if self.blank_option_applies() and self.remove_blank.get() else "사용 안 함"
+        )
 
     def effective_tool(self):
         """Translate the selected mode into the existing worker operation."""
@@ -423,7 +523,7 @@ class FormController:
         }
         self.arrange_fields()
         self.security.config(text=notes.get(self.options["compression"].get(), ""))
-        self.security.pack(anchor="w", pady=(8, 0))
+        self.security.pack(anchor="w", pady=(4, 0))
 
     def set_output_password(self):
         if self.busy():

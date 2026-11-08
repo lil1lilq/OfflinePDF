@@ -5,6 +5,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import font as tkfont
 
+from . import theme
 from .effects import mix
 from .ui import BG, BLUE, FONT, INK, LINE, MUTED, PANEL, RED, SOFT, Tooltip
 
@@ -43,7 +44,7 @@ class FileList(tk.Canvas):
         self.tooltip_row = None
         self.bind("<Motion>", self.show_filename)
         self.bind("<Leave>", lambda event: self.name_tooltip.hide())
-        self.name_font = tkfont.Font(family=FONT, size=9, weight="bold")
+        self.name_font = tkfont.Font(family=theme.BOLD_FAMILY, size=10, weight="bold")
 
     def show_filename(self, event):
         index = int(self.canvasy(event.y) // self.row_height)
@@ -277,7 +278,7 @@ class FileList(tk.Canvas):
                 anchor="nw",
                 text=name,
                 width=w - 25,
-                font=(FONT, 9, "bold"),
+                font=(theme.BOLD_FAMILY, 10, "bold"),
                 fill=mix(background, INK, opacity),
             )
             self.create_text(
@@ -286,7 +287,7 @@ class FileList(tk.Canvas):
                 anchor="w",
                 text=meta,
                 width=w - 25,
-                font=(FONT, 8),
+                font=(FONT, 10),
                 fill=mix(background, MUTED, opacity),
             )
 
@@ -394,7 +395,7 @@ class WindowDropHover:
             text="놓으면 파일 목록에 추가됩니다",
             bg=PANEL,
             fg=INK,
-            font=(FONT, 14, "bold"),
+            font=(theme.BOLD_FAMILY, 14, "bold"),
             padx=24,
             pady=18,
             highlightthickness=2,

@@ -11,6 +11,7 @@ from pathlib import Path
 import pymupdf as pdf
 
 from .. import ctk_widgets as ttk
+from .. import theme
 from ..engine import UserError, check_local_path, open_pdf, pages, split_ranges
 from ..images import open_image_document
 from ..passwords import cached_password
@@ -27,22 +28,33 @@ class PreviewController:
             self.show_preview()
 
     def show_preview(self):
-        if self.screen != "preview":
+        # Redaction is drawn on the preview itself, so that preview is the tool's
+        # main work screen: keep its settings visible and let "back" go home.
+        inline = self.tool == "redact"
+        if self.screen != "preview" and not inline:
             self.preview_origin = self.capture_preview_origin()
         self.preview_mode = "width"
         self.preview_zoom = 1.0
         self.canvas.xview_moveto(0)
-        self.columns.pack_forget()
         self.organizer.pack_forget()
         self.file_overview.pack_forget()
+        if inline and self.settings_panel_needed():
+            self.columns.pack(fill="x", before=self.document_host)
+        else:
+            self.columns.pack_forget()
         self.preview_panel.pack(fill="both", expand=True, pady=(8, 0))
         self.preview_button.config(text="미리보기 접기")
         self.schedule_preview()
         if self.work.winfo_manager():
-            self.screen = "preview"
+            self.screen = "work" if inline else "preview"
         self.update_back_state()
 
     def hide_preview(self, restore=True):
+        if self.tool == "redact" and self.work.winfo_manager():
+            # Redaction always works on the preview; never swap it for the overview.
+            self.preview_origin = None
+            self.show_preview()
+            return
         origin = self.preview_origin if restore else None
         self.preview_origin = None
         if origin:
@@ -72,7 +84,8 @@ class PreviewController:
         if self.tool == "extract":
             self.organizer.pack(fill="both", expand=True)
         else:
-            self.columns.pack(fill="x", before=self.document_host)
+            if self.settings_panel_needed():
+                self.columns.pack(fill="x", before=self.document_host)
             if self.files:
                 self.file_overview.pack(fill="both", expand=True)
                 self.overview_title.config(
@@ -139,7 +152,9 @@ class PreviewController:
         ):
             cell = ttk.Frame(row)
             cell.grid(row=0, column=i, sticky="nsew", padx=5)
-            ttk.Label(cell, text=caption, font=("맑은 고딕", 11, "bold")).pack(anchor="w", pady=5)
+            ttk.Label(cell, text=caption, font=(theme.BOLD_FAMILY, 14, "bold")).pack(
+                anchor="w", pady=5
+            )
             with Image.open(Path(folder) / name) as image:
                 source = image.copy()
                 self.comparison_images.append(source)
@@ -266,7 +281,7 @@ class PreviewController:
                                     anchor="w",
                                     text=f"{first + 1}–{last + 1}쪽",
                                     fill=BLUE,
-                                    font=("맑은 고딕", 12, "bold"),
+                                    font=(theme.BOLD_FAMILY, 12, "bold"),
                                 )
                             self.overview_canvas.configure(
                                 scrollregion=(0, 0, ow, ((len(ranges) + cols - 1) // cols) * 80)
@@ -422,4 +437,4 @@ class PreviewController:
 
     def update_region_status(self):
         count = sum(len(rects) for regions in self.regions.values() for rects in regions.values())
-        self.region_status.config(text=f"삭제 영역 {count}개 · 영구 삭제는 한 파일씩 처리합니다.")
+        self.region_status.config(text=f"선택 영역 {count}개")

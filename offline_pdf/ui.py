@@ -8,6 +8,7 @@ from tkinter import ttk
 import customtkinter as ctk
 from PIL import Image, ImageDraw, ImageTk
 
+from . import theme
 from .theme import (
     BUTTON_RADIUS,
     CARD_GROUP,
@@ -20,14 +21,17 @@ from .tools import TOOLS
 
 BG = "#f4f6fa"
 PANEL = "#ffffff"
-INK = "#202a3a"
-MUTED = "#526078"
+INK = "#111827"
+MUTED = "#374151"
 RED = "#b3384a"
 LINE = "#dfe5ef"
 BLUE = "#3759da"
 SOFT = "#eaf0ff"
 FONT = "맑은 고딕"
 
+# Card heights sized for 16:9 desktop windows: all 16 tools fit on one screen.
+CARD_MIN_HEIGHT = 140
+CARD_MAX_HEIGHT = 168
 POPULAR = ("merge", "split", "extract", "compress", "ocr", "pdf_images")
 # Titles share one source; compact summaries fit the basic cards.
 CARD_SUMMARIES = {
@@ -51,117 +55,36 @@ CARD_SUMMARIES = {
 CARD_TEXT = {key: (title, CARD_SUMMARIES[key]) for key, (title, _) in TOOLS.items()}
 
 
-def tool_color(key):
-    from .appearance import palette
+def chip_color(key):
+    """Light/dark background of a tool's icon chip, by its card group."""
+    group = CARD_GROUP[key]
+    return colors("default")[group][0], colors("dark")[group][0]
 
-    colors = palette()
-    return colors["BLUE"], colors["SOFT"]
+
+_TINTED_ICONS = {}
 
 
-def icon(canvas, key, x, y, color=BLUE, scale=1):
-    """Draw small original line icons with Tk primitives (24 by 24 units)."""
+def tool_icon(key, size=24):
+    """The tool's bundled Lucide icon, tinted for light and dark themes.
 
-    before = set(canvas.find_all())
+    The tinted pictures are cached; each caller gets its own CTkImage, which
+    binds to the Tk interpreter that first draws it.
+    """
+    if key not in _TINTED_ICONS:
+        group = CARD_GROUP[key]
+        light, dark = colors("default")[group][1], colors("dark")[group][1]
+        with Image.open(resource_path("lucide", f"{key}.png")) as image:
+            mask = image.getchannel("A")
 
-    def line(*coords, **kwargs):
-        points = [v + (x if i % 2 == 0 else y) for i, v in enumerate(coords)]
-        canvas.create_line(
-            *points, fill=color, width=1.8, capstyle="round", joinstyle="round", **kwargs
-        )
+            def tinted(color):
+                rgb = tuple(int(color[i : i + 2], 16) for i in (1, 3, 5))
+                result = Image.new("RGBA", image.size, (*rgb, 0))
+                result.putalpha(mask)
+                return result
 
-    def box(a, b, c, d):
-        canvas.create_rectangle(x + a, y + b, x + c, y + d, outline=color, width=1.7)
-
-    def oval(a, b, c, d):
-        canvas.create_oval(x + a, y + b, x + c, y + d, outline=color, width=1.7)
-
-    if key == "upload":
-        line(3, 15, 3, 22, 21, 22, 21, 15)
-        line(12, 17, 12, 2)
-        line(6, 8, 12, 2, 18, 8)
-    elif key in ("merge", "images_pdf"):
-        box(2, 2, 11, 15)
-        box(13, 8, 22, 22)
-        line(6, 19, 11, 19, 11, 22)
-        line(8, 16, 11, 19, 8, 22)
-    elif key == "split":
-        oval(2, 2, 8, 8)
-        oval(2, 16, 8, 22)
-        line(7, 7, 22, 21)
-        line(7, 17, 22, 3)
-    elif key == "extract":
-        box(1, 3, 23, 21)
-        line(8, 3, 8, 21)
-        line(12, 8, 19, 8)
-        line(12, 13, 19, 13)
-    elif key == "nup":
-        box(3, 1, 21, 23)
-        box(6, 4, 11, 10)
-        box(13, 4, 18, 10)
-        box(6, 13, 11, 19)
-        box(13, 13, 18, 19)
-    elif key == "compress":
-        line(2, 2, 9, 9, 3, 9)
-        line(9, 9, 9, 3)
-        line(22, 22, 15, 15, 21, 15)
-        line(15, 15, 15, 21)
-    elif key in ("pdf_images", "stamp"):
-        box(2, 3, 22, 21)
-        oval(14, 6, 18, 10)
-        line(3, 19, 9, 12, 15, 18, 18, 15, 22, 20)
-    elif key == "redact":
-        line(2, 15, 13, 3, 22, 11, 11, 22, 2, 15)
-        line(7, 10, 16, 18)
-        line(11, 22, 23, 22)
-    elif key in ("protect", "unlock"):
-        box(4, 10, 21, 23)
-        line(8, 10, 8, 4, 12, 1, 17, 4, 17, 10 if key == "protect" else 6)
-        oval(11, 14, 14, 17)
-        line(12.5, 17, 12.5, 20)
-    elif key == "rotate":
-        canvas.create_arc(
-            x + 3,
-            y + 3,
-            x + 21,
-            y + 21,
-            start=45,
-            extent=280,
-            style="arc",
-            outline=color,
-            width=1.8,
-        )
-        line(21, 2, 21, 9, 14, 9)
-    elif key == "crop":
-        line(1, 6, 18, 6, 18, 23)
-        line(6, 1, 6, 18, 23, 18)
-    elif key in ("watermark", "text", "number"):
-        if key == "number":
-            line(8, 2, 6, 22)
-            line(17, 2, 15, 22)
-            line(2, 9, 22, 9)
-            line(1, 16, 21, 16)
-        else:
-            line(3, 6, 3, 3, 21, 3, 21, 6)
-            line(12, 3, 12, 21)
-            line(7, 21, 17, 21)
-    elif key == "delete":
-        box(4, 2, 20, 22)
-        line(8, 12, 16, 12)
-    elif key == "clean":
-        box(3, 2, 21, 22)
-        line(7, 12, 11, 16, 18, 8)
-    else:
-        line(8, 2, 2, 2, 2, 8)
-        line(16, 2, 22, 2, 22, 8)
-        line(2, 16, 2, 22, 8, 22)
-        line(16, 22, 22, 22, 22, 16)
-        line(6, 9, 18, 9)
-        line(6, 14, 18, 14)
-
-    if scale != 1:
-        for item in set(canvas.find_all()) - before:
-            canvas.scale(item, x, y, scale, scale)
-            canvas.itemconfigure(item, width=1.8 * scale)
+            _TINTED_ICONS[key] = tinted(light), tinted(dark)
+    light_image, dark_image = _TINTED_ICONS[key]
+    return ctk.CTkImage(light_image=light_image, dark_image=dark_image, size=(size, size))
 
 
 class ScrollPane(ctk.CTkScrollableFrame):
@@ -173,7 +96,7 @@ class ScrollPane(ctk.CTkScrollableFrame):
             fg_color=("#f4f6fa", "#171c25"),
             corner_radius=0,
             scrollbar_button_color=("#8390a4", "#8793a5"),
-            scrollbar_button_hover_color=("#526078", "#b7c2d2"),
+            scrollbar_button_hover_color=("#374151", "#d5dce6"),
             **kwargs,
         )
         self.inner = self
@@ -265,7 +188,7 @@ class ToolCard(ctk.CTkFrame):
         super().__init__(
             master,
             width=220,
-            height=230,
+            height=CARD_MIN_HEIGHT,
             corner_radius=CARD_RADIUS,
             border_width=1,
             fg_color=("#ffffff", "#222a36"),
@@ -274,35 +197,23 @@ class ToolCard(ctk.CTkFrame):
         self.key = key
         self.command = command
         self.active = False
+        self.pressed = False
         self.hover_amount = 0.0
         self.enabled = True
         self.compact = False
         self.pack_propagate(False)
         self.tooltip = Tooltip(self, TOOLS[key][1])
-        group = CARD_GROUP[key]
-        light, dark = colors("default")[group], colors("dark")[group]
         self.chip = ctk.CTkFrame(
             self,
-            width=48,
-            height=48,
+            width=40,
+            height=40,
             corner_radius=10,
-            fg_color=(light[0], dark[0]),
+            fg_color=chip_color(key),
         )
-        self.chip.pack(anchor="w", padx=CARD_PADDING, pady=(16, 0))
+        self.chip.pack(anchor="w", padx=CARD_PADDING, pady=(14, 0))
         self.chip.pack_propagate(False)
-        with Image.open(resource_path("lucide", f"{key}.png")) as image:
-            mask = image.getchannel("A")
-
-            def tinted(color):
-                rgb = tuple(int(color[i : i + 2], 16) for i in (1, 3, 5))
-                result = Image.new("RGBA", image.size, (*rgb, 0))
-                result.putalpha(mask)
-                return result
-
-            self.icon_image = ctk.CTkImage(
-                light_image=tinted(light[1]), dark_image=tinted(dark[1]), size=(28, 28)
-            )
-        self.icon = ctk.CTkLabel(self.chip, text="", image=self.icon_image, width=28, height=28)
+        self.icon_image = tool_icon(key)
+        self.icon = ctk.CTkLabel(self.chip, text="", image=self.icon_image, width=24, height=24)
         self.icon.place(relx=0.5, rely=0.5, anchor="center")
         title, description = CARD_TEXT[key]
         self.title_label = ctk.CTkLabel(
@@ -311,20 +222,20 @@ class ToolCard(ctk.CTkFrame):
             anchor="w",
             justify="left",
             height=0,
-            text_color=("#202a3a", "#eff3fa"),
-            font=(FONT, 14, "bold"),
+            text_color=("#111827", "#f8fafc"),
+            font=(theme.BOLD_FAMILY, 16, "bold"),
         )
-        self.title_label.pack(fill="x", anchor="w", padx=CARD_PADDING, pady=(12, 0))
+        self.title_label.pack(fill="x", anchor="w", padx=CARD_PADDING, pady=(10, 0))
         self.description_label = ctk.CTkLabel(
             self,
             text=description,
             anchor="nw",
             justify="left",
             height=0,
-            text_color=("#526078", "#b7c2d2"),
-            font=(FONT, 12),
+            text_color=("#374151", "#d5dce6"),
+            font=(FONT, 13),
         )
-        self.description_label.pack(fill="x", anchor="w", padx=CARD_PADDING, pady=(6, 12))
+        self.description_label.pack(fill="x", anchor="w", padx=CARD_PADDING, pady=(4, 10))
         self.bind("<Configure>", self._resize_text, add="+")
         self._bind_tree(self)
         self.bind("<Unmap>", lambda e: self.tooltip.hide(), add="+")
@@ -333,7 +244,8 @@ class ToolCard(ctk.CTkFrame):
     def _bind_tree(self, widget):
         widget.bind("<Enter>", self._enter, add="+")
         widget.bind("<Leave>", self._leave, add="+")
-        widget.bind("<ButtonRelease-1>", lambda e: self.activate(), add="+")
+        widget.bind("<ButtonPress-1>", self._press, add="+")
+        widget.bind("<ButtonRelease-1>", self._release, add="+")
         widget.bind("<Return>", lambda e: self.activate(), add="+")
         widget.bind("<space>", lambda e: self.activate(), add="+")
         for child in widget.winfo_children():
@@ -341,17 +253,29 @@ class ToolCard(ctk.CTkFrame):
         if widget is self:
             widget._canvas.configure(takefocus=True)
 
+    def _pointer_inside(self):
+        x, y = self.winfo_pointerxy()
+        return (
+            self.winfo_rootx() <= x < self.winfo_rootx() + self.winfo_width()
+            and self.winfo_rooty() <= y < self.winfo_rooty() + self.winfo_height()
+        )
+
+    def _press(self, event):
+        self.pressed = True
+
+    def _release(self, event):
+        # Only a click that started on this card opens it. A release left over
+        # from a button in a dialog that just closed above the card is ignored.
+        pressed, self.pressed = self.pressed, False
+        if pressed and self._pointer_inside():
+            self.activate()
+
     def _enter(self, event):
         self.highlight(True)
 
     def _leave(self, event):
         # Child-to-child crossings should not flash the border.
-        x, y = self.winfo_pointerxy()
-        inside = (
-            self.winfo_rootx() <= x < self.winfo_rootx() + self.winfo_width()
-            and self.winfo_rooty() <= y < self.winfo_rooty() + self.winfo_height()
-        )
-        if not inside:
+        if not self._pointer_inside():
             self.highlight(False)
 
     def highlight(self, active):
@@ -372,7 +296,10 @@ class ToolCard(ctk.CTkFrame):
         self.description_label.configure(wraplength=width)
 
     def activate(self):
-        self.tooltip.hide()
+        # The card is hidden while its tool opens, so no <Leave> event arrives.
+        # Clear the hover state now so it is not still shown on return.
+        self.pressed = False
+        self.highlight(False)
         if self.enabled:
             self.command(self.key)
 
@@ -393,7 +320,7 @@ class ToolCard(ctk.CTkFrame):
             else ("#dfe5ef", "#394557")
         )
         self.title_label.configure(
-            text_color=("#202a3a", "#eff3fa") if self.enabled else ("#526078", "#b7c2d2")
+            text_color=("#111827", "#f8fafc") if self.enabled else ("#374151", "#d5dce6")
         )
         self.description_label.configure(
             text=CARD_TEXT[self.key][1]
@@ -414,9 +341,9 @@ def setup_style(root):
     style.configure("Panel.TLabel", background=PANEL)
     style.configure("Muted.TLabel", foreground=MUTED)
     style.configure("PanelMuted.TLabel", background=PANEL, foreground=MUTED, font=(FONT, 9))
-    style.configure("Title.TLabel", font=(FONT, 20, "bold"))
-    style.configure("Task.TLabel", font=(FONT, 16, "bold"))
-    style.configure("Section.TLabel", font=(FONT, 10, "bold"), background=PANEL)
+    style.configure("Title.TLabel", font=(theme.BOLD_FAMILY, 20, "bold"))
+    style.configure("Task.TLabel", font=(theme.BOLD_FAMILY, 16, "bold"))
+    style.configure("Section.TLabel", font=(theme.BOLD_FAMILY, 10, "bold"), background=PANEL)
     # Image elements are stretched through their centre, preserving 10px corners.
     # Retain the PhotoImage references for the entire lifetime of the window.
     if not hasattr(root, "button_images"):
@@ -505,8 +432,8 @@ def setup_style(root):
                 borderwidth=1,
             )
             style.map(style_name, foreground=[("disabled", MUTED), ("!disabled", fg)])
-    style.configure("Back.TButton", padding=(20, 12), font=(FONT, 11, "bold"))
-    style.configure("Run.TButton", padding=(22, 12), font=(FONT, 11, "bold"))
+    style.configure("Back.TButton", padding=(20, 12), font=(theme.BOLD_FAMILY, 11, "bold"))
+    style.configure("Run.TButton", padding=(22, 12), font=(theme.BOLD_FAMILY, 11, "bold"))
     style.configure(
         "TEntry",
         fieldbackground=PANEL,

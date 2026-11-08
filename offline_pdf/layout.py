@@ -5,7 +5,7 @@ from pathlib import Path
 
 import customtkinter as ctk
 
-from . import __version__
+from . import __version__, theme
 from . import ctk_widgets as ttk
 from .localization import ChoiceVar, DisplayVar
 from .settings import show_settings
@@ -18,9 +18,10 @@ from .ui import (
     LINE,
     MUTED,
     PANEL,
-    SOFT,
+    RED,
     ScrollPane,
     ToolCard,
+    Tooltip,
     setup_style,
 )
 from .workspace import FileList, StatusFeedback, WindowDropHover
@@ -48,8 +49,14 @@ def build(app):
     organizer.FONT = ui.FONT
     workspace.FONT = ui.FONT
     root.option_add("*Font", (FONT, 10))
+    # Widgets created without an explicit font (sidebar buttons, dialogs) use
+    # CustomTkinter's theme font: the app family at the readable body size.
+    ctk.ThemeManager.theme["CTkFont"]["family"] = FONT
+    ctk.ThemeManager.theme["CTkFont"]["size"] = ttk.BODY_SIZE
     setup_style(root)
     app.auto_open = tk.BooleanVar(value=True)
+    # Deletes pages, so it starts off on every launch and is never saved.
+    app.remove_blank = tk.BooleanVar(value=False)
     header = ctk.CTkFrame(root, fg_color=("#ffffff", "#222a36"), corner_radius=0)
     header.pack(fill="x", ipady=9)
     logo = tk.Canvas(header, width=32, height=32, bg=BLUE, highlightthickness=0)
@@ -58,9 +65,12 @@ def build(app):
 
     set_brand(root, logo)
     ctk.CTkLabel(
-        header, text="OfflinePDF", font=(FONT, 16, "bold"), text_color=("#202a3a", "#eff3fa")
+        header,
+        text="OfflinePDF",
+        font=(theme.BOLD_FAMILY, 18, "bold"),
+        text_color=("#111827", "#f8fafc"),
     ).pack(side="left")
-    ctk.CTkLabel(header, text=__version__, font=(FONT, 9), text_color=("#526078", "#b7c2d2")).pack(
+    ctk.CTkLabel(header, text=__version__, font=(FONT, 12), text_color=("#374151", "#d5dce6")).pack(
         side="left", padx=9
     )
     app.home_button = ctk.CTkButton(
@@ -74,8 +84,8 @@ def build(app):
         fg_color=("#ffffff", "#222a36"),
         border_color=("#dfe5ef", "#394557"),
         hover_color=("#eaf0ff", "#303b53"),
-        text_color=("#202a3a", "#eff3fa"),
-        font=(FONT, 11, "bold"),
+        text_color=("#111827", "#f8fafc"),
+        font=(theme.BOLD_FAMILY, 14, "bold"),
     )
     app.home_button.config = app.home_button.configure
     app.home_button.source_text = "뒤로가기"
@@ -97,11 +107,29 @@ def build(app):
         fg_color=("#ffffff", "#222a36"),
         border_color=("#dfe5ef", "#394557"),
         hover_color=("#eaf0ff", "#303b53"),
-        text_color=("#202a3a", "#eff3fa"),
+        text_color=("#111827", "#f8fafc"),
     )
     app.settings_button.source_text = "설정"
     app.settings_button.pack(side="right", padx=(0, 8), pady=4)
-    status = tk.Label(status_box, text="", anchor="w", bg=PANEL, fg=MUTED, font=(FONT, 9), padx=16)
+    from .about import show_about
+
+    # Version, license notices and where the sources are (AGPL-3.0).
+    app.about_button = ctk.CTkButton(
+        status_box,
+        text="정보",
+        command=lambda: show_about(app),
+        width=80,
+        height=34,
+        corner_radius=10,
+        border_width=1,
+        fg_color=("#ffffff", "#222a36"),
+        border_color=("#dfe5ef", "#394557"),
+        hover_color=("#eaf0ff", "#303b53"),
+        text_color=("#111827", "#f8fafc"),
+    )
+    app.about_button.source_text = "정보"
+    app.about_button.pack(side="right", padx=(0, 6), pady=4)
+    status = tk.Label(status_box, text="", anchor="w", bg=PANEL, fg=MUTED, font=(FONT, 11), padx=16)
     status.pack(fill="both", expand=True)
     status.bind("<Configure>", lambda e: status.configure(wraplength=max(300, e.width - 30)))
     app.feedback = StatusFeedback(app, status)
@@ -117,8 +145,8 @@ def build(app):
         app.sidebar,
         text="작업 파일  0개",
         anchor="w",
-        text_color=("#202a3a", "#eff3fa"),
-        font=(FONT, 10, "bold"),
+        text_color=("#111827", "#f8fafc"),
+        font=(theme.BOLD_FAMILY, 14, "bold"),
     )
     app.file_count.config = app.file_count.configure
     app.file_count.pack(anchor="w", pady=(14, 8), padx=12)
@@ -132,7 +160,7 @@ def build(app):
         fg_color=("#ffffff", "#222a36"),
         border_color=("#dfe5ef", "#394557"),
         hover_color=("#eaf0ff", "#303b53"),
-        text_color=("#202a3a", "#eff3fa"),
+        text_color=("#111827", "#f8fafc"),
     )
     app.add_button.source_text = "＋  파일 추가"
     app.add_button.pack(fill="x", pady=(0, 10), padx=12)
@@ -142,8 +170,8 @@ def build(app):
     ctk.CTkLabel(
         controls,
         textvariable=app.sidebar_total,
-        text_color=("#526078", "#b7c2d2"),
-        font=(FONT, 9),
+        text_color=("#374151", "#d5dce6"),
+        font=(FONT, 13),
         wraplength=195,
         anchor="w",
     ).pack(fill="x", pady=(0, 8))
@@ -165,7 +193,7 @@ def build(app):
             fg_color=("#ffffff", "#222a36"),
             border_color=("#dfe5ef", "#394557"),
             hover_color=("#eaf0ff", "#303b53"),
-            text_color=("#202a3a", "#eff3fa"),
+            text_color=("#111827", "#f8fafc"),
         ).pack(side="left", padx=(0, 3))
     ctk.CTkButton(
         controls,
@@ -177,15 +205,32 @@ def build(app):
         fg_color=("#ffffff", "#222a36"),
         border_color=("#dfe5ef", "#394557"),
         hover_color=("#eaf0ff", "#303b53"),
-        text_color=("#202a3a", "#eff3fa"),
+        text_color=("#111827", "#f8fafc"),
     ).pack(fill="x", pady=(6, 0))
+    app.blank_check = ctk.CTkCheckBox(
+        controls,
+        text="흰 빈 페이지 삭제",
+        variable=app.remove_blank,
+        command=app.update_blank_option,
+        font=(FONT, 13),
+        text_color=("#111827", "#f8fafc"),
+        text_color_disabled=("#8a93a3", "#7d889a"),
+        **ttk.CHECKBOX_STYLE,
+    )
+    app.blank_check.pack(anchor="w", pady=(8, 0))
+    app.blank_tooltip = Tooltip(
+        app.blank_check,
+        "결과물에서 아무것도 없는 흰 페이지를 지웁니다. 글자·선·이미지가 있는 페이지는 남깁니다.",
+    )
+    app.blank_check.bind("<Enter>", lambda e: app.blank_tooltip.schedule(), add="+")
+    app.blank_check.bind("<Leave>", lambda e: app.blank_tooltip.hide(), add="+")
     ctk.CTkCheckBox(
         controls,
         text="완료 후 폴더 열기",
         variable=app.auto_open,
-        font=(FONT, 10),
-        text_color=("#202a3a", "#eff3fa"),
-        fg_color=("#3759da", "#a9bcff"),
+        font=(FONT, 13),
+        text_color=("#111827", "#f8fafc"),
+        **ttk.CHECKBOX_STYLE,
     ).pack(anchor="w", pady=(8, 0))
     filebox = ctk.CTkFrame(app.sidebar, fg_color="transparent")
     filebox.pack(fill="both", expand=True, padx=12)
@@ -213,24 +258,31 @@ def build(app):
     app.content_host.pack(side="left", fill="both", expand=True)
     app.home = ScrollPane(app.content_host)
     app.home.pack(fill="both", expand=True)
-    home = ttk.Frame(app.home.inner, padding=(22, 20, 22, 15))
+    home = ttk.Frame(app.home.inner, padding=(22, 16, 22, 12))
     home.pack(fill="both", expand=True)
-    app.home_title = ttk.Label(home, text="어떤 작업을 할까요?", style="Title.TLabel")
+    # Shown only while choosing a tool for a previous result; the normal home is
+    # just the tool cards, with no heading taking up vertical space.
+    app.chain_banner = ttk.Frame(home)
+    chain_text = ttk.Frame(app.chain_banner)
+    chain_text.pack(side="left", fill="x", expand=True)
+    app.home_title = ttk.Label(
+        chain_text, text="어떤 작업을 할까요?", font=(theme.BOLD_FAMILY, 16, "bold")
+    )
     app.home_title.pack(anchor="w")
     app.home_description = ttk.Label(
-        home,
+        chain_text,
         text="왼쪽에서 파일을 확인하고 필요한 도구를 선택하세요.",
         style="Muted.TLabel",
         wraplength=800,
     )
-    app.home_description.pack(anchor="w", pady=(4, 12))
-    app.chain_cancel_button = ttk.Button(home, text="이어서 작업 취소", command=app.cancel_continue)
-    row = ttk.Frame(home)
-    row.pack(fill="x", pady=(0, 9))
-    app.home_section = ttk.Label(row, text="전체 도구", font=(FONT, 10, "bold"))
-    app.home_section.pack(side="left")
+    app.home_description.pack(anchor="w", pady=(2, 0))
+    app.chain_cancel_button = ttk.Button(
+        app.chain_banner, text="이어서 작업 취소", command=app.cancel_continue
+    )
+    app.chain_cancel_button.pack(side="right")
     app.cards_frame = ttk.Frame(home)
     app.cards_frame.pack(fill="x")
+    app.home_frame = home
     app.cards = {key: ToolCard(app.cards_frame, key, app.select_tool) for key in CARD_TEXT}
     app.show_all_tools = True
     app.card_columns = 0
@@ -248,6 +300,10 @@ def build(app):
         actions, text="PDF병합  →", style="Run.TButton", command=app.run, state="disabled"
     )
     app.run_button.pack(side="right")
+    # Shown beside the run button while blank-page removal applies to the tool.
+    app.blank_badge = ttk.Label(
+        actions, text="빈 페이지 삭제 켜짐", foreground=RED, font=(theme.BOLD_FAMILY, 13, "bold")
+    )
     app.cancel_button = ttk.Button(
         actions, text="작업 취소", command=app.cancel_job, state="disabled"
     )
@@ -269,11 +325,17 @@ def build(app):
     title_row = ttk.Frame(app.header_task, style="Panel.TFrame")
     app.task_title_row = title_row
     title_row.pack(fill="x")
-    app.task_icon = tk.Canvas(title_row, width=38, height=38, bg=SOFT, highlightthickness=0)
+    # The same icon chip as the tool's card on the home screen.
+    app.task_icon = ctk.CTkFrame(title_row, width=40, height=40, corner_radius=10)
     app.task_icon.pack(side="left", padx=(0, 10))
+    app.task_icon.pack_propagate(False)
+    app.task_icon_label = ctk.CTkLabel(app.task_icon, text="", width=24, height=24)
+    app.task_icon_label.place(relx=0.5, rely=0.5, anchor="center")
     title_text = ttk.Frame(title_row, style="Panel.TFrame")
     title_text.pack(side="left", fill="x", expand=True)
-    app.title = ttk.Label(title_text, text="", style="Panel.TLabel", font=(FONT, 11, "bold"))
+    app.title = ttk.Label(
+        title_text, text="", style="Panel.TLabel", font=(theme.BOLD_FAMILY, 16, "bold")
+    )
     app.title.pack(anchor="w")
     app.description = ttk.Label(title_text, text="", style="PanelMuted.TLabel", wraplength=660)
     app.description.pack(anchor="w", pady=(2, 0))
@@ -305,32 +367,33 @@ def build(app):
     settings = panel(app.columns)
     settings.configure(padx=12, pady=8)
     settings.pack(fill="x")
-    app.form = ttk.Frame(settings, style="Panel.TFrame")
-    app.form.pack(fill="x")
+    # Options, the merged file name and the redaction count share one row.
+    settings_row = ttk.Frame(settings, style="Panel.TFrame")
+    settings_row.pack(fill="x")
+    # Packed by configure_form only for tools that put something in it: an
+    # emptied Tk container keeps its last size instead of shrinking.
+    app.side_controls = ttk.Frame(settings_row, style="Panel.TFrame")
+    app.form = ttk.Frame(settings_row, style="Panel.TFrame")
+    app.form.pack(side="left", fill="x", expand=True)
     app.form_cells = []
     app.form_columns = 0
     app.form.bind("<Configure>", lambda e: app.arrange_fields(e.width))
-    app.name_frame = ttk.Frame(settings, style="Panel.TFrame")
+    # Laid out like an option cell: caption above, controls bottom-aligned.
+    app.name_frame = ttk.Frame(app.side_controls, style="Panel.TFrame")
     ttk.Label(app.name_frame, text="저장 파일 이름", style="Panel.TLabel").pack(
-        side="left", padx=(0, 8)
+        anchor="w", pady=(0, 3)
     )
+    name_controls = ttk.Frame(app.name_frame, style="Panel.TFrame")
+    name_controls.pack(side="bottom", fill="x")
     app.output_name = tk.StringVar(value="합친문서.pdf")
-    ttk.Entry(app.name_frame, textvariable=app.output_name, width=27).pack(
+    ttk.Entry(name_controls, textvariable=app.output_name, width=24).pack(
         side="left", fill="x", expand=True
     )
     app.output_password_button = ttk.Button(
-        app.name_frame, text="암호 추가", command=app.set_output_password
+        name_controls, text="암호 추가", command=app.set_output_password
     )
     app.output_password_button.pack(side="left", padx=(8, 0))
     app.security = ttk.Label(settings, text="", style="PanelMuted.TLabel", wraplength=800)
-    app.region_controls = ttk.Frame(settings, style="Panel.TFrame")
-    ttk.Button(
-        app.region_controls, text="현재 페이지 삭제 영역 지우기", command=app.clear_regions
-    ).pack(side="left")
-    app.region_status = ttk.Label(
-        app.region_controls, text="삭제 영역 0개", style="PanelMuted.TLabel"
-    )
-    app.region_status.pack(side="left", padx=8)
     app.split_summary = ttk.Label(settings, text="", style="PanelMuted.TLabel", wraplength=800)
     workspace = ttk.Frame(app.body)
     app.document_host = workspace
@@ -339,7 +402,7 @@ def build(app):
     overview_header = ttk.Frame(app.file_overview)
     overview_header.pack(fill="x", pady=(4, 6))
     app.overview_title = ttk.Label(
-        overview_header, text="", font=(FONT, 12, "bold"), width=1, wraplength=450
+        overview_header, text="", font=(theme.BOLD_FAMILY, 16, "bold"), width=1, wraplength=450
     )
     app.overview_title.pack(side="left", fill="x", expand=True)
     app.overview_title.bind(
@@ -374,31 +437,40 @@ def build(app):
     app.organizer = PageOrganizer(workspace, app)
     preview = panel(workspace)
     app.preview_panel = preview
-    nav = ttk.Frame(preview, style="Panel.TFrame", padding=(10, 7))
-    nav.pack(fill="x")
-    ttk.Label(nav, text="미리보기", style="Panel.TLabel").pack(side="left")
-    ttk.Button(nav, text="다음 ›", command=lambda: app.turn(1)).pack(side="right")
-    app.page_label = ttk.Label(nav, text="미리보기", style="PanelMuted.TLabel")
-    app.page_label.pack(side="right", padx=8)
-    ttk.Button(nav, text="‹ 이전", command=lambda: app.turn(-1)).pack(side="right")
-    zoom = ttk.Frame(preview, style="Panel.TFrame", padding=(10, 0, 10, 6))
+    # One toolbar: zoom on the left, page turning (and redaction clearing) on the right.
+    zoom = ttk.Frame(preview, style="Panel.TFrame")
     app.preview_zoom_row = zoom
-    zoom.pack(fill="x")
-    for text, command in [
-        ("폭 맞춤", lambda: app.set_preview_mode("width")),
-        ("한 페이지", lambda: app.set_preview_mode("page")),
-        ("－", lambda: app.zoom_preview(-0.25)),
-        ("＋", lambda: app.zoom_preview(0.25)),
-    ]:
-        ttk.Button(zoom, text=text, command=command).pack(side="left", padx=(0, 4))
-    app.zoom_label = ttk.Label(zoom, text="폭 맞춤", style="PanelMuted.TLabel")
-    app.zoom_label.pack(side="left", padx=4)
-    # Keep the destructive action available when DPI scaling crowds the zoom row.
-    app.preview_region_row = ttk.Frame(preview, style="Panel.TFrame", padding=(10, 0, 10, 6))
+    zoom.pack(fill="x", padx=10, pady=8)
+    # Packed first so it keeps its room when DPI scaling crowds the toolbar.
+    app.preview_region_row = ttk.Frame(zoom, style="Panel.TFrame")
     app.clear_preview_regions = ttk.Button(
-        app.preview_region_row, text="영역 지우기", command=app.clear_regions
+        app.preview_region_row, text="이 페이지 선택 초기화", command=app.clear_regions
     )
     app.clear_preview_regions.pack(side="right")
+    # Redaction: how many regions are marked, beside the button that clears them.
+    app.region_status = ttk.Label(
+        app.preview_region_row, text="선택 영역 0개", style="PanelMuted.TLabel"
+    )
+    app.region_status.pack(side="right", padx=(0, 8))
+    app.preview_nav = ttk.Frame(zoom, style="Panel.TFrame")
+    app.preview_nav.pack(side="right")
+    ttk.Button(app.preview_nav, text="다음 ›", command=lambda: app.turn(1), width=7).pack(
+        side="right"
+    )
+    app.page_label = ttk.Label(app.preview_nav, text="미리보기", style="PanelMuted.TLabel")
+    app.page_label.pack(side="right", padx=8)
+    ttk.Button(app.preview_nav, text="‹ 이전", command=lambda: app.turn(-1), width=7).pack(
+        side="right"
+    )
+    for text, command, width in [
+        ("폭 맞춤", lambda: app.set_preview_mode("width"), 8),
+        ("한 페이지", lambda: app.set_preview_mode("page"), 8),
+        ("－", lambda: app.zoom_preview(-0.25), 4),
+        ("＋", lambda: app.zoom_preview(0.25), 4),
+    ]:
+        ttk.Button(zoom, text=text, command=command, width=width).pack(side="left", padx=(0, 4))
+    app.zoom_label = ttk.Label(zoom, text="폭 맞춤", style="PanelMuted.TLabel")
+    app.zoom_label.pack(side="left", padx=4)
     area = tk.Frame(preview, bg=PANEL)
     area.pack(fill="both", expand=True, padx=8, pady=(0, 8))
     app.canvas = tk.Canvas(area, bg="#e9edf4", highlightthickness=0, height=180, takefocus=True)

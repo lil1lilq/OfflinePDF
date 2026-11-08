@@ -23,8 +23,8 @@ PALETTES = {
     "default": {
         "BG": "#f4f6fa",
         "PANEL": "#ffffff",
-        "INK": "#202a3a",
-        "MUTED": "#526078",
+        "INK": "#111827",
+        "MUTED": "#374151",
         "RED": "#b3384a",
         "LINE": "#dfe5ef",
         "BLUE": "#3759da",
@@ -38,8 +38,8 @@ PALETTES = {
     "dark": {
         "BG": "#171c25",
         "PANEL": "#222a36",
-        "INK": "#eff3fa",
-        "MUTED": "#b7c2d2",
+        "INK": "#f8fafc",
+        "MUTED": "#d5dce6",
         "RED": "#ff929e",
         "LINE": "#394557",
         "BLUE": "#a9bcff",
@@ -69,6 +69,7 @@ FONT_SIZES = {"title": 20, "card_title": 14, "body": 12, "caption": 11}
 FALLBACK_FONTS = ("맑은 고딕", "Malgun Gothic", "Segoe UI")
 _registered = []
 FONT_FAMILY = "맑은 고딕"
+BOLD_FAMILY = "맑은 고딕"
 
 
 def resource_path(*parts):
@@ -89,13 +90,18 @@ def register_fonts():
 
 
 def font_family(root):
-    global FONT_FAMILY
+    """Pick the body family; bold text uses BOLD_FAMILY for a real bold face."""
+    global FONT_FAMILY, BOLD_FAMILY
     installed = set(tkfont.families(root))
     for family in ("Pretendard", *FALLBACK_FONTS):
         if family in installed:
-            FONT_FAMILY = family
-            return family
-    FONT_FAMILY = "TkDefaultFont"
+            FONT_FAMILY = BOLD_FAMILY = family
+            # Pretendard Regular is thin on screen; Medium reads clearly. Bold
+            # stays on the base family, whose own Bold face is used.
+            if family == "Pretendard" and "Pretendard Medium" in installed:
+                FONT_FAMILY = "Pretendard Medium"
+            return FONT_FAMILY
+    FONT_FAMILY = BOLD_FAMILY = "TkDefaultFont"
     return FONT_FAMILY
 
 

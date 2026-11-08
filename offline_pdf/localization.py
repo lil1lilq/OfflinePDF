@@ -34,6 +34,8 @@ def tr(text):
     for prefix in ("✓  ", "!  ", "↻  "):
         if text.startswith(prefix):
             return prefix + tr(text[len(prefix) :])
+    if text.endswith("  →"):
+        return tr(text[: -len("  →")]) + "  →"
     if "  /  " in text:
         return "  /  ".join(tr(part) for part in text.split("  /  "))
     for pattern, target in _PATTERNS:
@@ -194,7 +196,12 @@ def apply_language(root, value):
 
     def visit(widget):
         if hasattr(widget, "source_text"):
-            widget.configure(text=tr(widget.source_text))
+            # Some wrappers record whatever text they receive as their source.
+            # Keep the canonical Korean text so repeated switches never mix languages.
+            source = widget.source_text
+            translates = getattr(widget, "translates_text", False)
+            widget.configure(text=source if translates else tr(source))
+            widget.source_text = source
         if hasattr(widget, "_canonical_values"):
             widget.configure(values=widget._canonical_values)
         if isinstance(widget, tk.Canvas):

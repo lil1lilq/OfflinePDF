@@ -13,6 +13,7 @@ import customtkinter as ctk
 import pymupdf as pdf
 
 from offline_pdf.app import TOOLS, App
+from offline_pdf.ui import CARD_MAX_HEIGHT, CARD_MIN_HEIGHT
 
 
 class CardLayoutTests(unittest.TestCase):
@@ -83,7 +84,8 @@ class CardLayoutTests(unittest.TestCase):
             self.assertEqual(card.grid.call_count, 2)
             compact, height = card.set_compact.call_args.args
             self.assertFalse(compact)
-            self.assertGreaterEqual(height, 158)
+            self.assertGreaterEqual(height, CARD_MIN_HEIGHT)
+            self.assertLessEqual(height, CARD_MAX_HEIGHT)
 
 
 class AppTests(unittest.TestCase):
@@ -208,7 +210,7 @@ class AppTests(unittest.TestCase):
         sizes = {(card.winfo_width(), card.winfo_height()) for card in self.app.cards.values()}
         # One-pixel rounding across equal grid columns is normal.
         self.assertLessEqual(max(w for w, h in sizes) - min(w for w, h in sizes), 1)
-        self.assertTrue(all(h >= 158 for w, h in sizes))
+        self.assertTrue(all(CARD_MIN_HEIGHT <= h <= CARD_MAX_HEIGHT for w, h in sizes))
         self.app.select_tool("redact")
         self.root.update()
         self.assertTrue(self.app.work.winfo_ismapped())
@@ -219,14 +221,38 @@ class AppTests(unittest.TestCase):
             self.app.select_tool("merge")
         self.assertEqual(self.app.tool, "redact")
         self.assertTrue(self.app.work.winfo_ismapped())
-        self.app.home_button.invoke()
-        self.root.update()
-        self.assertTrue(self.app.work.winfo_ismapped())
+        # Redaction edits on its preview, which is its main screen: back goes home.
+        self.assertEqual(self.app.screen, "work")
+        # Redaction has no options, so no empty settings panel above the page.
+        self.assertFalse(self.app.columns.winfo_ismapped())
+        self.assertTrue(self.app.region_status.winfo_ismapped())
         self.app.home_button.invoke()
         self.root.update()
         self.assertTrue(self.app.home.winfo_ismapped())
         self.root.update()
         self.assertEqual(sum(card.winfo_ismapped() for card in self.app.cards.values()), 16)
+
+    def test_i2_card_opens_only_on_its_own_click_and_clears_hover(self):
+        self.app.show_home()
+        self.root.update()
+        card = self.app.cards["merge"]
+        opened = []
+        with patch.object(card, "command", side_effect=opened.append):
+            # A release left over from a dialog button that closed above the card.
+            card._release(None)
+            self.assertEqual(opened, [])
+            card.highlight(True)
+            card._press(None)
+            with patch.object(card, "_pointer_inside", return_value=True):
+                card._release(None)
+        self.assertEqual(opened, ["merge"])
+        self.assertFalse(card.active)
+        card.highlight(True)
+        self.app.select_tool("split")
+        self.app.show_home()
+        # Checked before events run: a pointer resting on a card may hover it again.
+        self.assertFalse(any(c.active for c in self.app.cards.values()))
+        self.root.update()
 
     def test_j_switch_tools_preserves_pdf_and_accepts_mixed_inputs(self):
         self.app.select_tool("merge")
@@ -725,7 +751,23 @@ class AppTests(unittest.TestCase):
         ):
             self.app.run()
             self.root.update()
-            self.assertTrue(self.app.progress.winfo_ismapped())
+
+            def layout(widget):
+                return (
+                    f"manager={widget.winfo_manager()!r} mapped={widget.winfo_ismapped()} "
+                    f"h={widget.winfo_height()} req={widget.winfo_reqheight()}"
+                )
+
+            footer = self.app.progress.master
+            self.assertTrue(
+                self.app.progress.winfo_ismapped(),
+                "progress hidden right after run: "
+                f"root={self.root.winfo_width()}x{self.root.winfo_height()} "
+                f"screen={self.root.winfo_screenwidth()}x{self.root.winfo_screenheight()} "
+                f"process={self.app.process!r} status={self.app.status.get()!r} | "
+                f"work: {layout(self.app.work)} | footer: {layout(footer)} | "
+                f"body: {layout(self.app.body)} | progress: {layout(self.app.progress)}",
+            )
             self.wait_for_job()
         lengths = []
         for path in self.app.result_files:
@@ -845,8 +887,6 @@ class AppTests(unittest.TestCase):
             ("tif", "TIFF"),
             ("tiff", "TIFF"),
             ("webp", "WEBP"),
-            ("heic", "HEIF"),
-            ("heif", "HEIF"),
         ]:
             path = self.folder / ("추가한 이미지." + extension.upper())
             with Image.new("RGB", (64, 32), "red") as im:
@@ -855,7 +895,8 @@ class AppTests(unittest.TestCase):
         self.app.add_paths(paths)
         self.assertEqual(self.app.files, paths)
         self.app.file_list.selection_clear(0, "end")
-        self.app.file_list.selection_set(5)
+        # The last one: WebP.
+        self.app.file_list.selection_set(4)
         self.app.refresh_preview(reset=True)
         self.root.update()
         self.assertIsNotNone(self.app.preview_rect)
@@ -1008,7 +1049,7 @@ class AppTests(unittest.TestCase):
 
         self.assertIn(__version__, self.root.title())
 
-    def test_ze_mixed_import_replaces_sidebar_only_after_success(self):
+    def test_ze_mixed_import_keeps_original_images_in_sidebar(self):
         from PIL import Image
 
         self.app.cancel_continue()
@@ -1027,14 +1068,12 @@ class AppTests(unittest.TestCase):
         ):
             self.app.run()
             self.wait_for_job()
-        self.assertEqual(self.app.files[0], str(self.source.resolve()))
-        self.assertEqual(Path(self.app.files[1]).suffix, ".pdf")
-        self.assertTrue(Path(self.app.files[1]).is_file())
+        self.assertEqual(self.app.files, [str(self.source.resolve()), str(image.resolve())])
         self.assertEqual(image.read_bytes(), before)
+        self.assertEqual(len(self.app.result_files), 1)
         with pdf.open(self.app.result_files[0]) as doc:
             self.assertEqual(len(doc), 3)
-        self.assertEqual(self.app.file_list.rows[1][2], self.app.files[1])
-        # A failed selected operation must leave the image in the sidebar.
+        # A failed selected operation must leave the image in the sidebar too.
         self.app.select_tool("compress")
         self.app.clear_files()
         self.app.add_paths([str(image)])
