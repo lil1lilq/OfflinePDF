@@ -21,9 +21,13 @@ try {
         '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER', "/DIR=`"$target`""
     ) 'Silent install'
     $exe = Join-Path $target 'OfflinePDF.exe'
-    foreach ($file in @($exe, 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'CorrespondingSource.zip')) {
+    foreach ($file in @($exe, 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'SOURCE_CODE.txt', 'licenses')) {
         $path = if ([IO.Path]::IsPathRooted($file)) { $file } else { Join-Path $target $file }
         if (-not (Test-Path -LiteralPath $path)) { throw "Installed file missing: $file" }
+    }
+    # Sources are a separate release file now; they must not bloat the install.
+    foreach ($file in @('dependency-sources', 'CorrespondingSource.zip')) {
+        if (Test-Path -LiteralPath (Join-Path $target $file)) { throw "Unexpected file installed: $file" }
     }
     $report = Join-Path $reports 'installed-self-test.json'
     Wait-Process-Checked $exe @('--self-test', "`"$report`"") 'Installed self-test'

@@ -1,4 +1,11 @@
-"""Bundle the application's corresponding source alongside every executable.
+"""Build the release's Corresponding Source archive (AGPL-3.0).
+
+Usage: python packaging/make_source_archive.py DESTINATION.zip [DEPENDENCY_SOURCES_DIR]
+
+The archive is published next to the installer and portable ZIP instead of
+inside them, so every download is not ~200 MB larger. It holds:
+  OfflinePDF/          the application source
+  dependency-sources/  unmodified sources of PyMuPDF/MuPDF and Pillow (sources.json)
 
 In a git checkout only tracked files are included, so local leftovers such as
 crash dumps or test documents on the build PC never end up in the archive.
@@ -50,6 +57,9 @@ def walked_files():
     return names
 
 
+dependencies = Path(sys.argv[2]).resolve() if len(sys.argv) > 2 else None
+if dependencies is not None and not (dependencies / "sources.json").is_file():
+    raise SystemExit(f"Dependency sources are not prepared: {dependencies}")
 names = tracked_files()
 if names is None:
     print("git is unavailable; archiving the source tree without build output.")
@@ -58,5 +68,14 @@ with zipfile.ZipFile(destination, "w", zipfile.ZIP_DEFLATED) as archive:
     for name in names:
         path = root / name
         if path.is_file():
-            archive.write(path, name)
+            archive.write(path, "OfflinePDF/" + name)
+    if dependencies is not None:
+        for path in sorted(dependencies.rglob("*")):
+            if path.is_file() and not path.name.endswith(".partial"):
+                # Already-compressed archives gain nothing from deflate.
+                archive.write(
+                    path,
+                    "dependency-sources/" + path.relative_to(dependencies).as_posix(),
+                    compress_type=zipfile.ZIP_STORED,
+                )
 print(destination)
