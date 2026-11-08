@@ -22,8 +22,9 @@ def digest(path):
     return result.hexdigest()
 
 
-# Source hosts such as mupdf.com sometimes answer 502/503/504 for a moment.
-RETRY_DELAYS = (5, 15, 45, 90)
+# Source hosts such as mupdf.com sometimes answer 502/503/504 for a while;
+# together these waits ride out about eight minutes. CI also caches the files.
+RETRY_DELAYS = (10, 30, 60, 120, 240)
 
 
 def retrying(action, url, sleep=time.sleep):
