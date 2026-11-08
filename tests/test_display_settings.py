@@ -163,6 +163,41 @@ class DisplaySettingsTests(unittest.TestCase):
             apply_language(self.root, "ko")
             self.app.show_home()
 
+    def test_about_dialog_shows_legal_notices_and_opens_license_files(self):
+        from offline_pdf import __version__, about
+
+        dialog = about.show_about(self.app)
+        self.root.update()
+        texts = []
+
+        def visit(widget):
+            try:
+                texts.append(str(widget.cget("text")))
+            except (tk.TclError, ValueError):
+                pass
+            for child in widget.winfo_children():
+                visit(child)
+
+        visit(dialog)
+        shown = "\n".join(texts)
+        self.assertIn(__version__, shown)
+        self.assertIn("AGPL-3.0", shown)
+        self.assertIn("어떠한 보증도 제공하지 않습니다", shown)
+        self.assertEqual(
+            {path.name for path in dialog.links.values()},
+            {"LICENSE", "THIRD_PARTY_NOTICES.md", about.program_folder().name},
+        )
+        buttons = [w for w in dialog.winfo_children()[0].winfo_children()[-1].winfo_children()]
+        with patch("offline_pdf.about.open_path") as opened:
+            for button in buttons:
+                if button.cget("text") in ("라이선스 전문", "오픈소스 고지", "소스 코드 폴더"):
+                    self.assertEqual(str(button.cget("state")), "normal")
+                    button.invoke()
+        self.assertEqual(
+            [call.args[0] for call in opened.call_args_list], list(dialog.links.values())
+        )
+        dialog.destroy()
+
     def test_english_tool_forms_and_options_open_without_korean_labels(self):
         apply_language(self.root, "en")
         for tool in self.app.cards:

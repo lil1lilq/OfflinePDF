@@ -11,7 +11,6 @@ out.mkdir(exist_ok=True)
 for name in [
     "PyMuPDF",
     "Pillow",
-    "pillow-heif",
     "numpy",
     "onnxruntime",
     "flatbuffers",
@@ -26,7 +25,9 @@ for name in [
 ]:
     dist = metadata.distribution(name)
     target = out / name
-    target.mkdir(exist_ok=True)
+    # Start clean so notices of an older version are never shipped beside the new.
+    shutil.rmtree(target, ignore_errors=True)
+    target.mkdir()
     for entry in dist.files or []:
         low = str(entry).lower()
         if (

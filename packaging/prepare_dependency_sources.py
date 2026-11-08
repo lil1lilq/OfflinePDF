@@ -9,6 +9,8 @@ import json
 import urllib.request
 from pathlib import Path
 
+MUPDF_SOURCE = "mupdf-1.26.12-source.tar.gz"
+
 
 def digest(path):
     result = hashlib.sha256()
@@ -45,15 +47,13 @@ def main():
             raise SystemExit("Run prepare_dependency_sources.py on an online preparation PC first.")
         data = json.loads(manifest.read_text(encoding="utf-8"))
         required = {
+            "pymupdf-1.26.7.tar.gz",
             "pillow-13.0.0.tar.gz",
-            "pillow_heif-1.8.1.tar.gz",
-            "libheif-1.23.6-source.tar.gz",
-            "libde265-1.1.3-source.tar.gz",
-            "x265-e9b8812-source.tar.gz",
+            MUPDF_SOURCE,
         }
         if not required <= {record["filename"] for record in data}:
             raise SystemExit(
-                "Image dependency sources are missing. Prepare dependency sources online again."
+                "Dependency sources are missing. Prepare dependency sources online again."
             )
         for record in data:
             path = out / record["filename"]
@@ -61,7 +61,7 @@ def main():
                 raise SystemExit("Missing or altered source archive: " + record["filename"])
         return
     records = []
-    for package, version in [("PyMuPDF", "1.26.6"), ("Pillow", "13.0.0"), ("pillow-heif", "1.8.1")]:
+    for package, version in [("PyMuPDF", "1.26.7"), ("Pillow", "13.0.0")]:
         with urllib.request.urlopen(
             f"https://pypi.org/pypi/{package}/{version}/json", timeout=30
         ) as response:
@@ -76,20 +76,9 @@ def main():
         )
     records += [
         {
-            "filename": "mupdf-1.26.11-source.tar.gz",
-            "url": "https://mupdf.com/downloads/archive/mupdf-1.26.11-source.tar.gz",
-        },
-        {
-            "filename": "libheif-1.23.6-source.tar.gz",
-            "url": "https://github.com/strukturag/libheif/archive/refs/tags/v1.23.6.tar.gz",
-        },
-        {
-            "filename": "libde265-1.1.3-source.tar.gz",
-            "url": "https://github.com/strukturag/libde265/archive/refs/tags/v1.1.3.tar.gz",
-        },
-        {
-            "filename": "x265-e9b8812-source.tar.gz",
-            "url": "https://github.com/Multicorewareinc/x265/archive/e9b8812.tar.gz",
+            # The MuPDF release bundled in PyMuPDF 1.26.7 (pymupdf.VersionFitz).
+            "filename": MUPDF_SOURCE,
+            "url": "https://mupdf.com/downloads/archive/" + MUPDF_SOURCE,
         },
     ]
     for record in records:

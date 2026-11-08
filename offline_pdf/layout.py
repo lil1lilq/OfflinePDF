@@ -111,6 +111,24 @@ def build(app):
     )
     app.settings_button.source_text = "설정"
     app.settings_button.pack(side="right", padx=(0, 8), pady=4)
+    from .about import show_about
+
+    # Version, license notices and where the sources are (AGPL-3.0).
+    app.about_button = ctk.CTkButton(
+        status_box,
+        text="정보",
+        command=lambda: show_about(app),
+        width=80,
+        height=34,
+        corner_radius=10,
+        border_width=1,
+        fg_color=("#ffffff", "#222a36"),
+        border_color=("#dfe5ef", "#394557"),
+        hover_color=("#eaf0ff", "#303b53"),
+        text_color=("#111827", "#f8fafc"),
+    )
+    app.about_button.source_text = "정보"
+    app.about_button.pack(side="right", padx=(0, 6), pady=4)
     status = tk.Label(status_box, text="", anchor="w", bg=PANEL, fg=MUTED, font=(FONT, 11), padx=16)
     status.pack(fill="both", expand=True)
     status.bind("<Configure>", lambda e: status.configure(wraplength=max(300, e.width - 30)))

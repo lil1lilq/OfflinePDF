@@ -20,7 +20,7 @@ if errorlevel 1 (
 )
 
 echo Building the portable Windows version...
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%CD%\packaging\build_windows.ps1" -Python "%CD%\.venv\Scripts\python.exe" -FixFormat
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%CD%\packaging\build_windows.ps1" -Python "%CD%\.venv\Scripts\python.exe" -FixFormat -SkipInstaller
 if errorlevel 1 goto :failed
 
 echo Build completed: release\OfflinePDF-Windows-x64-portable.zip

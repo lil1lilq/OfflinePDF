@@ -8,25 +8,35 @@ permissions:
 jobs:
   build:
     runs-on: windows-2022
-    timeout-minutes: 25
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           architecture: x64
+      - name: Ensure Inno Setup 6 for the installer
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed.' }
+          }
       - name: Test and build
         shell: pwsh
         run: ./packaging/build_windows.ps1
       - name: Require expected outputs
         shell: pwsh
         run: |
-          @('release/OfflinePDF-Windows-x64-portable.zip','release/SHA256SUMS.txt') | ForEach-Object {
+          @('release/OfflinePDF-Windows-x64-portable.zip','release/OfflinePDF-Setup-Windows-x64.exe','release/SHA256SUMS.txt') | ForEach-Object {
             if (!(Test-Path $_)) { throw "Missing artifact: $_" }
           }
       - name: Verify portable ZIP and offline firewall behavior
         shell: pwsh
         run: ./packaging/verify_windows_build.ps1
+      - name: Verify installer (silent install, self-test, uninstall)
+        shell: pwsh
+        run: ./packaging/verify_installer.ps1
       - name: Upload validation reports even on failure
         if: always()
         uses: actions/upload-artifact@v7
@@ -34,12 +44,13 @@ jobs:
           name: OfflinePDF-validation
           path: release/validation/
           if-no-files-found: ignore
-      - name: Upload portable bundle
+      - name: Upload portable bundle and installer
         uses: actions/upload-artifact@v7
         with:
           name: OfflinePDF-Windows-x64
           path: |
             release/OfflinePDF-Windows-x64-portable.zip
+            release/OfflinePDF-Setup-Windows-x64.exe
             release/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 30

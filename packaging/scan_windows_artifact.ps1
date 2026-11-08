@@ -77,6 +77,9 @@ try {
         }
     }
     Invoke-ArtifactScan 'portable-zip' $portable[0].FullName
+    # Builds from 1.0.0 on also ship an installer; older builds have none.
+    $installer = @($originalFiles | Where-Object Name -eq 'OfflinePDF-Setup-Windows-x64.exe')
+    if ($installer.Count -eq 1) { Invoke-ArtifactScan 'installer' $installer[0].FullName }
 
     # Also scan extracted EXE/DLL files; never execute the downloaded application.
     $temporary = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() }

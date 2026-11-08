@@ -19,7 +19,7 @@ TOOLS = {
     ),
     "images_pdf": (
         "이미지 → PDF",
-        "JPG·PNG·BMP·GIF·TIFF·WebP·HEIC 등의 이미지를 A4 PDF로 만듭니다.",
+        "JPG·PNG·BMP·GIF·TIFF·WebP 이미지를 A4 PDF로 만듭니다.",
     ),
     "protect": ("암호 편집", "PDF 열기 암호를 설정하거나 소유자 암호로 기존 암호를 제거합니다."),
     "watermark": (
