@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import customtkinter as ctk
 import pymupdf as pdf
 
 from offline_pdf.app import App
@@ -14,7 +15,7 @@ class NupGuiTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         try:
-            cls.root = tk.Tk()
+            cls.root = ctk.CTk()
         except tk.TclError:
             raise unittest.SkipTest("GUI requires a desktop or X display.")
         cls.app = App(cls.root)

@@ -2,8 +2,11 @@
 
 import tkinter as tk
 from pathlib import Path
-from tkinter import ttk
 
+import customtkinter as ctk
+import pymupdf as pdf
+
+from . import ctk_widgets as ttk
 from .engine import UserError, open_pdf
 from .ui import FONT, RED
 
@@ -21,7 +24,7 @@ def requested_tool(app):
 
 def ask_password(app, path=None, *, output=False, explanation=""):
     result = None
-    dialog = tk.Toplevel(app.root)
+    dialog = ctk.CTkToplevel(app.root)
     dialog.title("결과 PDF 암호 설정" if output else "PDF 암호 입력")
     dialog.transient(app.root)
     dialog.resizable(False, False)
@@ -131,9 +134,19 @@ def ensure_password(app, path):
     if not path or Path(path).suffix.lower() != ".pdf":
         return True
     try:
-        with __import__("pymupdf").open(path) as probe:
-            encrypted = probe.needs_pass or bool((probe.metadata or {}).get("encryption"))
-        if not encrypted:
+        with pdf.open(path) as probe:
+            encrypted = bool(probe.needs_pass or (probe.metadata or {}).get("encryption"))
+            needs_password = bool(probe.needs_pass)
+            if encrypted and not needs_password:
+                permission = (
+                    pdf.PDF_PERM_COPY
+                    if app.tool in ("text", "pdf_images", "ocr")
+                    else pdf.PDF_PERM_MODIFY
+                )
+                needs_password = requested_tool(app) == "unlock" or not bool(
+                    probe.permissions & permission
+                )
+        if not needs_password:
             return True
         password = cached_password(app, path)
         if password:

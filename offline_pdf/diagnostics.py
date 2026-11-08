@@ -125,7 +125,6 @@ def worker_result(job):
 def self_test():
     """Exercise the frozen executable, child workers, native UI and AI/OCR."""
     import socket
-    import tkinter as tk
 
     import pymupdf as pdf
     from PIL import Image
@@ -192,7 +191,9 @@ def self_test():
         tessdata = model_folder().parent / "tessdata"
         assert list(run("ocr", [source], language="eng", tessdata=str(tessdata)).glob("*.pdf"))
         checks.append("ocr-models-worker")
-        window = tk.Tk()
+        import customtkinter as ctk
+
+        window = ctk.CTk()
         app = App(window)
         app.auto_open.set(False)
         try:

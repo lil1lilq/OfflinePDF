@@ -16,48 +16,34 @@ class NavigationController:
     """Tool selection, history and result chaining."""
 
     def arrange_cards(self, width, force=False):
+        if getattr(self, "_arranging_cards", False):
+            return
         width = max(160, width)
-        columns = max(1, min(6, int(width / (195 if self.show_all_tools else 270))))
-        available = max(200, self.home.canvas.winfo_height() - 170)
-        keys = (
-            list(POPULAR) + [key for key in CARD_TEXT if key not in POPULAR]
-            if self.show_all_tools
-            else list(POPULAR)
-        )
-        if self.show_all_tools:
-            while (
-                columns < 6
-                and ((len(keys) + columns - 1) // columns) * 66 > available
-                and width / (columns + 1) >= 170
-            ):
-                columns += 1
-            rows = (len(keys) + columns - 1) // columns
-            height = max(46, min(68, int(available / rows) - 6))
-        else:
-            height = 185
-        layout = (columns, height, self.show_all_tools)
+        keys = list(POPULAR) + [key for key in CARD_TEXT if key not in POPULAR]
+        columns = max(1, min(6, width // 190))
+        rows = (len(keys) + columns - 1) // columns
+        available = max(240, self.home.canvas.winfo_height() - 115)
+        height = max(230, (available - (rows - 1) * 14) // rows)
+        layout = (columns, height)
         if layout == self.card_layout and not force:
             return
-        self.card_layout = layout
-        self.card_columns = columns
-        for card in self.cards.values():
-            card.grid_forget()
-        for col in range(6):
-            self.cards_frame.columnconfigure(
-                col,
-                weight=1 if col < columns else 0,
-                uniform="cards" if col < columns else "",
-                minsize=0,
-            )
-        for index, key in enumerate(keys):
-            self.cards[key].set_compact(self.show_all_tools, height)
-            self.cards[key].grid(
-                row=index // columns,
-                column=index % columns,
-                sticky="ew",
-                padx=4,
-                pady=(0, 6 if self.show_all_tools else 12),
-            )
+        self._arranging_cards = True
+        try:
+            self.card_layout = layout
+            self.card_columns = columns
+            for card in self.cards.values():
+                card.grid_forget()
+            for col in range(6):
+                self.cards_frame.columnconfigure(
+                    col, weight=1 if col < columns else 0, uniform="cards" if col < columns else ""
+                )
+            for index, key in enumerate(keys):
+                self.cards[key].set_compact(False, height)
+                self.cards[key].grid(
+                    row=index // columns, column=index % columns, sticky="ew", padx=7, pady=(0, 14)
+                )
+        finally:
+            self._arranging_cards = False
 
     def schedule_cards(self):
         if self.card_resize_timer:
@@ -71,11 +57,6 @@ class NavigationController:
         self.card_resize_timer = self.root.after(50, resize)
 
     def toggle_tools(self):
-        self.show_all_tools = not self.show_all_tools
-        self.all_tools_button.config(
-            text="기본 카드로 보기  ⌃" if self.show_all_tools else "전체 도구 보기  ⌄"
-        )
-        self.home_section.config(text="전체 도구" if self.show_all_tools else "자주 쓰는 도구")
         self.arrange_cards(self.cards_frame.winfo_width(), force=True)
 
     def select_tool(self, key):
@@ -136,6 +117,10 @@ class NavigationController:
     def update_back_state(self):
         enabled = not self.busy() and (self.screen != "home" or self.pending_results is not None)
         self.home_button.config(state="normal" if enabled else "disabled")
+        if self.screen == "home":
+            self.home_button.pack_forget()
+        elif not self.home_button.winfo_manager():
+            self.home_button.pack(side="right", padx=16)
         self.task_title_row.pack_forget() if self.screen == "home" else self.task_title_row.pack(
             fill="x"
         )
@@ -219,9 +204,6 @@ class NavigationController:
         self.chain_cancel_button.pack(anchor="w", pady=(0, 12), before=self.home_section.master)
         for key, card in self.cards.items():
             card.set_enabled(key in allowed)
-        # Image results have just one compatible tool; reveal it immediately.
-        if "images_pdf" in allowed and not self.show_all_tools:
-            self.toggle_tools()
         self.home.canvas.yview_moveto(0)
         self.update_back_state()
 

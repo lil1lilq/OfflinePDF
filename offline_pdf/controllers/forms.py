@@ -5,8 +5,11 @@ from __future__ import annotations
 import sys
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, ttk
+from tkinter import filedialog
 
+import customtkinter as ctk
+
+from .. import ctk_widgets as ttk
 from ..engine import UserError, open_pdf, split_ranges
 from ..images import EXPORT_FORMATS, IMAGE_EXTENSIONS, IMAGE_PATTERN, open_image_document
 from ..localization import ChoiceVar
@@ -21,7 +24,7 @@ class FormController:
     def organizer_settings(self):
         if self.busy():
             return
-        dialog = tk.Toplevel(self.root)
+        dialog = ctk.CTkToplevel(self.root)
         dialog.title("페이지 정리 · 파일·저장 설정")
         dialog.geometry("560x450")
         dialog.transient(self.root)
@@ -231,9 +234,9 @@ class FormController:
         self.run_button.config(text=CARD_TEXT[self.tool][0] + "  →")
         self.preview_button.config(state="normal")
         if self.tool == "redact":
-            self.clear_preview_regions.pack(side="right")
+            self.preview_region_row.pack(fill="x", after=self.preview_zoom_row)
         else:
-            self.clear_preview_regions.pack_forget()
+            self.preview_region_row.pack_forget()
         self.output_name.set("합친문서.pdf" if self.tool == "merge" else "이미지문서.pdf")
         if self.tool in ("merge", "images_pdf"):
             self.name_frame.pack(fill="x", pady=(7, 0))

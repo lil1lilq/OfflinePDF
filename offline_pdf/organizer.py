@@ -6,10 +6,11 @@ import base64
 import tkinter as tk
 from collections import OrderedDict
 from pathlib import Path
-from tkinter import messagebox, simpledialog, ttk
+from tkinter import messagebox, simpledialog
 
 import pymupdf as pdf
 
+from . import ctk_widgets as ttk
 from .engine import UserError, open_pdf, pages
 from .ui import BG, BLUE, FONT, INK, LINE, MUTED, PANEL, SOFT
 

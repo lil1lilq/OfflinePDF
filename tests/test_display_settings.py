@@ -5,6 +5,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import customtkinter as ctk
+
 from offline_pdf.app import App
 from offline_pdf.appearance import DARK, DEFAULT, apply_theme
 from offline_pdf.localization import ChoiceVar, DisplayVar, apply_language, tr
@@ -33,7 +35,7 @@ class PreferencesTests(unittest.TestCase):
 class DisplaySettingsTests(unittest.TestCase):
     def setUp(self):
         try:
-            self.root = tk.Tk()
+            self.root = ctk.CTk()
         except tk.TclError:
             self.skipTest("GUI needs a display")
         self.temp = tempfile.TemporaryDirectory()
@@ -92,12 +94,14 @@ class DisplaySettingsTests(unittest.TestCase):
         apply_theme(self.root, "dark")
         for card in self.app.cards.values():
             card.paint()
-            self.assertEqual(card.cget("bg"), DARK["BG"])
-        self.assertEqual(self.app.sidebar.cget("bg"), DARK["PANEL"])
+            self.assertEqual(card.cget("fg_color")[1], DARK["PANEL"])
+        self.assertEqual(self.app.sidebar.cget("fg_color")[1], DARK["PANEL"])
         style = tk.ttk.Style(self.root)
         self.assertEqual(style.lookup("TEntry", "fieldbackground"), DARK["PANEL"])
+        self.assertNotIn("arrow", str(style.layout("Vertical.TScrollbar")).lower())
+        self.assertEqual(int(style.lookup("Vertical.TScrollbar", "width")), 16)
         apply_theme(self.root, "default")
-        self.assertEqual(self.app.sidebar.cget("bg"), DEFAULT["PANEL"])
+        self.assertEqual(self.app.sidebar.cget("fg_color")[0], DEFAULT["PANEL"])
         self.assertEqual(style.lookup("TEntry", "fieldbackground"), DEFAULT["PANEL"])
 
     def test_settings_dialog_offers_only_two_themes_and_saves(self):
@@ -107,9 +111,9 @@ class DisplaySettingsTests(unittest.TestCase):
         buttons = []
 
         def visit(w):
-            if isinstance(w, tk.ttk.Radiobutton):
+            if isinstance(w, ctk.CTkRadioButton):
                 radios.append(w)
-            if isinstance(w, tk.ttk.Button):
+            if isinstance(w, ctk.CTkButton):
                 buttons.append(w)
             for c in w.winfo_children():
                 visit(c)
@@ -134,7 +138,7 @@ class DisplaySettingsTests(unittest.TestCase):
             self.assertFalse(any("가" <= c <= "힣" for c in self.app.title.cget("text")), tool)
             for child in self.app.form.winfo_children():
                 for label in child.winfo_children():
-                    if isinstance(label, tk.ttk.Label):
+                    if isinstance(label, ctk.CTkLabel):
                         self.assertFalse(
                             any("가" <= c <= "힣" for c in label.cget("text")),
                             (tool, label.cget("text")),
