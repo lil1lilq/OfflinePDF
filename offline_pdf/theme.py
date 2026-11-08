@@ -23,8 +23,8 @@ PALETTES = {
     "default": {
         "BG": "#f4f6fa",
         "PANEL": "#ffffff",
-        "INK": "#202a3a",
-        "MUTED": "#526078",
+        "INK": "#111827",
+        "MUTED": "#374151",
         "RED": "#b3384a",
         "LINE": "#dfe5ef",
         "BLUE": "#3759da",
@@ -38,8 +38,8 @@ PALETTES = {
     "dark": {
         "BG": "#171c25",
         "PANEL": "#222a36",
-        "INK": "#eff3fa",
-        "MUTED": "#b7c2d2",
+        "INK": "#f8fafc",
+        "MUTED": "#d5dce6",
         "RED": "#ff929e",
         "LINE": "#394557",
         "BLUE": "#a9bcff",

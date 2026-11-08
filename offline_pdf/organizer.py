@@ -103,17 +103,23 @@ class PageOrganizer(ttk.Frame):
         self.boundary = None
         self.hover = None
         self.tile_width = tk.IntVar(value=220)
-        top = ttk.Frame(self)
-        top.pack(fill="x", pady=(0, 10))
+        # The same white bordered panel that holds every other tool's options.
+        header = tk.Frame(self, bg=PANEL, highlightbackground=LINE, highlightthickness=1)
+        header.pack(fill="x", pady=(0, 8))
+        self.header = header
+        panel = ttk.Frame(header, style="Panel.TFrame")
+        panel.pack(fill="x", padx=12, pady=8)
+        top = ttk.Frame(panel, style="Panel.TFrame")
+        top.pack(fill="x", pady=(0, 8))
         self.filename = ttk.Label(
             top, text="왼쪽에서 PDF·이미지를 선택하세요.", font=(FONT, 11, "bold"), wraplength=480
         )
         self.filename.pack(side="left")
         ttk.Button(top, text="설정", command=app.organizer_settings).pack(side="right")
         ttk.Button(top, text="파일 선택", command=app.add_files).pack(side="right", padx=7)
-        bar = ttk.Frame(self)
+        bar = ttk.Frame(panel, style="Panel.TFrame")
         self.toolbar = bar
-        bar.pack(fill="x", pady=(0, 8))
+        bar.pack(fill="x", pady=(0, 6))
         self.all = tk.BooleanVar()
         ttk.Checkbutton(bar, text="전체 선택", variable=self.all, command=self.select_all).pack(
             side="left"
@@ -132,8 +138,8 @@ class PageOrganizer(ttk.Frame):
         ttk.Button(bar, text="초기화", command=self.reset).pack(side="right")
         self.undo_button = ttk.Button(bar, text="되돌리기", command=self.undo)
         self.undo_button.pack(side="right", padx=6)
-        hint = ttk.Frame(self)
-        hint.pack(fill="x", pady=(0, 8))
+        hint = ttk.Frame(panel, style="Panel.TFrame")
+        hint.pack(fill="x")
         ttk.Label(
             hint, text="드래그로 순서 변경 · Ctrl/Shift 다중 선택", style="Muted.TLabel"
         ).pack(side="left")
@@ -178,9 +184,11 @@ class PageOrganizer(ttk.Frame):
         top.bind("<Configure>", lambda e: self.filename.config(wraplength=max(180, e.width - 200)))
         self.bind(
             "<Configure>",
-            lambda e: self.order_label.config(wraplength=max(200, e.width - 15))
-            if e.widget is self
-            else None,
+            lambda e: (
+                self.order_label.config(wraplength=max(200, e.width - 15))
+                if e.widget is self
+                else None
+            ),
             add="+",
         )
 
@@ -310,7 +318,7 @@ class PageOrganizer(ttk.Frame):
                 anchor="w",
                 text=f"저장 {i + 1}번째",
                 fill=BLUE if selected else MUTED,
-                font=(FONT, 9),
+                font=(FONT, 10),
             )
             self.canvas.create_text(x + cw - 15, y + 15, text="⠿", fill=MUTED, font=(FONT, 13))
             self.canvas.create_rectangle(

@@ -9,7 +9,9 @@ from ..engine import UserError, check_local_path
 from ..images import IMAGE_EXTENSIONS
 from ..passwords import fingerprint
 from ..tools import TOOLS
-from ..ui import CARD_TEXT, POPULAR
+from ..ui import CARD_MAX_HEIGHT, CARD_MIN_HEIGHT, CARD_TEXT, POPULAR
+
+MAX_CARD_COLUMNS = 8
 
 
 class NavigationController:
@@ -20,10 +22,15 @@ class NavigationController:
             return
         width = max(160, width)
         keys = list(POPULAR) + [key for key in CARD_TEXT if key not in POPULAR]
-        columns = max(1, min(6, width // 190))
-        rows = (len(keys) + columns - 1) // columns
-        available = max(240, self.home.canvas.winfo_height() - 115)
-        height = max(230, (available - (rows - 1) * 14) // rows)
+        fit = max(1, min(MAX_CARD_COLUMNS, width // 190))
+        rows = (len(keys) + fit - 1) // fit
+        # Fewest rows that fit, then the fewest columns giving that many rows, so
+        # 16 tools form even rows (4x4, 8x2) instead of leaving one card alone.
+        columns = (len(keys) + rows - 1) // rows
+        # Fill a 16:9 window without scrolling, but never stretch cards into tall
+        # columns: their content only needs about 140px.
+        available = self.home.canvas.winfo_height() - 28
+        height = max(CARD_MIN_HEIGHT, min(CARD_MAX_HEIGHT, (available - rows * 12) // rows))
         layout = (columns, height)
         if layout == self.card_layout and not force:
             return
@@ -33,14 +40,14 @@ class NavigationController:
             self.card_columns = columns
             for card in self.cards.values():
                 card.grid_forget()
-            for col in range(6):
+            for col in range(MAX_CARD_COLUMNS):
                 self.cards_frame.columnconfigure(
                     col, weight=1 if col < columns else 0, uniform="cards" if col < columns else ""
                 )
             for index, key in enumerate(keys):
                 self.cards[key].set_compact(False, height)
                 self.cards[key].grid(
-                    row=index // columns, column=index % columns, sticky="ew", padx=7, pady=(0, 14)
+                    row=index // columns, column=index % columns, sticky="ew", padx=6, pady=(0, 12)
                 )
         finally:
             self._arranging_cards = False
@@ -109,6 +116,9 @@ class NavigationController:
             return
         self.cancel_continue()
         self.work.pack_forget()
+        for card in self.cards.values():
+            card.pressed = False
+            card.highlight(False)
         self.home.pack(fill="both", expand=True)
         self.schedule_cards()
         self.screen = "home"
@@ -173,7 +183,7 @@ class NavigationController:
         self.pending_results = None
         self.home_title.config(text="어떤 작업을 할까요?")
         self.home_description.config(text="왼쪽에서 파일을 확인하고 필요한 도구를 선택하세요.")
-        self.chain_cancel_button.pack_forget()
+        self.chain_banner.pack_forget()
         for card in self.cards.values():
             card.set_enabled(True)
         if had_pending:
@@ -201,7 +211,7 @@ class NavigationController:
         self.file_count.config(text=f"작업 결과  {len(self.pending_results)}개")
         self.sidebar_total.set(f"이전 작업 결과 {len(self.pending_results)}개")
         self.feedback.file_added(range(len(self.pending_results)))
-        self.chain_cancel_button.pack(anchor="w", pady=(0, 12), before=self.home_section.master)
+        self.chain_banner.pack(fill="x", pady=(0, 12), before=self.cards_frame)
         for key, card in self.cards.items():
             card.set_enabled(key in allowed)
         self.home.canvas.yview_moveto(0)

@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import customtkinter as ctk
 
+from offline_pdf import localization
 from offline_pdf.app import App
 from offline_pdf.appearance import DARK, DEFAULT, apply_theme
 from offline_pdf.localization import ChoiceVar, DisplayVar, apply_language, tr
@@ -107,27 +108,60 @@ class DisplaySettingsTests(unittest.TestCase):
     def test_settings_dialog_offers_only_two_themes_and_saves(self):
         dialog = show_settings(self.app)
         self.root.update()
-        radios = []
         buttons = []
 
         def visit(w):
-            if isinstance(w, ctk.CTkRadioButton):
-                radios.append(w)
             if isinstance(w, ctk.CTkButton):
                 buttons.append(w)
             for c in w.winfo_children():
                 visit(c)
 
         visit(dialog)
-        self.assertEqual({w.cget("value") for w in radios}, {"ko", "en", "default", "dark"})
-        for radio in radios:
-            if radio.cget("value") in ("en", "dark"):
-                radio.invoke()
+        self.assertEqual(set(dialog.language_choice.cget("values")), {"한국어", "English"})
+        self.assertEqual(set(dialog.theme_choice.cget("values")), {"기본", "다크모드"})
+        dialog.language_choice.set("English")
+        dialog.theme_choice.set("다크모드")
         next(w for w in buttons if w.cget("text") == "적용").invoke()
         self.root.update()
         self.assertEqual(load_preferences(), {"language": "en", "theme": "dark"})
         self.assertEqual(self.app.settings_button.cget("text"), "Settings")
         self.assertEqual(self.app.home_title.cget("text"), "Choose a tool")
+
+    def test_repeated_language_switches_never_mix_languages(self):
+        catalog = json.loads(
+            (Path(localization.__file__).with_name("translations.json")).read_text("utf-8")
+        )
+        english = {v for k, v in catalog.items() if k != v}
+
+        def shown(widget, out):
+            if not isinstance(widget, ctk.CTkBaseClass):
+                try:
+                    text = widget.cget("text")
+                    if isinstance(text, str) and text:
+                        out.append(text)
+                except (tk.TclError, ValueError):
+                    pass
+            for child in widget.winfo_children():
+                shown(child, out)
+            return out
+
+        try:
+            for tool in ("merge", "extract", "redact", "compress"):
+                self.app.select_tool(tool)
+                for _ in range(4):
+                    apply_language(self.root, "en")
+                    apply_language(self.root, "ko")
+                self.root.update()
+                leftovers = {t for t in shown(self.root, []) if t in english}
+                self.assertEqual(leftovers, set(), tool)
+                apply_language(self.root, "en")
+                self.root.update()
+                korean = {t for t in shown(self.root, []) if any("가" <= c <= "힣" for c in t)}
+                self.assertEqual(korean, set(), tool)
+                apply_language(self.root, "ko")
+        finally:
+            apply_language(self.root, "ko")
+            self.app.show_home()
 
     def test_english_tool_forms_and_options_open_without_korean_labels(self):
         apply_language(self.root, "en")

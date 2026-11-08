@@ -277,7 +277,7 @@ class FileList(tk.Canvas):
                 anchor="nw",
                 text=name,
                 width=w - 25,
-                font=(FONT, 9, "bold"),
+                font=(FONT, 10, "bold"),
                 fill=mix(background, INK, opacity),
             )
             self.create_text(
@@ -286,7 +286,7 @@ class FileList(tk.Canvas):
                 anchor="w",
                 text=meta,
                 width=w - 25,
-                font=(FONT, 8),
+                font=(FONT, 9),
                 fill=mix(background, MUTED, opacity),
             )
 

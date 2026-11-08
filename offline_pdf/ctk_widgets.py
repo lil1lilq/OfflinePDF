@@ -31,6 +31,8 @@ def _style(name):
 
 
 class _Text:
+    translates_text = True
+
     def configure(self, **kwargs):
         if "foreground" in kwargs:
             kwargs["text_color"] = _semantic_color(kwargs.pop("foreground"))
@@ -45,7 +47,14 @@ class _Text:
 class Frame(ctk.CTkFrame):
     def __init__(self, master, style=None, padding=None, **kwargs):
         kwargs.setdefault("corner_radius", 0)
-        kwargs.setdefault("fg_color", _pair("PANEL") if _style(style) == "panel" else "transparent")
+        if _style(style) == "panel":
+            kwargs.setdefault("fg_color", _pair("PANEL"))
+        elif not isinstance(master, (ctk.CTkBaseClass, ctk.CTk, ctk.CTkToplevel)):
+            # "transparent" under a plain Tk frame freezes that frame's current
+            # colour, which then stays light in dark mode. Use the themed pair.
+            kwargs.setdefault("fg_color", _pair("BG"))
+        else:
+            kwargs.setdefault("fg_color", "transparent")
         super().__init__(master, **kwargs)
         self.padding = padding
 
@@ -90,7 +99,10 @@ class Button(_Text, ctk.CTkButton):
             kwargs.setdefault("hover_color", ("#2948c3", "#c3d0ff"))
             kwargs.setdefault("text_color", ("#ffffff", "#172135"))
             kwargs.setdefault("border_color", _pair("BLUE"))
+            kwargs.setdefault("text_color_disabled", ("#e3e9ff", "#46546f"))
         else:
+            # CustomTkinter's default disabled text (gray74) is barely readable.
+            kwargs.setdefault("text_color_disabled", ("#8a93a3", "#7d889a"))
             kwargs.setdefault("fg_color", _pair("PANEL"))
             kwargs.setdefault("hover_color", _pair("SOFT"))
             kwargs.setdefault("text_color", _pair("INK"))
@@ -150,9 +162,27 @@ class Radiobutton(_Text, ctk.CTkRadioButton):
         kwargs["text"] = tr(self.source_text)
         kwargs.setdefault("text_color", _pair("INK"))
         kwargs.setdefault("fg_color", _pair("BLUE"))
+        kwargs.setdefault("hover_color", ("#2948c3", "#c3d0ff"))
+        kwargs.setdefault("border_color", ("#9aa3b2", "#7d889a"))
+        kwargs.setdefault("radiobutton_width", 18)
+        kwargs.setdefault("radiobutton_height", 18)
+        kwargs.setdefault("border_width_unchecked", 2)
+        kwargs.setdefault("border_width_checked", 5)
         kwargs.setdefault("width", 105)
         kwargs.setdefault("font", (theme.FONT_FAMILY, 12))
         super().__init__(master, **kwargs)
+
+
+CHECKBOX_STYLE = dict(
+    checkbox_width=18,
+    checkbox_height=18,
+    corner_radius=5,
+    border_width=2,
+    fg_color=("#3759da", "#a9bcff"),
+    hover_color=("#2948c3", "#c3d0ff"),
+    border_color=("#9aa3b2", "#7d889a"),
+    checkmark_color=("#ffffff", "#172135"),
+)
 
 
 class Checkbutton(_Text, ctk.CTkCheckBox):
@@ -160,8 +190,9 @@ class Checkbutton(_Text, ctk.CTkCheckBox):
         self.source_text = kwargs.get("text", "")
         kwargs["text"] = tr(self.source_text)
         kwargs.setdefault("text_color", _pair("INK"))
-        kwargs.setdefault("fg_color", _pair("BLUE"))
         kwargs.setdefault("font", (theme.FONT_FAMILY, 12))
+        for key, value in CHECKBOX_STYLE.items():
+            kwargs.setdefault(key, value)
         super().__init__(master, **kwargs)
 
 

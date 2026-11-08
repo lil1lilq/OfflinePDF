@@ -58,9 +58,9 @@ def build(app):
 
     set_brand(root, logo)
     ctk.CTkLabel(
-        header, text="OfflinePDF", font=(FONT, 16, "bold"), text_color=("#202a3a", "#eff3fa")
+        header, text="OfflinePDF", font=(FONT, 16, "bold"), text_color=("#111827", "#f8fafc")
     ).pack(side="left")
-    ctk.CTkLabel(header, text=__version__, font=(FONT, 9), text_color=("#526078", "#b7c2d2")).pack(
+    ctk.CTkLabel(header, text=__version__, font=(FONT, 10), text_color=("#374151", "#d5dce6")).pack(
         side="left", padx=9
     )
     app.home_button = ctk.CTkButton(
@@ -74,7 +74,7 @@ def build(app):
         fg_color=("#ffffff", "#222a36"),
         border_color=("#dfe5ef", "#394557"),
         hover_color=("#eaf0ff", "#303b53"),
-        text_color=("#202a3a", "#eff3fa"),
+        text_color=("#111827", "#f8fafc"),
         font=(FONT, 11, "bold"),
     )
     app.home_button.config = app.home_button.configure
@@ -97,11 +97,11 @@ def build(app):
         fg_color=("#ffffff", "#222a36"),
         border_color=("#dfe5ef", "#394557"),
         hover_color=("#eaf0ff", "#303b53"),
-        text_color=("#202a3a", "#eff3fa"),
+        text_color=("#111827", "#f8fafc"),
     )
     app.settings_button.source_text = "설정"
     app.settings_button.pack(side="right", padx=(0, 8), pady=4)
-    status = tk.Label(status_box, text="", anchor="w", bg=PANEL, fg=MUTED, font=(FONT, 9), padx=16)
+    status = tk.Label(status_box, text="", anchor="w", bg=PANEL, fg=MUTED, font=(FONT, 10), padx=16)
     status.pack(fill="both", expand=True)
     status.bind("<Configure>", lambda e: status.configure(wraplength=max(300, e.width - 30)))
     app.feedback = StatusFeedback(app, status)
@@ -117,7 +117,7 @@ def build(app):
         app.sidebar,
         text="작업 파일  0개",
         anchor="w",
-        text_color=("#202a3a", "#eff3fa"),
+        text_color=("#111827", "#f8fafc"),
         font=(FONT, 10, "bold"),
     )
     app.file_count.config = app.file_count.configure
@@ -132,7 +132,7 @@ def build(app):
         fg_color=("#ffffff", "#222a36"),
         border_color=("#dfe5ef", "#394557"),
         hover_color=("#eaf0ff", "#303b53"),
-        text_color=("#202a3a", "#eff3fa"),
+        text_color=("#111827", "#f8fafc"),
     )
     app.add_button.source_text = "＋  파일 추가"
     app.add_button.pack(fill="x", pady=(0, 10), padx=12)
@@ -142,8 +142,8 @@ def build(app):
     ctk.CTkLabel(
         controls,
         textvariable=app.sidebar_total,
-        text_color=("#526078", "#b7c2d2"),
-        font=(FONT, 9),
+        text_color=("#374151", "#d5dce6"),
+        font=(FONT, 10),
         wraplength=195,
         anchor="w",
     ).pack(fill="x", pady=(0, 8))
@@ -165,7 +165,7 @@ def build(app):
             fg_color=("#ffffff", "#222a36"),
             border_color=("#dfe5ef", "#394557"),
             hover_color=("#eaf0ff", "#303b53"),
-            text_color=("#202a3a", "#eff3fa"),
+            text_color=("#111827", "#f8fafc"),
         ).pack(side="left", padx=(0, 3))
     ctk.CTkButton(
         controls,
@@ -177,15 +177,15 @@ def build(app):
         fg_color=("#ffffff", "#222a36"),
         border_color=("#dfe5ef", "#394557"),
         hover_color=("#eaf0ff", "#303b53"),
-        text_color=("#202a3a", "#eff3fa"),
+        text_color=("#111827", "#f8fafc"),
     ).pack(fill="x", pady=(6, 0))
     ctk.CTkCheckBox(
         controls,
         text="완료 후 폴더 열기",
         variable=app.auto_open,
         font=(FONT, 10),
-        text_color=("#202a3a", "#eff3fa"),
-        fg_color=("#3759da", "#a9bcff"),
+        text_color=("#111827", "#f8fafc"),
+        **ttk.CHECKBOX_STYLE,
     ).pack(anchor="w", pady=(8, 0))
     filebox = ctk.CTkFrame(app.sidebar, fg_color="transparent")
     filebox.pack(fill="both", expand=True, padx=12)
@@ -213,24 +213,29 @@ def build(app):
     app.content_host.pack(side="left", fill="both", expand=True)
     app.home = ScrollPane(app.content_host)
     app.home.pack(fill="both", expand=True)
-    home = ttk.Frame(app.home.inner, padding=(22, 20, 22, 15))
+    home = ttk.Frame(app.home.inner, padding=(22, 16, 22, 12))
     home.pack(fill="both", expand=True)
-    app.home_title = ttk.Label(home, text="어떤 작업을 할까요?", style="Title.TLabel")
+    # Shown only while choosing a tool for a previous result; the normal home is
+    # just the tool cards, with no heading taking up vertical space.
+    app.chain_banner = ttk.Frame(home)
+    chain_text = ttk.Frame(app.chain_banner)
+    chain_text.pack(side="left", fill="x", expand=True)
+    app.home_title = ttk.Label(chain_text, text="어떤 작업을 할까요?", font=(FONT, 13, "bold"))
     app.home_title.pack(anchor="w")
     app.home_description = ttk.Label(
-        home,
+        chain_text,
         text="왼쪽에서 파일을 확인하고 필요한 도구를 선택하세요.",
         style="Muted.TLabel",
         wraplength=800,
     )
-    app.home_description.pack(anchor="w", pady=(4, 12))
-    app.chain_cancel_button = ttk.Button(home, text="이어서 작업 취소", command=app.cancel_continue)
-    row = ttk.Frame(home)
-    row.pack(fill="x", pady=(0, 9))
-    app.home_section = ttk.Label(row, text="전체 도구", font=(FONT, 10, "bold"))
-    app.home_section.pack(side="left")
+    app.home_description.pack(anchor="w", pady=(2, 0))
+    app.chain_cancel_button = ttk.Button(
+        app.chain_banner, text="이어서 작업 취소", command=app.cancel_continue
+    )
+    app.chain_cancel_button.pack(side="right")
     app.cards_frame = ttk.Frame(home)
     app.cards_frame.pack(fill="x")
+    app.home_frame = home
     app.cards = {key: ToolCard(app.cards_frame, key, app.select_tool) for key in CARD_TEXT}
     app.show_all_tools = True
     app.card_columns = 0
