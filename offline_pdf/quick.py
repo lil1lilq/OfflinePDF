@@ -58,19 +58,21 @@ class QuickWindow:
         root.geometry("480x340")
         root.resizable(False, False)
         root.configure(fg_color="#ffffff")
-        brand = Canvas(root, width=32, height=32, highlightthickness=0)
-        brand.pack(anchor="w", padx=26, pady=(16, 0))
-        set_brand(root, brand)
         self.body = ctk.CTkFrame(root, fg_color="#ffffff", corner_radius=0)
         self.body.pack(fill="both", expand=True, padx=26, pady=(20, 8))
+        heading = ctk.CTkFrame(self.body, fg_color="transparent", height=34)
+        heading.pack(fill="x")
+        brand = Canvas(heading, width=32, height=32, highlightthickness=0)
+        brand.pack(side="left", padx=(0, 10))
+        set_brand(root, brand)
         self.title = ctk.CTkLabel(
-            self.body,
+            heading,
             text="파일 준비 중",
             text_color="#192b44",
             font=("맑은 고딕", 20, "bold"),
             anchor="w",
         )
-        self.title.pack(fill="x")
+        self.title.pack(fill="x", side="left", expand=True)
         self.subtitle = ctk.CTkLabel(
             self.body, text="선택한 파일을 모으고 있습니다…", text_color="#718098", anchor="w"
         )
@@ -85,7 +87,7 @@ class QuickWindow:
         self.progress.pack(fill="x", pady=8)
         self.progress.configure(mode="indeterminate")
         self.progress.start()
-        self.fields = ctk.CTkFrame(self.body, fg_color="transparent")
+        self.fields = ctk.CTkFrame(self.body, fg_color="transparent", height=1)
         self.fields.pack(fill="x")
         self.error = ctk.CTkLabel(
             self.body, text="", text_color="#b43b42", wraplength=420, justify="left"
@@ -96,7 +98,7 @@ class QuickWindow:
         )
         self.note.pack(fill="x", side="bottom")
         self.footer = ctk.CTkFrame(root, fg_color="#f7f9fc", corner_radius=0)
-        self.footer.pack(fill="x")
+        self.footer.pack(side="bottom", fill="x", before=self.body)
         self.buttons = []
         self.actions(("취소", self.request_close))
         root.protocol("WM_DELETE_WINDOW", self.request_close)
@@ -125,6 +127,7 @@ class QuickWindow:
                 child.delete(0, "end")
             child.destroy()
         self.prompt = None
+        self.fields.configure(height=1)
         self.root.geometry("480x340")
 
     def ask_secret(self, path=None):

@@ -63,6 +63,9 @@ class QuickGuiTests(unittest.TestCase):
             doc.save(self.source)
         self.inbox = SimpleNamespace(messages=queue.Queue(), close=Mock())
         self.app = QuickWindow(self.root, self.inbox)
+        self.root.update_idletasks()
+        self.assertTrue(self.app.footer.winfo_ismapped())
+        self.assertTrue(self.app.buttons[0].winfo_ismapped())
 
     def tearDown(self):
         if hasattr(self, "temp"):
