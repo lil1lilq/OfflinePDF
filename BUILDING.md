@@ -1,7 +1,7 @@
 # 소스 실행과 빌드
 
 이 문서는 OfflinePDF를 소스에서 실행하거나 Windows 배포본을 만드는 개발자를 위한 안내입니다.
-프로그램 다운로드와 기본 사용법은 [README](README.md), 조작 방법은 [사용 안내](USER_GUIDE_KO.txt)에 있습니다.
+프로그램 다운로드와 사용법은 [README](README.md)([English](README.en.md))에 있습니다.
 
 ## 개발 환경
 
@@ -9,6 +9,10 @@
 - Python 3.12, x64
 
 실행 의존성은 `requirements.txt`, 빌드·검사 도구는 `requirements-build.txt`에 버전이 고정되어 있습니다.
+배포 빌드는 간접 의존성까지 버전과 SHA256 해시를 기록한 `requirements-lock.txt`로만 설치합니다
+(`pip --require-hashes`). 내용이 바뀐 패키지나 목록에 없는 패키지는 설치가 거부됩니다.
+`requirements.txt`나 `requirements-build.txt`를 바꾸면 `requirements-lock.txt` 첫머리의 명령으로 다시 생성합니다.
+GitHub Actions의 외부 액션도 버전 태그가 아니라 커밋 SHA로 고정되어 있습니다.
 Windows 실행파일은 Windows에서 빌드합니다.
 화면은 CustomTkinter 5.2.2를 사용합니다. 빌드 스크립트에 `--collect-all customtkinter`와
 `--add-data assets;assets`가 포함되어 있어 Lucide 아이콘과 Pretendard 글꼴을 함께 묶습니다.
@@ -36,7 +40,7 @@ py -3.12 -m venv .venv
 ## 검사
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements-build.txt
+.\.venv\Scripts\python.exe -m pip install --require-hashes -r requirements-lock.txt
 .\.venv\Scripts\python.exe -m ruff check offline_pdf packaging tests main.py
 .\.venv\Scripts\python.exe -m ruff format --check offline_pdf packaging tests main.py
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
@@ -82,9 +86,8 @@ OfflinePDF-Setup-Windows-x64.exe /VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS
 `packaging/build_windows.ps1`을 옵션 없이 실행합니다. GitHub Actions는 항상 두 가지를 모두 만들고,
 설치 파일을 조용히 설치해 자체 검사를 실행한 뒤 제거까지 확인합니다.
 
-빌드는 `README.md`, `USER_GUIDE_KO.txt`, `CHANGELOG.md`, `BUILDING.md`, `LICENSE`, `THIRD_PARTY_NOTICES.md`를 배포본에 복사합니다.
+빌드는 `README.md`, `README.en.md`, `CHANGELOG.md`, `BUILDING.md`, `LICENSE`, `THIRD_PARTY_NOTICES.md`를 배포본에 복사합니다.
 `README.md`는 PyInstaller 데이터에도 포함됩니다.
-사용 안내는 포터블 폴더의 `USER_GUIDE_KO.txt`에서 확인할 수 있습니다.
 
 버전은 다음 위치에서 관리합니다.
 
@@ -112,7 +115,7 @@ OfflinePDF-Setup-Windows-x64.exe /VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS
 인터넷이 되는 Windows x64·Python 3.12 환경에서 의존성을 준비합니다.
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip download -r requirements-build.txt --only-binary=:all: -d wheelhouse
+.\.venv\Scripts\python.exe -m pip download --require-hashes -r requirements-lock.txt --only-binary=:all: -d wheelhouse
 .\.venv\Scripts\python.exe packaging/prepare_dependency_sources.py
 ```
 

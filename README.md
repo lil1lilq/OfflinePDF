@@ -1,5 +1,7 @@
 # OfflinePDF
 
+**한국어** | [English](README.en.md)
+
 Windows에서 PDF를 병합·분할·편집하는 데스크톱 프로그램입니다.
 문서 처리는 PC 안에서 이루어지며, 파일을 외부 변환 서버에 업로드하지 않습니다.
 
@@ -55,6 +57,7 @@ Word·Excel·PowerPoint·HWP 변환은 지원하지 않습니다.
 이미지를 추가하면 선택한 작업에 앞서 PDF로 자동 변환합니다.
 
 창 하단의 **설정**에서 한국어·영어와 **기본·다크모드**를 선택할 수 있습니다. 언어와 테마는 다음 실행에도 유지됩니다.
+**정보**에서 버전, 라이선스와 소스 위치를 확인할 수 있습니다.
 
 ## 문서 처리 시 확인할 점
 
@@ -66,7 +69,7 @@ Word·Excel·PowerPoint·HWP 변환은 지원하지 않습니다.
 
 ## 소스와 라이선스
 
-[소스 실행·빌드](BUILDING.md) · [변경 기록](CHANGELOG.md) ·
+[소스 실행·빌드](BUILDING.md) · [변경 기록](CHANGELOG.md)
 
 소스 코드는 [AGPL-3.0-or-later](LICENSE)로 제공합니다.
 외부 구성요소와 모델의 고지는 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)에 정리되어 있습니다.

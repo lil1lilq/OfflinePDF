@@ -52,7 +52,6 @@ Type: filesandordirs; Name: "{app}\_internal"
 
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\OfflinePDF.exe"
-Name: "{autoprograms}\{#AppName} 사용 안내"; Filename: "{app}\USER_GUIDE_KO.txt"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\OfflinePDF.exe"; Tasks: desktopicon
 
 [Run]
