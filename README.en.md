@@ -18,7 +18,7 @@ Documents are processed on your PC. Files are never uploaded to an external conv
 Two downloads are available: an installer, and a portable ZIP that needs no installation. Windows 10 and 11, 64-bit, are supported. Everything the program needs is included, so Python does not have to be installed.
 Keep the portable version's folder together with the executable.
 
-The current source version is **1.0.1**. Check the version shown on Releases for the downloaded files.
+The current source version is **1.2.1**. Check the version shown on Releases for the downloaded files.
 Features or fixes added to the source may not be in earlier releases.
 
 ## Features
@@ -74,3 +74,22 @@ Use **Settings** at the bottom of the window to choose Korean or English and the
 
 The source code is provided under [AGPL-3.0-or-later](LICENSE).
 Notices for third-party components and models are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## Explorer context menu
+
+The Explorer menu is checked by default during installation; uncheck to opt out.
+Windows 11 shows it under Show more options. The menu uses the application icon.
+
+- **Quick run** opens a compact progress window and starts automatically: merge in name order, split into pages, recommended compression, or 1.5x AI enhancement. Password protection/removal prompts only for required passwords.
+- **Open in OfflinePDF** opens the full task screen for adjusting settings and file order.
+
+Both groups offer merge, split, compression, AI enhancement and password protection/removal.
+Output goes into a new folder beside the inputs, or a folder picker for inputs from different folders.
+Originals are preserved. The quick window supports cancellation and opening results.
+Merging PDFs with different passwords requests a new output password. Requests are briefly batched;
+files delivered after processing starts may become a separate task. Progress is per processing phase.
+Custom split boundaries in the full app apply to the selected file; per-page split processes the list.
+
+Portable users: run Register-Explorer.cmd / Unregister-Explorer.cmd to register/remove the menu.
+Unregister before moving the folder and re-register afterwards. Avoid registering installed and
+portable copies together. Equivalent flags: --register-explorer / --unregister-explorer.

@@ -130,14 +130,23 @@ class App(NavigationController, FileController, FormController, PreviewControlle
         # Cancel every queued UI callback before destroying its Tcl commands.
         for timer in self.root.tk.call("after", "info"):
             self.root.tk.call("after", "cancel", timer)
+        if getattr(self, "explorer_inbox", None):
+            self.explorer_inbox.close()
         self.root.destroy()
 
 
-def main():
+def main(inbox=None, files=None):
     disable_network()
     from .theme import register_fonts
 
     register_fonts()
     root = ctk.CTk()
-    App(root)
+    app = App(root)
+    if inbox:
+        from .explorer import attach_inbox
+
+        attach_inbox(app, inbox)
+    elif files:
+        app.select_tool("merge")
+        app.add_paths(files)
     root.mainloop()

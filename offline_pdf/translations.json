@@ -446,5 +446,6 @@
   "큰 확대": "Large",
   "4배 (용량·시간 매우 큼)": "4x (very large, slow)",
   "AI 보정 배율을 원본 크기·1.5배·2배·4배 중에서 선택하세요.": "Choose an AI scale: same size, 1.5x, 2x or 4x.",
-  "AI 보정 결과가 너무 큽니다. 더 작은 배율을 선택하거나 이미지 해상도를 줄이세요.": "The AI result would be too large. Choose a smaller scale or reduce the image resolution."
+  "AI 보정 결과가 너무 큽니다. 더 작은 배율을 선택하거나 이미지 해상도를 줄이세요.": "The AI result would be too large. Choose a smaller scale or reduce the image resolution.",
+  "PDF, JPG, PNG 등 파일을\n드래그해 화면 아무 데나 놓으세요.\n\n지원: PDF · JPG/JPEG · PNG\nBMP · GIF · TIF/TIFF · WebP": "Drag PDF, JPG, PNG and other files\nand drop them anywhere in the window.\n\nSupported: PDF · JPG/JPEG · PNG\nBMP · GIF · TIF/TIFF · WebP"
 }

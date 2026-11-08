@@ -8,6 +8,28 @@ if __name__ == "__main__":
         from offline_pdf.diagnostics import run_diagnostic
 
         raise SystemExit(run_diagnostic(sys.argv[1], sys.argv[2]))
+    from offline_pdf.explorer import ExplorerInbox, parse_args, register_menu
+
+    args = parse_args(sys.argv[1:])
+    inbox = None
+    if args.register_explorer or args.unregister_explorer or args.explorer:
+        import os
+
+        if os.name != "nt":
+            raise SystemExit("Explorer integration requires Windows.")
+    if args.register_explorer or args.unregister_explorer:
+        register_menu(remove=args.unregister_explorer)
+        raise SystemExit(0)
+    if args.explorer:
+        inbox = ExplorerInbox(quick=args.quick)
+        inbox.submit(args.explorer, args.files)
+        if not inbox.owner:
+            raise SystemExit(0)
+    if args.quick:
+        from offline_pdf.quick import main as quick_main
+
+        quick_main(inbox)
+        raise SystemExit(0)
     from offline_pdf.app import main
 
-    main()
+    main(inbox=inbox, files=args.files if not args.explorer else None)

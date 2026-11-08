@@ -195,6 +195,22 @@ class FileList(tk.Canvas):
         )
         self.configure(scrollregion=(0, 0, w, extent), yscrollincrement=24)
         self.positions = {}
+        if not self.rows and not self.motion_rows:
+            h = max(1, self.winfo_height())
+            self.configure(scrollregion=(0, 0, w, h))
+            self.yview_moveto(0)
+            self.create_text(
+                w / 2,
+                h / 2,
+                text="PDF, JPG, PNG 등 파일을\n드래그해 화면 아무 데나 놓으세요.\n\n지원: PDF · JPG/JPEG · PNG\nBMP · GIF · TIF/TIFF · WebP",
+                width=max(100, w - 28),
+                justify="center",
+                anchor="center",
+                fill=MUTED,
+                font=(FONT, 10),
+                tags="empty_hint",
+            )
+            return
         records = []
         amount = (
             max(0, (self.motion_value - 0.45) / 0.55)

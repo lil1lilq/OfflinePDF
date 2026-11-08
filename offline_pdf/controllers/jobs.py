@@ -29,7 +29,9 @@ class JobController:
         actual_tool = self.effective_tool()
         active_files = (
             [self.selected_file()]
-            if preview or self.tool in ("extract", "split")
+            if preview
+            or self.tool == "extract"
+            or (self.tool == "split" and self.options["split_mode"].get() == "N개 파일로 나누기")
             else list(self.files)
         )
         if not all(path and self.accepted_path(path) for path in active_files):
