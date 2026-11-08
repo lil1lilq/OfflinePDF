@@ -19,6 +19,8 @@ ACTIONS = {
     "split": "PDF 분할",
     "compress": "PDF 압축",
     "upscale": "AI 업스케일",
+    "unlock": "비밀번호 해제",
+    "protect": "비밀번호 설정",
 }
 KEY = r"Software\Classes\SystemFileAssociations\.pdf\shell\OfflinePDF"
 
@@ -53,33 +55,42 @@ def register_menu(remove=False):
             for name, value in values.items():
                 winreg.SetValueEx(handle, name, 0, winreg.REG_SZ, value)
 
-    write(KEY, {"MUIVerb": "OfflinePDF", "SubCommands": "", "Icon": sys.executable})
-    for action, label in ACTIONS.items():
-        key = KEY + "\\shell\\" + action
-        write(key, {"MUIVerb": label, "MultiSelectModel": "Player"})
-        write(
-            key + "\\command",
-            {"": subprocess.list2cmdline(command + ["--explorer", action]) + ' "%1"'},
-        )
+    icon = f'"{sys.executable}",0'
+    write(KEY, {"MUIVerb": "OfflinePDF", "SubCommands": "", "Icon": icon})
+    for mode, title in (("quick", "바로 실행"), ("open", "OfflinePDF에서 열기")):
+        parent = KEY + "\\shell\\" + mode
+        write(parent, {"MUIVerb": title, "SubCommands": "", "Icon": icon})
+        for action, label in ACTIONS.items():
+            key = parent + "\\shell\\" + action
+            write(key, {"MUIVerb": label, "MultiSelectModel": "Player", "Icon": icon})
+            args = command + ["--explorer", action]
+            if mode == "quick":
+                args.append("--quick")
+            write(key + "\\command", {"": subprocess.list2cmdline(args) + ' "%1"'})
 
 
 def parse_args(argv):
     parser = argparse.ArgumentParser(description="OfflinePDF")
     parser.add_argument("--explorer", choices=ACTIONS)
+    parser.add_argument("--quick", action="store_true")
     parser.add_argument("--register-explorer", action="store_true")
     parser.add_argument("--unregister-explorer", action="store_true")
     parser.add_argument("files", nargs="*")
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if args.quick and not args.explorer:
+        parser.error("--quick requires --explorer")
+    return args
 
 
 class ExplorerInbox:
     """One Explorer-launched window per user; collect per-file shell invocations."""
 
-    def __init__(self):
+    def __init__(self, quick=False):
         from multiprocessing.connection import Listener
 
         identity = os.environ.get("USERDOMAIN", "") + "\\" + os.environ.get("USERNAME", "")
         suffix = hashlib.sha256(identity.encode()).hexdigest()[:24]
+        suffix += "-quick" if quick else "-open"
         self.address = r"\\.\pipe\OfflinePDF-" + suffix
         kernel = ctypes.WinDLL("kernel32", use_last_error=True)
         kernel.CreateMutexW.argtypes = [ctypes.c_void_p, ctypes.c_bool, ctypes.c_wchar_p]
@@ -159,7 +170,9 @@ def attach_inbox(app, inbox):
                 app.files = []
                 app.password_cache.clear()
             app.pending_results = None
-            app.select_tool(action)
+            app.select_tool("protect" if action == "unlock" else action)
+            if action == "unlock":
+                app.options["password_mode"].set("암호 제거")
             app.add_paths(paths)
             parents = {str(Path(p).parent) for p in app.files}
             if len(parents) == 1:

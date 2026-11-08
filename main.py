@@ -21,10 +21,15 @@ if __name__ == "__main__":
         register_menu(remove=args.unregister_explorer)
         raise SystemExit(0)
     if args.explorer:
-        inbox = ExplorerInbox()
+        inbox = ExplorerInbox(quick=args.quick)
         inbox.submit(args.explorer, args.files)
         if not inbox.owner:
             raise SystemExit(0)
+    if args.quick:
+        from offline_pdf.quick import main as quick_main
+
+        quick_main(inbox)
+        raise SystemExit(0)
     from offline_pdf.app import main
 
     main(inbox=inbox, files=args.files if not args.explorer else None)

@@ -60,19 +60,20 @@ class ExplorerTests(unittest.TestCase):
         with patch("offline_pdf.explorer.KEY", key):
             try:
                 register_menu()
-                for action in ACTIONS:
-                    with winreg.OpenKey(
-                        winreg.HKEY_CURRENT_USER, key + "\\shell\\" + action
-                    ) as handle:
-                        self.assertEqual(
-                            winreg.QueryValueEx(handle, "MultiSelectModel")[0], "Player"
-                        )
-                    with winreg.OpenKey(
-                        winreg.HKEY_CURRENT_USER, key + "\\shell\\" + action + "\\command"
-                    ) as handle:
-                        command = winreg.QueryValueEx(handle, "")[0]
-                        self.assertIn("--explorer " + action, command)
-                        self.assertTrue(command.endswith('"%1"'))
+                with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key) as handle:
+                    self.assertIn(",0", winreg.QueryValueEx(handle, "Icon")[0])
+                for mode in ("quick", "open"):
+                    for action in ACTIONS:
+                        verb = key + "\\shell\\" + mode + "\\shell\\" + action
+                        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, verb) as handle:
+                            self.assertEqual(
+                                winreg.QueryValueEx(handle, "MultiSelectModel")[0], "Player"
+                            )
+                        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, verb + "\\command") as handle:
+                            command = winreg.QueryValueEx(handle, "")[0]
+                            self.assertIn("--explorer " + action, command)
+                            self.assertEqual("--quick" in command, mode == "quick")
+                            self.assertTrue(command.endswith('"%1"'))
             finally:
                 register_menu(remove=True)
             with self.assertRaises(FileNotFoundError):
