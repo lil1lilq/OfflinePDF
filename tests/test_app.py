@@ -254,6 +254,17 @@ class AppTests(unittest.TestCase):
         self.assertFalse(any(c.active for c in self.app.cards.values()))
         self.root.update()
 
+    def test_i3_tool_without_options_keeps_a_one_row_panel(self):
+        # Merge has no option cells, only the file name; an empty option area
+        # used to claim CustomTkinter's default 200 px and stretch the panel.
+        for previous in ("merge", "nup", "split", "merge"):
+            self.app.select_tool(previous)
+            self.app.select_tool("merge")
+            self.root.update()
+            self.assertLessEqual(self.app.form.winfo_height(), 2, previous)
+            self.assertLess(self.app.columns.winfo_height(), 110, previous)
+            self.assertTrue(self.app.name_frame.winfo_ismapped())
+
     def test_j_switch_tools_preserves_pdf_and_accepts_mixed_inputs(self):
         self.app.select_tool("merge")
         self.app.files = [str(self.source)]

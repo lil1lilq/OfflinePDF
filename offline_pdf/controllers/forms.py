@@ -188,6 +188,11 @@ class FormController:
                     continue
             visible.append((key, cell))
         wrap_captions(self.form, visible, width)
+        if not visible:
+            # A tool without options (merge has only the file name beside it).
+            # An empty CTkFrame claims 200 px, and Tk keeps an emptied grid at
+            # its last size, so request almost nothing; cells regrow it.
+            self.form.configure(height=1)
         # One row does not depend on the width, so resizes need no new layout.
         signature = tuple(id(cell) for _, cell in visible)
         if signature == getattr(self, "form_signature", None):
