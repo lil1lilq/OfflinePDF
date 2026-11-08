@@ -6,6 +6,8 @@ The application never imports this module. Archives remain unmodified.
 import argparse
 import hashlib
 import json
+import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -20,18 +22,53 @@ def digest(path):
     return result.hexdigest()
 
 
+# Source hosts such as mupdf.com sometimes answer 502/503/504 for a moment.
+RETRY_DELAYS = (5, 15, 45, 90)
+
+
+def retrying(action, url, sleep=time.sleep):
+    """Run action(), retrying temporary network and server errors with growing waits."""
+    for attempt in range(len(RETRY_DELAYS) + 1):
+        try:
+            return action()
+        except urllib.error.HTTPError as exc:
+            # 4xx other than "too many requests" will not fix itself: fail at once.
+            if attempt == len(RETRY_DELAYS) or (exc.code < 500 and exc.code != 429):
+                raise
+            reason = f"HTTP {exc.code}"
+        except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
+            if attempt == len(RETRY_DELAYS):
+                raise
+            reason = type(exc).__name__
+        delay = RETRY_DELAYS[attempt]
+        print(f"{reason} from {url}; retrying in {delay} s ({attempt + 1}/{len(RETRY_DELAYS)})")
+        sleep(delay)
+
+
 def download(url, path):
     temporary = path.with_suffix(path.suffix + ".partial")
-    try:
+
+    def fetch():
         with urllib.request.urlopen(url, timeout=120) as response, temporary.open("wb") as out:
             while True:
                 block = response.read(1024 * 1024)
                 if not block:
                     break
                 out.write(block)
+
+    try:
+        retrying(fetch, url)
         temporary.replace(path)
     finally:
         temporary.unlink(missing_ok=True)
+
+
+def fetch_json(url):
+    def fetch():
+        with urllib.request.urlopen(url, timeout=30) as response:
+            return json.load(response)
+
+    return retrying(fetch, url)
 
 
 def main():
@@ -62,10 +99,7 @@ def main():
         return
     records = []
     for package, version in [("PyMuPDF", "1.26.7"), ("Pillow", "13.0.0")]:
-        with urllib.request.urlopen(
-            f"https://pypi.org/pypi/{package}/{version}/json", timeout=30
-        ) as response:
-            release = json.load(response)
+        release = fetch_json(f"https://pypi.org/pypi/{package}/{version}/json")
         source = next(item for item in release["urls"] if item["packagetype"] == "sdist")
         records.append(
             {
