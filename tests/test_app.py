@@ -749,7 +749,23 @@ class AppTests(unittest.TestCase):
         ):
             self.app.run()
             self.root.update()
-            self.assertTrue(self.app.progress.winfo_ismapped())
+
+            def layout(widget):
+                return (
+                    f"manager={widget.winfo_manager()!r} mapped={widget.winfo_ismapped()} "
+                    f"h={widget.winfo_height()} req={widget.winfo_reqheight()}"
+                )
+
+            footer = self.app.progress.master
+            self.assertTrue(
+                self.app.progress.winfo_ismapped(),
+                "progress hidden right after run: "
+                f"root={self.root.winfo_width()}x{self.root.winfo_height()} "
+                f"screen={self.root.winfo_screenwidth()}x{self.root.winfo_screenheight()} "
+                f"process={self.app.process!r} status={self.app.status.get()!r} | "
+                f"work: {layout(self.app.work)} | footer: {layout(footer)} | "
+                f"body: {layout(self.app.body)} | progress: {layout(self.app.progress)}",
+            )
             self.wait_for_job()
         lengths = []
         for path in self.app.result_files:

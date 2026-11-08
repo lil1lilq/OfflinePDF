@@ -18,6 +18,26 @@ from ..tools import TOOLS
 from ..ui import BLUE, CARD_TEXT, MUTED, RED, icon
 
 
+def wrap_captions(form, visible, width=None):
+    """Wrap captions to an equal share of the form's width (its parent sets it)."""
+    if not visible:
+        return
+    width = width or form.winfo_width()
+    if not isinstance(width, int) or width <= 1:
+        return
+    # Same weights as the grid: compression 3, others 1, padded to 4 columns.
+    weights = [3 if key == "compression" else 1 for key, _ in visible]
+    share = width / (sum(weights) + max(0, 4 - len(visible)))
+    for (key, cell), weight in zip(visible, weights):
+        caption = getattr(cell, "caption", None)
+        if caption is None:
+            continue
+        wrap = max(60, int(share * weight) - 14)
+        if getattr(cell, "caption_wrap", None) != wrap:
+            cell.caption_wrap = wrap
+            caption.configure(wraplength=wrap)
+
+
 class FormController:
     """Tool-specific fields, save settings and live split summaries."""
 
@@ -88,13 +108,9 @@ class FormController:
         caption = ttk.Label(cell, text=label, style="Panel.TLabel", wraplength=80, justify="left")
         caption.pack(anchor="w", fill="x", pady=(0, 3))
         # Every option shares one row, so captions wrap instead of widening the cell.
-        cell.bind(
-            "<Configure>",
-            lambda e, c=caption: (
-                c.configure(wraplength=max(50, e.width - 4)) if e.widget is cell else None
-            ),
-            add="+",
-        )
+        # arrange_fields sets the wrap width from the form's width, never from the
+        # cell's own width: that would feed back into the cell size and relayout.
+        cell.caption = caption
         controls = ttk.Frame(cell, style="Panel.TFrame")
         # Bottom-aligned, so inputs line up even when a neighbouring caption wraps.
         controls.pack(side="bottom", fill="x")
@@ -162,6 +178,7 @@ class FormController:
                 ):
                     continue
             visible.append((key, cell))
+        wrap_captions(self.form, visible, width)
         # One row does not depend on the width, so resizes need no new layout.
         signature = tuple(id(cell) for _, cell in visible)
         if signature == getattr(self, "form_signature", None):
