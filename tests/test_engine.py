@@ -184,13 +184,19 @@ class EngineTests(unittest.TestCase):
         with pdf.open(self.output_pdf(result)) as doc:
             self.assertEqual(doc.page_count, 3)
 
+        # Removing an owner-only password needs no password either.
         app.tool = "protect"
         app.effective_tool = lambda: "unlock"
-        with patch("offline_pdf.passwords.ask_password", return_value=None) as prompt:
-            self.assertFalse(ensure_password(app, str(owner_only)))
-            prompt.assert_called_once()
+        with patch("offline_pdf.passwords.ask_password") as prompt:
+            self.assertTrue(ensure_password(app, str(owner_only)))
+            prompt.assert_not_called()
+        result = self.run_tool("unlock", [str(owner_only)])
+        with pdf.open(self.output_pdf(result)) as doc:
+            self.assertFalse((doc.metadata or {}).get("encryption"))
+            self.assertEqual(doc.page_count, 3)
 
-    def test_owner_only_pdf_with_restricted_permissions_requests_owner_password(self):
+    def test_owner_only_restrictions_do_not_block_work_like_a_browser(self):
+        # Opens without a password (as in Chrome) but forbids editing and copying.
         restricted = self.root / "편집 금지.pdf"
         with pdf.open(self.source) as doc:
             doc.save(
@@ -198,17 +204,46 @@ class EngineTests(unittest.TestCase):
                 encryption=pdf.PDF_ENCRYPT_AES_256,
                 user_pw="",
                 owner_pw="owner-secret",
-                permissions=pdf.PDF_PERM_COPY,
+                permissions=pdf.PDF_PERM_PRINT,
+            )
+        for tool in ("merge", "text", "protect"):
+            app = SimpleNamespace(tool=tool, password_cache={}, metadata_cache={})
+            if tool == "protect":
+                app.effective_tool = lambda: "unlock"
+            with patch("offline_pdf.passwords.ask_password") as prompt:
+                self.assertTrue(ensure_password(app, str(restricted)), tool)
+                prompt.assert_not_called()
+        for extraction in (False, True):
+            doc, encrypted = open_pdf(str(restricted), extraction=extraction)
+            with doc:
+                self.assertTrue(encrypted)
+        result = self.run_tool("merge", [str(restricted)])
+        with pdf.open(self.output_pdf(result)) as doc:
+            self.assertEqual(doc.page_count, 3)
+        text = next(self.run_tool("text", [str(restricted)]).glob("*.txt"))
+        self.assertIn("SECOND", text.read_text(encoding="utf-8-sig"))
+
+    def test_opening_password_is_still_required(self):
+        locked = self.root / "열기 암호.pdf"
+        with pdf.open(self.source) as doc:
+            doc.save(
+                locked,
+                encryption=pdf.PDF_ENCRYPT_AES_256,
+                user_pw="user-secret",
+                owner_pw="owner-secret",
+                permissions=pdf.PDF_PERM_PRINT,
             )
         app = SimpleNamespace(tool="merge", password_cache={}, metadata_cache={})
-        with patch("offline_pdf.passwords.ask_password", return_value="owner-secret") as prompt:
-            self.assertTrue(ensure_password(app, str(restricted)))
+        with patch("offline_pdf.passwords.ask_password", return_value=None) as prompt:
+            self.assertFalse(ensure_password(app, str(locked)))
             prompt.assert_called_once()
+        with self.assertRaisesRegex(UserError, "암호화된 PDF"):
+            open_pdf(str(locked))
+        # The opening (user) password alone still respects the editing restriction.
         with self.assertRaisesRegex(UserError, "소유자 암호"):
-            open_pdf(str(restricted))
-        doc, encrypted = open_pdf(str(restricted), "owner-secret")
-        with doc:
-            self.assertTrue(encrypted)
+            open_pdf(str(locked), "user-secret")
+        doc, _ = open_pdf(str(locked), "owner-secret")
+        doc.close()
 
     def test_images_roundtrip(self):
         folder = self.run_tool("pdf_images", pages="1", dpi="72", format="PNG")
