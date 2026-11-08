@@ -12,6 +12,20 @@ from PIL import Image
 from .engine import UserError, check_cancel
 
 MAX_OUTPUT_PIXELS = 40_000_000
+# Output size relative to the scan. The model always enlarges 4x; smaller
+# factors resize its result down, so "1" keeps the size and only sharpens.
+SCALES = {"1": 1.0, "1.5": 1.5, "2": 2.0, "4": 4.0}
+JPEG_QUALITY = 90
+
+
+def output_scale(options):
+    """The chosen factor; the advanced "4x" checkbox overrides the main choice."""
+    if options.get("scale4") in (True, "1", "True", "true"):
+        return 4.0
+    value = str(options.get("scale", "1.5")).strip()
+    if value not in SCALES:
+        raise UserError("AI 보정 배율을 원본 크기·1.5배·2배·4배 중에서 선택하세요.")
+    return SCALES[value]
 
 
 def model_folder():
@@ -46,15 +60,22 @@ class Upscaler:
     def image(self, image, scale=2, cancel=None, progress=lambda value, total: None):
         import numpy as np
 
-        if scale not in (2, 4):
-            raise UserError("AI 확대 배율은 2배 또는 4배를 선택하세요.")
+        if float(scale) not in SCALES.values():
+            raise UserError("AI 보정 배율을 원본 크기·1.5배·2배·4배 중에서 선택하세요.")
+        scale = float(scale)
         w, h = image.size
+        # The model works tile by tile, so only the finished image's size matters.
         if w * h * scale * scale > MAX_OUTPUT_PIXELS:
             raise UserError(
-                "AI 보정 결과가 너무 큽니다. 2배로 선택하거나 이미지 해상도를 줄이세요."
+                "AI 보정 결과가 너무 큽니다. 더 작은 배율을 선택하거나 이미지 해상도를 줄이세요."
             )
+
+        def at(value):
+            # Shared rounding keeps neighbouring tiles edge to edge at 1.5x.
+            return round(value * scale)
+
         tile, pad = 128, 40
-        result = Image.new("RGB", (w * scale, h * scale))
+        result = Image.new("RGB", (at(w), at(h)))
         total = ((w + tile - 1) // tile) * ((h + tile - 1) // tile)
         done = 0
         try:
@@ -77,13 +98,13 @@ class Upscaler:
                             ((x - x1) * 4, (y - y1) * 4, (x2 - x1) * 4, (y2 - y1) * 4)
                         )
                     try:
-                        if scale == 2:
+                        if scale != 4:
                             reduced = region.resize(
-                                ((x2 - x) * scale, (y2 - y) * scale), Image.Resampling.LANCZOS
+                                (at(x2) - at(x), at(y2) - at(y)), Image.Resampling.LANCZOS
                             )
                             region.close()
                             region = reduced
-                        result.paste(region, (x * scale, y * scale))
+                        result.paste(region, (at(x), at(y)))
                     finally:
                         region.close()
                     done += 1
@@ -105,18 +126,37 @@ def images_to_enhance(doc):
     return found
 
 
-def read_image(doc, xref):
+def read_image(doc, xref, details=None):
+    """Decode an embedded image as RGB; details gets its stored format and mode."""
     data = doc.extract_image(xref)
     if data["width"] * data["height"] > MAX_OUTPUT_PIXELS:
         raise UserError("이미지가 너무 큽니다. 작은 문서로 다시 시도하세요.")
     with Image.open(BytesIO(data["image"])) as image:
+        if details is not None:
+            details.update(ext=data.get("ext", ""), mode=image.mode)
         return image.convert("RGB")
 
 
+def encode(image, details):
+    """Store the result like its source: a JPEG scan stays JPEG, which keeps the
+    file several times smaller than PNG at no visible cost; a lossless source
+    (PNG, etc.) stays lossless. Grayscale sources stay grayscale."""
+    stream = BytesIO()
+    gray = details.get("mode") in ("L", "LA", "I", "I;16")
+    out = image.convert("L") if gray else image
+    try:
+        if details.get("ext") in ("jpeg", "jpg"):
+            out.save(stream, format="JPEG", quality=JPEG_QUALITY, optimize=True)
+        else:
+            out.save(stream, format="PNG", optimize=True)
+    finally:
+        if out is not image:
+            out.close()
+    return stream.getvalue()
+
+
 def enhance_pdf(doc, options, emit, cancel):
-    scale = int(options.get("scale", "2"))
-    if scale not in (2, 4):
-        raise UserError("AI 확대 배율은 2배 또는 4배를 선택하세요.")
+    scale = output_scale(options)
     found = images_to_enhance(doc)
     if not found:
         raise UserError(
@@ -125,7 +165,8 @@ def enhance_pdf(doc, options, emit, cancel):
     upscaler = Upscaler()
     for i, (xref, page_num) in enumerate(found.items()):
         check_cancel(cancel)
-        with read_image(doc, xref) as original:
+        details = {}
+        with read_image(doc, xref, details) as original:
 
             def progress(value, total):
                 emit(
@@ -138,9 +179,7 @@ def enhance_pdf(doc, options, emit, cancel):
                 )
 
             with upscaler.image(original, scale, cancel, progress) as improved:
-                stream = BytesIO()
-                improved.save(stream, format="PNG")
-                doc[page_num].replace_image(xref, stream=stream.getvalue())
+                doc[page_num].replace_image(xref, stream=encode(improved, details))
 
 
 def comparison(doc, stage, options, emit, cancel):
@@ -154,9 +193,8 @@ def comparison(doc, stage, options, emit, cancel):
         x = max(0, (w - 160) // 2)
         y = max(0, (h - 160) // 2)
         with image.crop((x, y, min(w, x + 160), min(h, y + 160))) as crop:
-            scale = int(options.get("scale", "2"))
-            crop.resize((crop.width * scale, crop.height * scale), Image.Resampling.NEAREST).save(
-                stage / "before.png"
-            )
+            scale = output_scale(options)
+            size = (round(crop.width * scale), round(crop.height * scale))
+            crop.resize(size, Image.Resampling.NEAREST).save(stage / "before.png")
             with Upscaler().image(crop, scale, cancel) as after:
                 after.save(stage / "after.png")

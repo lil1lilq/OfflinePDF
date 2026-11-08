@@ -34,7 +34,7 @@ Features or fixes added to the source may not be in earlier releases.
 | Text and image overlay · Page numbers | Add text, signature or stamp images, and page numbers |
 | Crop margins · Redact | Cover page edges; permanently delete the content of selected areas |
 | Extract text · Scan OCR | Save text; recognize Korean and English text in scanned documents |
-| AI enhancement | Upscale scanned images 2x or 4x, compare a before/after detail, optional maximum MB per file |
+| AI enhancement | Sharpen scanned images at the same size, or upscale them 1.5x or 2x (4x under advanced options); compare a before/after detail |
 | Clean metadata | Clean document properties, attachments and similar data |
 
 Tick **Remove plain white pages** in the sidebar to drop blank pages from PDF results. It is off every time the program starts. Pages with any text, shapes, annotations, form fields or image traces are kept.

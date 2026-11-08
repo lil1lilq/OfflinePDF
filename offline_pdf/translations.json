@@ -422,8 +422,6 @@
   "빈 페이지 삭제 켜짐": "Blank-page removal on",
   "결과물에서 아무것도 없는 흰 페이지를 지웁니다. 글자·선·이미지가 있는 페이지는 남깁니다.": "Removes completely white pages from the result. Pages with any text, lines or images are kept.",
   "확대 배율": "Scale",
-  "2배 (권장)": "2x (recommended)",
-  "4배 (더 선명·느림)": "4x (sharper, slower)",
   "상세 옵션 ▾": "Advanced ▾",
   "상세 옵션 접기 ▴": "Hide advanced ▴",
   "최소 DPI·품질은 최대 용량을 입력했을 때만 사용합니다. 용량을 맞추느라 화질이 낮아질 수 있습니다.": "Minimum DPI and quality apply only when a maximum size is set. Meeting the size may lower image quality.",
@@ -441,5 +439,12 @@
   "오픈소스 고지": "Open-source notices",
   "닫기": "Close",
   "소스 코드 안내": "Source code",
-  "함께 사용한 오픈소스 구성요소의 저작권과 라이선스는 '오픈소스 고지'와 licenses 폴더에 있습니다. 프로그램과 구성요소의 소스 코드는 이 프로그램을 받은 곳에서 OfflinePDF-{0}-source.zip으로 함께 제공합니다. 자세한 내용은 '소스 코드 안내'를 확인하세요.": "Copyrights and licenses of the open-source components are in 'Open-source notices' and the licenses folder. Source code of the program and its components is provided as OfflinePDF-{0}-source.zip from the same place you got this program. See 'Source code' for details."
+  "함께 사용한 오픈소스 구성요소의 저작권과 라이선스는 '오픈소스 고지'와 licenses 폴더에 있습니다. 프로그램과 구성요소의 소스 코드는 이 프로그램을 받은 곳에서 OfflinePDF-{0}-source.zip으로 함께 제공합니다. 자세한 내용은 '소스 코드 안내'를 확인하세요.": "Copyrights and licenses of the open-source components are in 'Open-source notices' and the licenses folder. Source code of the program and its components is provided as OfflinePDF-{0}-source.zip from the same place you got this program. See 'Source code' for details.",
+  "원본 크기로 선명하게": "Sharpen, same size",
+  "1.5배 (권장)": "1.5x (recommended)",
+  "2배": "2x",
+  "큰 확대": "Large",
+  "4배 (용량·시간 매우 큼)": "4x (very large, slow)",
+  "AI 보정 배율을 원본 크기·1.5배·2배·4배 중에서 선택하세요.": "Choose an AI scale: same size, 1.5x, 2x or 4x.",
+  "AI 보정 결과가 너무 큽니다. 더 작은 배율을 선택하거나 이미지 해상도를 줄이세요.": "The AI result would be too large. Choose a smaller scale or reduce the image resolution."
 }

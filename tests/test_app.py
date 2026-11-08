@@ -265,6 +265,27 @@ class AppTests(unittest.TestCase):
             self.assertLess(self.app.columns.winfo_height(), 110, previous)
             self.assertTrue(self.app.name_frame.winfo_ismapped())
 
+    def test_i4_upscale_scale_choices_and_advanced_row(self):
+        self.app.select_tool("upscale")
+        self.root.update()
+        self.assertEqual(self.app.options["scale"].get(), "1.5")
+        self.assertFalse(self.app.options["scale4"].get())
+        grid_rows = {key: cell.grid_info().get("row") for key, cell in self.app.form_cells}
+        self.assertEqual(grid_rows["scale"], 0)
+        self.assertIsNone(grid_rows["scale4"])  # hidden until advanced options open
+        self.app.toggle_advanced()
+        self.root.update()
+        rows = {key: int(cell.grid_info()["row"]) for key, cell in self.app.form_cells}
+        self.assertEqual(rows["scale"], 0)
+        self.assertEqual({rows[k] for k in ("scale4", "max_output_mb", "min_dpi")}, {1})
+        self.app.options["scale4"].set(True)
+        self.app.update_scale4()
+        self.assertEqual(self.app.option_widgets["scale"]._state, "disabled")
+        self.app.options["scale4"].set(False)
+        self.app.update_scale4()
+        self.assertEqual(self.app.option_widgets["scale"]._state, "normal")
+        self.app.toggle_advanced()
+
     def test_j_switch_tools_preserves_pdf_and_accepts_mixed_inputs(self):
         self.app.select_tool("merge")
         self.app.files = [str(self.source)]
@@ -1055,7 +1076,8 @@ class AppTests(unittest.TestCase):
             self.wait_for_job()
         with pdf.open(self.app.result_files[0]) as doc:
             self.assertIn("RETAIN TEXT", doc[0].get_text())
-            self.assertEqual(doc[0].get_images()[0][2:4], (64, 48))
+            # The default AI scale is 1.5x: a 32x24 scan becomes 48x36.
+            self.assertEqual(doc[0].get_images()[0][2:4], (48, 36))
         from offline_pdf import __version__
 
         self.assertIn(__version__, self.root.title())
