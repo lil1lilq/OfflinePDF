@@ -43,6 +43,25 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
+Name: "explorermenu"; Description: "탐색기 PDF 우클릭 메뉴 추가 / Add Explorer PDF menu"; Flags: unchecked
+
+[Registry]
+Root: HKA; Subkey: "Software\Classes\SystemFileAssociations\.pdf\shell\OfflinePDF"; ValueType: string; ValueName: "MUIVerb"; ValueData: "OfflinePDF"; Tasks: explorermenu; Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Classes\SystemFileAssociations\.pdf\shell\OfflinePDF"; ValueType: string; ValueName: "SubCommands"; ValueData: ""; Tasks: explorermenu
+
+Root: HKA; Subkey: "Software\Classes\SystemFileAssociations\.pdf\shell\OfflinePDF\shell\merge"; ValueType: string; ValueName: "MUIVerb"; ValueData: "PDF 병합"; Tasks: explorermenu
+Root: HKA; Subkey: "Software\Classes\SystemFileAssociations\.pdf\shell\OfflinePDF\shell\merge"; ValueType: string; ValueName: "MultiSelectModel"; ValueData: "Player"; Tasks: explorermenu
+Root: HKA; Subkey: "Software\Classes\SystemFileAssociations\.pdf\shell\OfflinePDF\shell\merge\command"; ValueType: string; ValueName: ""; ValueData: """{app}\OfflinePDF.exe"" --explorer merge ""%1"""; Tasks: explorermenu
+Root: HKA; Subkey: "Software\Classes\SystemFileAssociations\.pdf\shell\OfflinePDF\shell\split"; ValueType: string; ValueName: "MUIVerb"; ValueData: "PDF 분할"; Tasks: explorermenu
+Root: HKA; Subkey: "Software\Classes\SystemFileAssociations\.pdf\shell\OfflinePDF\shell\split"; ValueType: string; ValueName: "MultiSelectModel"; ValueData: "Player"; Tasks: explorermenu
+Root: HKA; Subkey: "Software\Classes\SystemFileAssociations\.pdf\shell\OfflinePDF\shell\split\command"; ValueType: string; ValueName: ""; ValueData: """{app}\OfflinePDF.exe"" --explorer split ""%1"""; Tasks: explorermenu
+Root: HKA; Subkey: "Software\Classes\SystemFileAssociations\.pdf\shell\OfflinePDF\shell\compress"; ValueType: string; ValueName: "MUIVerb"; ValueData: "PDF 압축"; Tasks: explorermenu
+Root: HKA; Subkey: "Software\Classes\SystemFileAssociations\.pdf\shell\OfflinePDF\shell\compress"; ValueType: string; ValueName: "MultiSelectModel"; ValueData: "Player"; Tasks: explorermenu
+Root: HKA; Subkey: "Software\Classes\SystemFileAssociations\.pdf\shell\OfflinePDF\shell\compress\command"; ValueType: string; ValueName: ""; ValueData: """{app}\OfflinePDF.exe"" --explorer compress ""%1"""; Tasks: explorermenu
+Root: HKA; Subkey: "Software\Classes\SystemFileAssociations\.pdf\shell\OfflinePDF\shell\upscale"; ValueType: string; ValueName: "MUIVerb"; ValueData: "AI 업스케일"; Tasks: explorermenu
+Root: HKA; Subkey: "Software\Classes\SystemFileAssociations\.pdf\shell\OfflinePDF\shell\upscale"; ValueType: string; ValueName: "MultiSelectModel"; ValueData: "Player"; Tasks: explorermenu
+Root: HKA; Subkey: "Software\Classes\SystemFileAssociations\.pdf\shell\OfflinePDF\shell\upscale\command"; ValueType: string; ValueName: ""; ValueData: """{app}\OfflinePDF.exe"" --explorer upscale ""%1"""; Tasks: explorermenu
+
 [Files]
 ; The same files as the portable ZIP, including licenses and corresponding sources.
 Source: "..\dist\OfflinePDF\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs

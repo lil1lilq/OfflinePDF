@@ -18,7 +18,7 @@ Documents are processed on your PC. Files are never uploaded to an external conv
 Two downloads are available: an installer, and a portable ZIP that needs no installation. Windows 10 and 11, 64-bit, are supported. Everything the program needs is included, so Python does not have to be installed.
 Keep the portable version's folder together with the executable.
 
-The current source version is **1.0.1**. Check the version shown on Releases for the downloaded files.
+The current source version is **1.1.0**. Check the version shown on Releases for the downloaded files.
 Features or fixes added to the source may not be in earlier releases.
 
 ## Features
@@ -74,3 +74,18 @@ Use **Settings** at the bottom of the window to choose Korean or English and the
 
 The source code is provided under [AGPL-3.0-or-later](LICENSE).
 Notices for third-party components and models are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## Explorer context menu
+
+Select the optional Explorer PDF menu during installation. Select PDFs and use
+OfflinePDF → Merge / Split / Compress / AI upscale (under Show more options on
+Windows 11). Review settings and file order before running. Files are loaded in
+name order. Per-page splitting processes all listed PDFs; custom boundaries
+apply to the selected file only. A shared input folder is suggested for output;
+otherwise a folder picker opens. Originals are preserved. Requests arriving
+during processing wait until completion. Explorer launches share their own window.
+
+Portable users can run Register-Explorer.cmd and Unregister-Explorer.cmd to manage
+the current-user menu. Unregister before moving/deleting the folder, then register
+again at the new location. Do not register installed and portable copies together.
+The equivalent executable flags are --register-explorer and --unregister-explorer.

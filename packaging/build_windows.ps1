@@ -37,7 +37,7 @@ Invoke-Checked $Python $bundleArgs
 $destination = 'dist/OfflinePDF'
 Copy-Item 'README.md','README.en.md','LICENSE','THIRD_PARTY_NOTICES.md','SOURCE_CODE.txt' $destination
 Copy-Item 'CHANGELOG.md' $destination
-Copy-Item 'BUILDING.md' $destination
+Copy-Item 'BUILDING.md','Register-Explorer.cmd','Unregister-Explorer.cmd' $destination
 Copy-Item 'assets' "$destination/assets" -Recurse -Force
 Copy-Item 'licenses' "$destination/licenses" -Recurse -Force
 # The Corresponding Source is a separate release file (see below), not part of
