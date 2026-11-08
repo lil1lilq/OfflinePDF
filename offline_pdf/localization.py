@@ -162,7 +162,7 @@ def apply_language(root, value):
         for option in ("variable", "textvariable"):
             try:
                 active_variables.add(str(widget.cget(option)))
-            except tk.TclError:
+            except (tk.TclError, ValueError):
                 pass
         for child in widget.winfo_children():
             collect(child)
@@ -193,6 +193,8 @@ def apply_language(root, value):
             pass
 
     def visit(widget):
+        if hasattr(widget, "source_text"):
+            widget.configure(text=tr(widget.source_text))
         if hasattr(widget, "_canonical_values"):
             widget.configure(values=widget._canonical_values)
         if isinstance(widget, tk.Canvas):

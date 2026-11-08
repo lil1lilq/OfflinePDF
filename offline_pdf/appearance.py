@@ -4,25 +4,29 @@ import sys
 import tkinter as tk
 from tkinter import ttk
 
+import customtkinter as ctk
+
+from .theme import set_mode
+
 DEFAULT = dict(
-    BG="#f5f7fb",
+    BG="#f4f6fa",
     PANEL="#ffffff",
-    INK="#202b3d",
-    MUTED="#637086",
-    RED="#c62828",
-    LINE="#e2e7ef",
-    BLUE="#285de5",
-    SOFT="#edf2ff",
+    INK="#202a3a",
+    MUTED="#526078",
+    RED="#b3384a",
+    LINE="#dfe5ef",
+    BLUE="#3759da",
+    SOFT="#eaf0ff",
 )
 DARK = dict(
-    BG="#1c2027",
-    PANEL="#292e37",
-    INK="#edf1f7",
-    MUTED="#abb8cb",
-    RED="#ff8585",
-    LINE="#485263",
-    BLUE="#82aaff",
-    SOFT="#303f59",
+    BG="#171c25",
+    PANEL="#222a36",
+    INK="#eff3fa",
+    MUTED="#b7c2d2",
+    RED="#ff929e",
+    LINE="#394557",
+    BLUE="#a9bcff",
+    SOFT="#303b53",
 )
 _current = dict(DEFAULT)
 
@@ -33,6 +37,7 @@ def palette():
 
 def apply_theme(root, name):
     global _current
+    set_mode(name)
     target = DARK if name == "dark" else DEFAULT
     old = _current
     mapping = {v.lower(): target[k] for k, v in old.items()}
@@ -51,6 +56,10 @@ def apply_theme(root, name):
                     setattr(module, key, color)
 
     def visit(widget):
+        if isinstance(widget, (ctk.CTk, ctk.CTkBaseClass, ctk.CTkScrollableFrame)):
+            for child in widget.winfo_children():
+                visit(child)
+            return
         if not isinstance(widget, ttk.Widget):
             options = {}
             for key in (
@@ -66,7 +75,7 @@ def apply_theme(root, name):
                     color = str(widget.cget(key)).lower()
                     if color in mapping:
                         options[key] = mapping[color]
-                except tk.TclError:
+                except (tk.TclError, ValueError):
                     pass
             if options:
                 widget.configure(**options)

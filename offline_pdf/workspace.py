@@ -238,11 +238,35 @@ class FileList(tk.Canvas):
                 if selected
                 else BG
             )
-            self.create_rectangle(
-                3,
-                y + 2,
-                w - 3,
-                y + self.row_height - 5,
+            left, top = 3, y + 2
+            right, bottom, radius = w - 3, y + self.row_height - 5, 12
+            self.create_polygon(
+                left + radius,
+                top,
+                right - radius,
+                top,
+                right,
+                top,
+                right,
+                top + radius,
+                right,
+                bottom - radius,
+                right,
+                bottom,
+                right - radius,
+                bottom,
+                left + radius,
+                bottom,
+                left,
+                bottom,
+                left,
+                bottom - radius,
+                left,
+                top + radius,
+                left,
+                top,
+                smooth=True,
+                splinesteps=12,
                 fill=mix(background, fill, opacity),
                 outline=mix(background, BLUE if selected else LINE, opacity),
                 width=1,
@@ -329,7 +353,7 @@ class StatusFeedback:
             t = min(1, (time.monotonic() - start) / 0.9)
             bg = mix(fill, PANEL, t)
             self.label.config(bg=bg)
-            self.label.master.config(bg=bg)
+            self.label.master.configure(fg_color=bg)
             if t < 1:
                 self.timer = self.label.after(25, tick)
 
@@ -339,12 +363,12 @@ class StatusFeedback:
         self.app.file_list.flash(indices)
         if self.count_timer:
             self.label.after_cancel(self.count_timer)
-        self.app.file_count.config(foreground=BLUE)
+        self.app.file_count.configure(text_color=BLUE)
         self.count_timer = self.label.after(1100, self.end_count)
 
     def end_count(self):
         self.count_timer = None
-        self.app.file_count.config(foreground=INK)
+        self.app.file_count.configure(text_color=INK)
 
     def close(self):
         self.app.status.trace_remove("write", self.trace)
@@ -362,6 +386,7 @@ class WindowDropHover:
     def __init__(self, app):
         self.app = app
         self.active = False
+        self.pointer_inside = False
         self.timer = None
         self.closed = False
         self.notice = tk.Label(
@@ -375,30 +400,28 @@ class WindowDropHover:
             highlightthickness=2,
             highlightbackground=BLUE,
         )
-        self.edges = [tk.Frame(app.root, bg=BLUE) for _ in range(4)]
         self.poll()
+
+    def _pointer(self, inside):
+        self.pointer_inside = inside
+        self.update_hover(
+            bool(getattr(getattr(self.app, "file_drop", None), "_drag_active", False))
+        )
 
     def update_hover(self, active, sidebar_active=False):
         active = bool(active and not self.app.busy())
-        if active == self.active:
+        if active == self.active and getattr(self, "_last_pointer", None) == self.pointer_inside:
             return
         self.active = active
-        self.app.host.configure(
-            highlightthickness=2 if active else 1, highlightbackground=BLUE if active else LINE
-        )
+        self._last_pointer = self.pointer_inside
+        # A color change leaves widget geometry stable; changing highlightthickness
+        # on pointer entry previously caused the entire layout to jump.
+        self.app.host.configure(highlightbackground=BLUE if active or self.pointer_inside else LINE)
         if active:
             self.notice.place(relx=0.5, rely=0.5, anchor="center")
             self.notice.lift()
-            self.edges[0].place(x=0, y=0, relwidth=1, height=2)
-            self.edges[1].place(x=0, rely=1, anchor="sw", relwidth=1, height=2)
-            self.edges[2].place(x=0, y=0, width=2, relheight=1)
-            self.edges[3].place(relx=1, y=0, anchor="ne", width=2, relheight=1)
-            for edge in self.edges:
-                edge.lift()
         else:
             self.notice.place_forget()
-            for edge in self.edges:
-                edge.place_forget()
 
     def poll(self):
         self.timer = None
@@ -408,6 +431,12 @@ class WindowDropHover:
             self.app.root.offline_pdf_busy = self.app.busy()
             native = getattr(self.app, "file_drop", None)
             active = bool(native and getattr(native, "_drag_active", False))
+            x, y = self.app.root.winfo_pointerxy()
+            left, top = self.app.root.winfo_rootx(), self.app.root.winfo_rooty()
+            self.pointer_inside = (
+                left <= x < left + self.app.root.winfo_width()
+                and top <= y < top + self.app.root.winfo_height()
+            )
             self.update_hover(active)
         except tk.TclError:
             pass
@@ -420,5 +449,3 @@ class WindowDropHover:
         if self.timer:
             self.app.root.after_cancel(self.timer)
         self.notice.destroy()
-        for edge in self.edges:
-            edge.destroy()

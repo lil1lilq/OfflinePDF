@@ -5,16 +5,27 @@ from __future__ import annotations
 import tkinter as tk
 from tkinter import ttk
 
+import customtkinter as ctk
+from PIL import Image, ImageDraw, ImageTk
+
+from .theme import (
+    BUTTON_RADIUS,
+    CARD_GROUP,
+    CARD_PADDING,
+    CARD_RADIUS,
+    colors,
+    resource_path,
+)
 from .tools import TOOLS
 
-BG = "#f5f7fb"
+BG = "#f4f6fa"
 PANEL = "#ffffff"
-INK = "#202b3d"
-MUTED = "#637086"
-RED = "#c62828"
-LINE = "#e2e7ef"
-BLUE = "#285de5"
-SOFT = "#edf2ff"
+INK = "#202a3a"
+MUTED = "#526078"
+RED = "#b3384a"
+LINE = "#dfe5ef"
+BLUE = "#3759da"
+SOFT = "#eaf0ff"
 FONT = "맑은 고딕"
 
 POPULAR = ("merge", "split", "extract", "compress", "ocr", "pdf_images")
@@ -42,32 +53,9 @@ CARD_TEXT = {key: (title, CARD_SUMMARIES[key]) for key, (title, _) in TOOLS.item
 
 def tool_color(key):
     from .appearance import palette
-    from .effects import mix
 
-    dark = palette()["PANEL"] != "#ffffff"
-    group = (
-        "teal"
-        if key in ("extract", "nup", "rotate", "crop", "number")
-        else "orange"
-        if key == "compress"
-        else "purple"
-        if key in ("pdf_images", "images_pdf", "watermark", "text")
-        else "indigo"
-        if key in ("ocr", "upscale")
-        else "red"
-        if key in ("protect", "unlock", "redact", "clean")
-        else "blue"
-    )
-    colors = {
-        "blue": ("#2464e8", "#91b4ff"),
-        "teal": ("#087f86", "#5dd6ce"),
-        "orange": ("#c45c08", "#ffb276"),
-        "purple": ("#8041c3", "#cbabff"),
-        "indigo": ("#5146bd", "#b5adff"),
-        "red": ("#b13a42", "#ffa0a6"),
-    }
-    color = colors[group][int(dark)]
-    return color, mix(palette()["PANEL"], color, 0.12)
+    colors = palette()
+    return colors["BLUE"], colors["SOFT"]
 
 
 def icon(canvas, key, x, y, color=BLUE, scale=1):
@@ -176,64 +164,26 @@ def icon(canvas, key, x, y, color=BLUE, scale=1):
             canvas.itemconfigure(item, width=1.8 * scale)
 
 
-class ScrollPane(ttk.Frame):
-    """A bounded native scroller; wheel events apply only while hovered."""
+class ScrollPane(ctk.CTkScrollableFrame):
+    """Scrollable home with a canvas alias for navigation and native drop routing."""
 
     def __init__(self, master, **kwargs):
-        super().__init__(master, **kwargs)
-        self.canvas = tk.Canvas(self, bg=BG, highlightthickness=0)
-        self.bar = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
-        self.canvas.configure(yscrollcommand=self._scroll_state)
-        self.bar.pack(side="right", fill="y")
-        self.canvas.pack(side="left", fill="both", expand=True)
-        self.inner = ttk.Frame(self.canvas)
-        self.window = self.canvas.create_window(0, 0, window=self.inner, anchor="nw")
-        self.inner.bind("<Configure>", self._content_size)
-        self.canvas.bind("<Configure>", self._viewport_size)
-        self.wheel_ids = []
-        for sequence in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
-            self.wheel_ids.append(
-                (sequence, self.winfo_toplevel().bind(sequence, self._wheel, add="+"))
-            )
-        self.bind("<Destroy>", self._destroy, add="+")
-
-    def _destroy(self, event):
-        if event.widget is self:
-            for sequence, binding in self.wheel_ids:
-                self.winfo_toplevel().unbind(sequence, binding)
-
-    def _content_size(self, event=None):
-        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
-
-    def _scroll_state(self, first, last):
-        self.bar.set(first, last)
-        if float(first) <= 0 and float(last) >= 1:
-            self.bar.pack_forget()
-        elif not self.bar.winfo_manager():
-            self.bar.pack(side="right", fill="y", before=self.canvas)
-
-    def _viewport_size(self, event):
-        self.canvas.itemconfigure(self.window, width=event.width)
-
-    def _wheel(self, event):
-        if not self.winfo_ismapped():
-            return
-        widget = self.winfo_containing(event.x_root, event.y_root)
-        if widget is None or not str(widget).startswith(str(self)):
-            return
-        # Native lists and entries keep their own wheel behavior.
-        if isinstance(widget, (tk.Listbox, ttk.Combobox, tk.Text)) or getattr(
-            widget, "own_wheel", False
-        ):
-            return
-        if self.inner.winfo_height() <= self.canvas.winfo_height():
-            return
-        step = (
-            (-1 if event.num == 4 else 1)
-            if event.num in (4, 5)
-            else -int(event.delta / 120) or (-1 if event.delta > 0 else 1)
+        super().__init__(
+            master,
+            fg_color=("#f4f6fa", "#171c25"),
+            corner_radius=0,
+            scrollbar_button_color=("#8390a4", "#8793a5"),
+            scrollbar_button_hover_color=("#526078", "#b7c2d2"),
+            **kwargs,
         )
-        self.canvas.yview_scroll(step * 3, "units")
+        self.inner = self
+        self.canvas = self._parent_canvas
+
+    def winfo_ismapped(self):
+        return self._parent_frame.winfo_ismapped()
+
+    def winfo_manager(self):
+        return self._parent_frame.winfo_manager()
 
 
 class Tooltip:
@@ -308,30 +258,118 @@ class Tooltip:
             self.window = None
 
 
-class ToolCard(tk.Canvas):
+class ToolCard(ctk.CTkFrame):
+    """Accessible, entirely clickable CTk card with a bundled Lucide image."""
+
     def __init__(self, master, key, command):
-        super().__init__(master, height=168, width=220, bg=BG, highlightthickness=0, takefocus=True)
+        super().__init__(
+            master,
+            width=220,
+            height=230,
+            corner_radius=CARD_RADIUS,
+            border_width=1,
+            fg_color=("#ffffff", "#222a36"),
+            border_color=("#dfe5ef", "#394557"),
+        )
         self.key = key
         self.command = command
         self.active = False
+        self.hover_amount = 0.0
         self.enabled = True
-        self.hover_amount = 0
         self.compact = False
+        self.pack_propagate(False)
         self.tooltip = Tooltip(self, TOOLS[key][1])
-        from .effects import Tween
+        group = CARD_GROUP[key]
+        light, dark = colors("default")[group], colors("dark")[group]
+        self.chip = ctk.CTkFrame(
+            self,
+            width=48,
+            height=48,
+            corner_radius=10,
+            fg_color=(light[0], dark[0]),
+        )
+        self.chip.pack(anchor="w", padx=CARD_PADDING, pady=(16, 0))
+        self.chip.pack_propagate(False)
+        with Image.open(resource_path("lucide", f"{key}.png")) as image:
+            mask = image.getchannel("A")
 
-        self.tween = Tween(self, self.animate)
-        self.bind("<Destroy>", lambda e: self.tween.close() if e.widget is self else None, add="+")
-        self.bind("<Configure>", lambda e: self.paint())
-        self.bind("<Enter>", lambda e: self.highlight(True))
-        self.bind("<Leave>", lambda e: self.highlight(False))
-        self.bind("<FocusIn>", lambda e: self.highlight(True))
-        self.bind("<FocusOut>", lambda e: self.highlight(False))
-        self.bind("<ButtonRelease-1>", lambda e: self.activate())
-        self.bind("<Return>", lambda e: self.activate())
-        self.bind("<space>", lambda e: self.activate())
+            def tinted(color):
+                rgb = tuple(int(color[i : i + 2], 16) for i in (1, 3, 5))
+                result = Image.new("RGBA", image.size, (*rgb, 0))
+                result.putalpha(mask)
+                return result
+
+            self.icon_image = ctk.CTkImage(
+                light_image=tinted(light[1]), dark_image=tinted(dark[1]), size=(28, 28)
+            )
+        self.icon = ctk.CTkLabel(self.chip, text="", image=self.icon_image, width=28, height=28)
+        self.icon.place(relx=0.5, rely=0.5, anchor="center")
+        title, description = CARD_TEXT[key]
+        self.title_label = ctk.CTkLabel(
+            self,
+            text=title,
+            anchor="w",
+            justify="left",
+            height=0,
+            text_color=("#202a3a", "#eff3fa"),
+            font=(FONT, 14, "bold"),
+        )
+        self.title_label.pack(fill="x", anchor="w", padx=CARD_PADDING, pady=(12, 0))
+        self.description_label = ctk.CTkLabel(
+            self,
+            text=description,
+            anchor="nw",
+            justify="left",
+            height=0,
+            text_color=("#526078", "#b7c2d2"),
+            font=(FONT, 12),
+        )
+        self.description_label.pack(fill="x", anchor="w", padx=CARD_PADDING, pady=(6, 12))
+        self.bind("<Configure>", self._resize_text, add="+")
+        self._bind_tree(self)
         self.bind("<Unmap>", lambda e: self.tooltip.hide(), add="+")
         self.bind("<Destroy>", lambda e: self.tooltip.hide() if e.widget is self else None, add="+")
+
+    def _bind_tree(self, widget):
+        widget.bind("<Enter>", self._enter, add="+")
+        widget.bind("<Leave>", self._leave, add="+")
+        widget.bind("<ButtonRelease-1>", lambda e: self.activate(), add="+")
+        widget.bind("<Return>", lambda e: self.activate(), add="+")
+        widget.bind("<space>", lambda e: self.activate(), add="+")
+        for child in widget.winfo_children():
+            self._bind_tree(child)
+        if widget is self:
+            widget._canvas.configure(takefocus=True)
+
+    def _enter(self, event):
+        self.highlight(True)
+
+    def _leave(self, event):
+        # Child-to-child crossings should not flash the border.
+        x, y = self.winfo_pointerxy()
+        inside = (
+            self.winfo_rootx() <= x < self.winfo_rootx() + self.winfo_width()
+            and self.winfo_rooty() <= y < self.winfo_rooty() + self.winfo_height()
+        )
+        if not inside:
+            self.highlight(False)
+
+    def highlight(self, active):
+        self.active = active and self.enabled
+        self.hover_amount = float(self.active)
+        self.paint()
+        if self.active:
+            self.tooltip.schedule()
+        else:
+            self.tooltip.hide()
+
+    def _resize_text(self, event=None):
+        width = max(60, self.winfo_width() - 2 * CARD_PADDING - 4)
+        if width == getattr(self, "_text_wrap_width", None):
+            return
+        self._text_wrap_width = width
+        self.title_label.configure(wraplength=width)
+        self.description_label.configure(wraplength=width)
 
     def activate(self):
         self.tooltip.hide()
@@ -340,119 +378,33 @@ class ToolCard(tk.Canvas):
 
     def set_compact(self, compact, height):
         self.compact = compact
-        self.configure(height=height, width=170 if compact else 220)
-        self.paint()
+        if self.cget("height") != height:
+            self.configure(height=height)
+        self._resize_text()
 
     def set_enabled(self, enabled):
         self.enabled = enabled
-        self.configure(takefocus=enabled)
-        self.paint()
-
-    def highlight(self, active):
-        self.active = active
-        self.tween.to(1 if active and self.enabled else 0)
-        if active and self.enabled:
-            self.tooltip.schedule()
-        else:
-            self.tooltip.hide()
-
-    def animate(self, value):
-        self.hover_amount = value
         self.paint()
 
     def paint(self):
-        self.delete("all")
-        w = self.winfo_width()
-        h = self.winfo_height()
-        r = 13
-        ph = h - 5
-        points = [
-            r,
-            1,
-            w - r,
-            1,
-            w - 1,
-            1,
-            w - 1,
-            r,
-            w - 1,
-            ph - r,
-            w - 1,
-            ph - 1,
-            w - r,
-            ph - 1,
-            r,
-            ph - 1,
-            1,
-            ph - 1,
-            1,
-            ph - r,
-            1,
-            r,
-            1,
-            1,
-        ]
-        from .effects import mix
-
-        lift = round(3 * self.hover_amount) if self.enabled else 0
-        points = [v + 4 - lift if i % 2 else v for i, v in enumerate(points)]
-        self.create_polygon(
-            points,
-            smooth=True,
-            fill=PANEL if self.enabled else BG,
-            outline=mix(LINE, BLUE, self.hover_amount) if self.enabled else LINE,
-            width=1.5,
+        self.configure(
+            border_color=("#3759da", "#a9bcff")
+            if self.active and self.enabled
+            else ("#dfe5ef", "#394557")
         )
-        if self.compact:
-            y = h / 2
-            self.create_rectangle(
-                10,
-                y - 16,
-                42,
-                y + 16,
-                fill=tool_color(self.key)[1],
-                outline=tool_color(self.key)[1],
-            )
-            icon(self, self.key, 14, y - 12, tool_color(self.key)[0] if self.enabled else MUTED)
-            title, description = CARD_TEXT[self.key]
-            self.create_text(
-                52,
-                y,
-                anchor="w",
-                text=title,
-                font=(FONT, 10, "bold"),
-                fill=INK if self.enabled else MUTED,
-                width=max(75, w - 62),
-            )
-            return
-        color, tint = tool_color(self.key)
-        self.create_rectangle(20, 18, 72, 70, fill=tint, outline=tint)
-        icon(self, self.key, 28, 26, color if self.enabled else MUTED, scale=1.5)
-        title, description = CARD_TEXT[self.key]
-        self.create_text(
-            20,
-            83,
-            anchor="nw",
-            text=title,
-            font=(FONT, 12, "bold"),
-            fill=INK if self.enabled else MUTED,
-            width=max(100, w - 40),
+        self.title_label.configure(
+            text_color=("#202a3a", "#eff3fa") if self.enabled else ("#526078", "#b7c2d2")
         )
-        self.create_text(
-            20,
-            122,
-            anchor="nw",
-            text=description if self.enabled else "현재 결과의 파일 형식은 지원하지 않습니다",
-            font=(FONT, 9),
-            fill=MUTED,
-            width=max(100, w - 40),
+        self.description_label.configure(
+            text=CARD_TEXT[self.key][1]
+            if self.enabled
+            else "현재 결과의 파일 형식은 지원하지 않습니다"
         )
-        if lift:
-            for item in self.find_all()[1:]:
-                self.move(item, 0, -lift)
 
 
 def setup_style(root):
+    from .effects import mix
+
     style = ttk.Style(root)
     style.theme_use("clam")
     style.configure(".", background=BG, foreground=INK, font=(FONT, 10))
@@ -465,60 +417,96 @@ def setup_style(root):
     style.configure("Title.TLabel", font=(FONT, 20, "bold"))
     style.configure("Task.TLabel", font=(FONT, 16, "bold"))
     style.configure("Section.TLabel", font=(FONT, 10, "bold"), background=PANEL)
-    style.configure(
-        "TButton",
-        padding=(12, 8),
-        background=PANEL,
-        bordercolor=LINE,
-        lightcolor=LINE,
-        darkcolor=LINE,
-        borderwidth=1,
-        relief="solid",
-    )
-    style.map(
-        "TButton",
-        background=[("active", SOFT)],
-        bordercolor=[("active", "#b8c9ed"), ("disabled", LINE)],
-        foreground=[("disabled", MUTED)],
-    )
-    style.configure(
-        "Quiet.TButton",
-        background=PANEL,
-        borderwidth=1,
-        relief="solid",
-        bordercolor=LINE,
-        foreground=INK,
-    )
-    style.configure(
-        "Back.TButton",
-        background=SOFT,
-        foreground=BLUE,
-        font=(FONT, 12, "bold"),
-        padding=(20, 12),
-        borderwidth=2,
-        bordercolor="#b7caf7",
-        lightcolor="#b7caf7",
-        darkcolor="#b7caf7",
-    )
-    style.map(
-        "Back.TButton",
-        background=[("disabled", BG), ("active", SOFT)],
-        bordercolor=[("disabled", LINE), ("active", BLUE)],
-        foreground=[("disabled", MUTED), ("active", BLUE)],
-    )
-    style.configure(
-        "Run.TButton",
-        font=(FONT, 11, "bold"),
-        padding=(22, 12),
-        background=BLUE,
-        foreground="#ffffff",
-        bordercolor=BLUE,
-    )
-    style.map(
-        "Run.TButton",
-        background=[("disabled", "#ccd5e8"), ("active", "#1e4fc9")],
-        foreground=[("disabled", MUTED), ("!disabled", "#ffffff")],
-    )
+    # Image elements are stretched through their centre, preserving 10px corners.
+    # Retain the PhotoImage references for the entire lifetime of the window.
+    if not hasattr(root, "button_images"):
+        root.button_images = []
+    dark = PANEL.lower() != "#ffffff"
+    variants = {
+        "Secondary": (PANEL, LINE, SOFT),
+        "Ghost": (PANEL, PANEL, SOFT),
+        "Primary": (
+            ("#a9bcff" if dark else "#3759da"),
+            ("#a9bcff" if dark else "#3759da"),
+            ("#c3d0ff" if dark else "#2948c3"),
+        ),
+    }
+    for kind, (base, border, hover) in variants.items():
+        images = []
+        for state in ("normal", "active", "pressed", "disabled"):
+            fill = (
+                mix(base, BG, 0.55)
+                if state == "disabled"
+                else mix(hover, base, 0.35)
+                if state == "pressed"
+                else hover
+                if state == "active"
+                else base
+            )
+            image = Image.new("RGB", (52, 36), PANEL)
+            draw = ImageDraw.Draw(image)
+            draw.rounded_rectangle(
+                (1, 1, 50, 34),
+                radius=BUTTON_RADIUS,
+                fill=fill,
+                outline=border if state != "disabled" else LINE,
+            )
+            photo = ImageTk.PhotoImage(image, master=root)
+            root.button_images.append(photo)
+            images.append(photo)
+        element = f"Offline{kind}{'Dark' if dark else 'Light'}.border"
+        if element not in style.element_names():
+            style.element_create(
+                element,
+                "image",
+                images[0],
+                ("disabled", images[3]),
+                ("pressed", images[2]),
+                ("active", images[1]),
+                border=(12, 12, 12, 12),
+                sticky="nswe",
+            )
+        for style_name in (
+            ("TButton", "Back.TButton")
+            if kind == "Secondary"
+            else ("Quiet.TButton",)
+            if kind == "Ghost"
+            else ("Run.TButton",)
+        ):
+            style.layout(
+                style_name,
+                [
+                    (
+                        element,
+                        {
+                            "sticky": "nswe",
+                            "children": [
+                                (
+                                    "Button.padding",
+                                    {
+                                        "sticky": "nswe",
+                                        "children": [("Button.label", {"sticky": "nswe"})],
+                                    },
+                                )
+                            ],
+                        },
+                    )
+                ],
+            )
+            fg = "#ffffff" if kind == "Primary" and not dark else INK
+            if kind == "Primary" and dark:
+                fg = "#172135"
+            style.configure(
+                style_name,
+                padding=(14, 9),
+                background=PANEL,
+                foreground=fg,
+                font=(FONT, 10),
+                borderwidth=1,
+            )
+            style.map(style_name, foreground=[("disabled", MUTED), ("!disabled", fg)])
+    style.configure("Back.TButton", padding=(20, 12), font=(FONT, 11, "bold"))
+    style.configure("Run.TButton", padding=(22, 12), font=(FONT, 11, "bold"))
     style.configure(
         "TEntry",
         fieldbackground=PANEL,
@@ -533,14 +521,42 @@ def setup_style(root):
     style.map("Settings.TRadiobutton", background=[("active", SOFT)])
     style.configure("TRadiobutton", background=PANEL, foreground=INK)
     style.map("TRadiobutton", background=[("active", SOFT)])
-    style.configure("TScrollbar", background=PANEL, troughcolor=BG, arrowcolor=INK)
+    # A 16px thumb-only vertical scrollbar, without Clam's arrow elements.
+    thumb = Image.new("RGBA", (16, 40), (0, 0, 0, 0))
+    ImageDraw.Draw(thumb).rounded_rectangle((2, 1, 13, 38), radius=6, fill=MUTED)
+    thumb_photo = ImageTk.PhotoImage(thumb, master=root)
+    root.button_images.append(thumb_photo)
+    thumb_element = f"OfflineScroll{'Dark' if dark else 'Light'}.thumb"
+    if thumb_element not in style.element_names():
+        style.element_create(
+            thumb_element, "image", thumb_photo, border=(6, 10, 6, 10), sticky="nswe"
+        )
+    style.layout(
+        "Vertical.TScrollbar",
+        [
+            (
+                "Vertical.Scrollbar.trough",
+                {"sticky": "ns", "children": [(thumb_element, {"expand": "1", "sticky": "nswe"})]},
+            )
+        ],
+    )
+    style.configure(
+        "Vertical.TScrollbar",
+        width=16,
+        background=MUTED,
+        troughcolor=BG,
+        bordercolor=BG,
+        lightcolor=MUTED,
+        darkcolor=MUTED,
+        relief="flat",
+        borderwidth=0,
+    )
+    style.map("Vertical.TScrollbar", background=[("active", BLUE), ("pressed", BLUE)])
     style.configure("Treeview", background=PANEL, fieldbackground=PANEL, foreground=INK)
     style.configure("TCombobox", fieldbackground=PANEL, padding=7, bordercolor=LINE, arrowsize=14)
     style.map("TCombobox", fieldbackground=[("readonly", PANEL)], foreground=[("readonly", INK)])
     style.configure("TCheckbutton", background=PANEL)
     # Explicit tick images avoid the Clam theme's cross-shaped indicator.
-    from PIL import Image, ImageDraw, ImageTk
-
     images = []
     size = max(16, round(12 * float(root.tk.call("tk", "scaling"))))
     for selected in (False, True):

@@ -1,8 +1,11 @@
 """Display settings dialog. No document, path, or password history is persisted."""
 
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import messagebox
 
+import customtkinter as ctk
+
+from . import ctk_widgets as ttk
 from .appearance import apply_theme
 from .localization import apply_language, language, tr
 from .preferences import save_preferences
@@ -14,7 +17,7 @@ def show_settings(app):
     if getattr(app, "settings_dialog", None) and app.settings_dialog.winfo_exists():
         app.settings_dialog.lift()
         return
-    dialog = tk.Toplevel(app.root)
+    dialog = ctk.CTkToplevel(app.root)
     app.settings_dialog = dialog
     dialog.title("설정")
     dialog.resizable(False, False)

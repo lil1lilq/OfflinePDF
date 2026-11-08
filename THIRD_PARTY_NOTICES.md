@@ -15,6 +15,9 @@ PyMuPDF의 오픈소스 라이선스에 맞춰 프로그램의 대응 소스와 
 | ONNX 1.17.0 | 모델 변환·검사 전용 | Apache-2.0, 사용자 실행파일에는 제외 |
 | Python 3.12 | 실행 환경 | PSF 및 포함 구성요소 고지 |
 | Tcl/Tk | 한글 데스크톱 화면 | Tcl/Tk 고지 및 조건 |
+| CustomTkinter 5.2.2 | 데스크톱 화면 위젯 | MIT, licenses/customtkinter 및 배포 소스 참조 |
+| Lucide Icons (lucide-static 1.70.0) | 도구 카드 아이콘 | ISC, assets/lucide/LICENSE |
+| Pretendard 1.3.9 | 화면 글꼴 | SIL OFL 1.1, assets/fonts/LICENSE |
 | PyInstaller 6.16.0 | 실행파일 패키징 | GPL 계열과 bootloader 예외, 일부 Apache-2.0 |
 | Tesseract OCR·tessdata | OCR 선택 기능 | Apache-2.0, 추가한 엔진·언어자료의 원본 고지 포함 필요 |
 

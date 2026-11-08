@@ -147,11 +147,13 @@ def open_pdf(path, password="", *, extraction=False):
             raise UserError("PDF 파일을 선택하세요.")
         encrypted = bool((doc.metadata or {}).get("encryption")) or doc.needs_pass
         if encrypted:
-            if not password:
+            if doc.needs_pass and not password:
                 raise UserError("암호화된 PDF입니다. 입력 암호를 입력하세요.")
-            auth = doc.authenticate(password)
-            if not auth:
-                raise UserError("PDF 암호가 올바르지 않습니다.")
+            auth = 0
+            if password:
+                auth = doc.authenticate(password)
+                if not auth:
+                    raise UserError("PDF 암호가 올바르지 않습니다.")
             permission = pdf.PDF_PERM_COPY if extraction else pdf.PDF_PERM_MODIFY
             if not auth & 4 and not doc.permissions & permission:
                 raise UserError("이 작업의 권한이 없습니다. 소유자 암호를 사용하세요.")

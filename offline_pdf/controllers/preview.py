@@ -7,10 +7,10 @@ import math
 import shutil
 import tkinter as tk
 from pathlib import Path
-from tkinter import ttk
 
 import pymupdf as pdf
 
+from .. import ctk_widgets as ttk
 from ..engine import UserError, check_local_path, open_pdf, pages, split_ranges
 from ..images import open_image_document
 from ..passwords import cached_password

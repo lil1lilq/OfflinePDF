@@ -10,6 +10,18 @@
 
 실행 의존성은 `requirements.txt`, 빌드·검사 도구는 `requirements-build.txt`에 버전이 고정되어 있습니다.
 Windows 실행파일은 Windows에서 빌드합니다.
+화면은 CustomTkinter 5.2.2를 사용합니다. 빌드 스크립트에 `--collect-all customtkinter`와
+`--add-data assets;assets`가 포함되어 있어 Lucide 아이콘과 Pretendard 글꼴을 함께 묶습니다.
+Pretendard를 사용할 수 없는 환경에서는 사용 가능한 시스템 글꼴로 전환합니다.
+
+## 가장 쉬운 빌드 방법
+
+소스 폴더에서 **`Build-Portable.cmd`를 더블클릭**합니다. Python 3.12의 64비트 버전이 설치되어 있어야 합니다.
+처음 실행하면 `.venv`를 만들고 필요한 패키지를 설치합니다. 이후에는 같은 가상환경을 다시 사용합니다.
+빌드에 앞서 Ruff가 소스 형식을 자동 정리하며, 코드 검사와 전체 테스트를 통과한 경우에만 포터블 ZIP을 생성합니다.
+
+완료되면 `release` 폴더가 열립니다. 배포 파일은 `OfflinePDF-Windows-x64-portable.zip`입니다.
+오류가 나면 창을 닫지 말고 마지막 오류 메시지를 확인하세요. 기존 `.venv`가 다른 Python 버전으로 만들어졌다면 `.venv` 폴더의 이름을 바꾸고 다시 더블클릭합니다.
 
 ## 소스 실행
 
@@ -31,6 +43,7 @@ py -3.12 -m venv .venv
 ```
 
 GUI 검사는 사용 가능한 데스크톱이 필요하며, 탐색기 파일 드롭 통합 검사는 Windows에서 실행됩니다.
+한글 조합 입력과 화면 배율에 따른 카드 문구 줄바꿈은 Windows 데스크톱에서 직접 확인하세요.
 화면을 사용할 수 없는 환경에서는 GUI 검사 클래스가 제외될 수 있습니다.
 제외된 검사는 성공한 검사와 구분해서 확인해야 합니다.
 
@@ -39,6 +52,8 @@ GUI 검사는 사용 가능한 데스크톱이 필요하며, 탐색기 파일 �
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File packaging\build_windows.ps1 -Python .\.venv\Scripts\python.exe
 ```
+
+이 명령은 소스를 변경하지 않고 형식을 검사합니다. 형식만 자동 정리하려면 명령 끝에 `-FixFormat`을 붙입니다.
 
 빌드 스크립트는 다음 순서로 실행됩니다.
 
@@ -63,7 +78,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File packaging\build_windows.ps1 
 
 | 위치 | 값의 형식 |
 | --- | --- |
-| `offline_pdf/__init__.py` | 앱 표시 버전, 예: `0.8.7` |
+| `offline_pdf/__init__.py` | 앱 표시 버전, 예: `0.8.10.4` |
 | `packaging/windows-version.txt` | 실행파일 제품·파일 버전, 숫자 버전은 4자리 |
 
 소스 버전을 바꿀 때 관련 검사와 문서의 버전 표기도 함께 갱신합니다.

@@ -3,6 +3,7 @@ import multiprocessing as mp
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pymupdf as pdf
@@ -13,9 +14,11 @@ from offline_pdf.engine import (
     check_local_path,
     disable_network,
     execute,
+    open_pdf,
     pages,
     worker,
 )
+from offline_pdf.passwords import ensure_password
 
 
 class EngineTests(unittest.TestCase):
@@ -155,6 +158,57 @@ class EngineTests(unittest.TestCase):
         )
         with pdf.open(transformed) as doc:
             self.assertTrue(doc.needs_pass)
+
+    def test_owner_only_password_does_not_block_allowed_work(self):
+        owner_only = self.root / "소유자 암호만.pdf"
+        with pdf.open(self.source) as doc:
+            doc.save(
+                owner_only,
+                encryption=pdf.PDF_ENCRYPT_AES_256,
+                user_pw="",
+                owner_pw="owner-secret",
+                permissions=pdf.PDF_PERM_COPY | pdf.PDF_PERM_MODIFY,
+            )
+        with pdf.open(owner_only) as doc:
+            self.assertFalse(doc.needs_pass)
+            self.assertTrue((doc.metadata or {}).get("encryption"))
+        app = SimpleNamespace(tool="merge", password_cache={}, metadata_cache={})
+        with patch("offline_pdf.passwords.ask_password") as prompt:
+            self.assertTrue(ensure_password(app, str(owner_only)))
+            prompt.assert_not_called()
+        doc, encrypted = open_pdf(str(owner_only))
+        with doc:
+            self.assertTrue(encrypted)
+            self.assertEqual(doc.page_count, 3)
+        result = self.run_tool("merge", [str(owner_only)])
+        with pdf.open(self.output_pdf(result)) as doc:
+            self.assertEqual(doc.page_count, 3)
+
+        app.tool = "protect"
+        app.effective_tool = lambda: "unlock"
+        with patch("offline_pdf.passwords.ask_password", return_value=None) as prompt:
+            self.assertFalse(ensure_password(app, str(owner_only)))
+            prompt.assert_called_once()
+
+    def test_owner_only_pdf_with_restricted_permissions_requests_owner_password(self):
+        restricted = self.root / "편집 금지.pdf"
+        with pdf.open(self.source) as doc:
+            doc.save(
+                restricted,
+                encryption=pdf.PDF_ENCRYPT_AES_256,
+                user_pw="",
+                owner_pw="owner-secret",
+                permissions=pdf.PDF_PERM_COPY,
+            )
+        app = SimpleNamespace(tool="merge", password_cache={}, metadata_cache={})
+        with patch("offline_pdf.passwords.ask_password", return_value="owner-secret") as prompt:
+            self.assertTrue(ensure_password(app, str(restricted)))
+            prompt.assert_called_once()
+        with self.assertRaisesRegex(UserError, "소유자 암호"):
+            open_pdf(str(restricted))
+        doc, encrypted = open_pdf(str(restricted), "owner-secret")
+        with doc:
+            self.assertTrue(encrypted)
 
     def test_images_roundtrip(self):
         folder = self.run_tool("pdf_images", pages="1", dpi="72", format="PNG")

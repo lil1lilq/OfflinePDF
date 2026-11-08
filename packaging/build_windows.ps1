@@ -1,4 +1,4 @@
-param([switch]$Offline, [string]$Python = 'python')
+param([switch]$Offline, [switch]$FixFormat, [string]$Python = 'python')
 $ErrorActionPreference = 'Stop'
 Set-Location (Split-Path $PSScriptRoot -Parent)
 function Invoke-Checked {
@@ -7,23 +7,24 @@ function Invoke-Checked {
     if ($LASTEXITCODE -ne 0) { throw "Build step failed: $Program (exit $LASTEXITCODE)" }
 }
 if ([Environment]::Is64BitOperatingSystem -eq $false) { throw 'Windows x64 is required.' }
-Invoke-Checked $Python @('-c', 'import struct,sys; assert struct.calcsize("P")==8, "Python x64 required"; assert sys.version_info[:2]==(3,12), "Use Python 3.12 x64"')
+Invoke-Checked $Python @('-c', 'import struct,sys; assert struct.calcsize(chr(80))==8; assert sys.version_info[:2]==(3,12)')
 if ($Offline) {
     Invoke-Checked $Python @('-m','pip','install','--no-index','--find-links','wheelhouse','-r','requirements-build.txt')
 } else {
     Invoke-Checked $Python @('-m','pip','install','-r','requirements-build.txt')
 }
 Invoke-Checked $Python @('packaging/prepare_ai_model.py')
+if ($FixFormat) { Invoke-Checked $Python @('-m','ruff','format','offline_pdf','packaging','tests','main.py') }
 Invoke-Checked $Python @('-m','ruff','check','offline_pdf','packaging','tests','main.py')
 Invoke-Checked $Python @('-m','ruff','format','--check','offline_pdf','packaging','tests','main.py')
-Invoke-Checked $Python @('-m','unittest','discover','-s','tests','-v')
+Invoke-Checked $Python @('-X','faulthandler','-m','unittest','discover','-s','tests','-v')
 Invoke-Checked $Python @('packaging/collect_licenses.py')
 if ($Offline) { Invoke-Checked $Python @('packaging/prepare_dependency_sources.py','--offline') }
 else { Invoke-Checked $Python @('packaging/prepare_dependency_sources.py') }
 $bundleArgs = @('-m','PyInstaller','--noconfirm','--clean','--onedir','--windowed','--name','OfflinePDF',
     '--version-file','packaging/windows-version.txt','--icon','assets/app.ico',
     '--add-data','assets;assets','--add-data','offline_pdf/translations.json;offline_pdf',
-    '--collect-all','pymupdf','--collect-all','PIL','--collect-all','pillow_heif',
+    '--collect-all','pymupdf','--collect-all','PIL','--collect-all','pillow_heif','--collect-all','customtkinter',
     '--collect-binaries','onnxruntime','--collect-data','onnxruntime',
     '--hidden-import','onnxruntime.capi.onnxruntime_pybind11_state','--exclude-module','onnx','--exclude-module','torch',
     '--exclude-module','onnxruntime.transformers','--exclude-module','onnxruntime.tools','--exclude-module','onnxruntime.quantization',

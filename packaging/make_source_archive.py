@@ -10,6 +10,7 @@ excluded = {
     ".git",
     ".venv",
     "__pycache__",
+    ".ruff_cache",
     "dist",
     "build",
     "release",

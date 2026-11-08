@@ -9,12 +9,34 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+import customtkinter as ctk
 import pymupdf as pdf
 
 from offline_pdf.app import TOOLS, App
 
 
 class CardLayoutTests(unittest.TestCase):
+    def test_windows_titlebar_hook_is_disabled_before_gui_construction(self):
+        self.assertTrue(ctk.CTk._deactivate_windows_window_header_manipulation)
+        self.assertTrue(ctk.CTkToplevel._deactivate_windows_window_header_manipulation)
+
+    def test_reentrant_card_resize_does_not_relayout_while_arranging(self):
+        state = SimpleNamespace(
+            card_layout=None,
+            card_columns=0,
+            home=SimpleNamespace(canvas=Mock()),
+            cards_frame=Mock(),
+            cards={key: Mock() for key in TOOLS},
+        )
+        state.home.canvas.winfo_height.return_value = 800
+        first = next(iter(state.cards.values()))
+        first.set_compact.side_effect = lambda *_: App.arrange_cards(state, 900, force=True)
+
+        App.arrange_cards(state, 900, force=True)
+
+        self.assertEqual(first.set_compact.call_count, 1)
+        self.assertEqual(sum(card.grid.call_count for card in state.cards.values()), 16)
+
     def test_compression_fields_do_not_overlap_when_target_mode_is_shown(self):
         from offline_pdf.controllers.forms import FormController
 
@@ -60,15 +82,15 @@ class CardLayoutTests(unittest.TestCase):
         for card in state.cards.values():
             self.assertEqual(card.grid.call_count, 2)
             compact, height = card.set_compact.call_args.args
-            self.assertTrue(compact)
-            self.assertLessEqual(height, 68)
+            self.assertFalse(compact)
+            self.assertGreaterEqual(height, 158)
 
 
 class AppTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         try:
-            cls.root = tk.Tk()
+            cls.root = ctk.CTk()
         except tk.TclError:
             raise unittest.SkipTest("GUI requires an available Windows desktop or X display.")
         cls.app = App(cls.root)
@@ -180,14 +202,13 @@ class AppTests(unittest.TestCase):
         self.app.show_home()
         self.root.update()
         self.assertTrue(self.app.home.winfo_ismapped())
-        self.assertEqual(sum(card.winfo_ismapped() for card in self.app.cards.values()), 6)
-        self.app.all_tools_button.invoke()
+        self.assertEqual(sum(card.winfo_ismapped() for card in self.app.cards.values()), 16)
         self.root.update()
         self.assertEqual(sum(card.winfo_ismapped() for card in self.app.cards.values()), 16)
         sizes = {(card.winfo_width(), card.winfo_height()) for card in self.app.cards.values()}
         # One-pixel rounding across equal grid columns is normal.
         self.assertLessEqual(max(w for w, h in sizes) - min(w for w, h in sizes), 1)
-        self.assertTrue(all(h <= 68 for w, h in sizes))
+        self.assertTrue(all(h >= 158 for w, h in sizes))
         self.app.select_tool("redact")
         self.root.update()
         self.assertTrue(self.app.work.winfo_ismapped())
@@ -204,9 +225,8 @@ class AppTests(unittest.TestCase):
         self.app.home_button.invoke()
         self.root.update()
         self.assertTrue(self.app.home.winfo_ismapped())
-        self.app.all_tools_button.invoke()
         self.root.update()
-        self.assertEqual(sum(card.winfo_ismapped() for card in self.app.cards.values()), 6)
+        self.assertEqual(sum(card.winfo_ismapped() for card in self.app.cards.values()), 16)
 
     def test_j_switch_tools_preserves_pdf_and_accepts_mixed_inputs(self):
         self.app.select_tool("merge")
@@ -255,9 +275,7 @@ class AppTests(unittest.TestCase):
             with self.subTest(requested=(width, height), actual=actual):
                 layouts.append((self.app.cards_frame.winfo_width(), self.app.card_columns))
                 self.assertEqual(len(self.app.cards_frame.grid_slaves()), 16)
-                self.assertLessEqual(
-                    self.app.home.inner.winfo_height(), self.app.home.canvas.winfo_height() + 2
-                )
+                self.assertGreaterEqual(self.app.home.inner.winfo_height(), 158)
                 for card in self.app.cards.values():
                     self.assertLessEqual(
                         card.winfo_x() + card.winfo_width(), self.app.cards_frame.winfo_width() + 1
@@ -281,7 +299,24 @@ class AppTests(unittest.TestCase):
         self.app.select_tool("redact")
         self.root.update()
         self.assertTrue(self.app.preview_panel.winfo_ismapped())
+        self.assertTrue(self.app.preview_zoom_row.winfo_ismapped())
+        self.assertTrue(self.app.preview_region_row.winfo_ismapped())
         self.assertTrue(self.app.clear_preview_regions.winfo_ismapped())
+        zoom_buttons = [
+            child
+            for child in self.app.preview_zoom_row.winfo_children()
+            if isinstance(child, ctk.CTkButton)
+        ]
+        labels = [child.cget("text") for child in zoom_buttons]
+        try:
+            for child in zoom_buttons:
+                child.config(text="확대보기 옵션 버튼")
+            self.root.update()
+            self.assertTrue(self.app.clear_preview_regions.winfo_ismapped())
+        finally:
+            for child, label in zip(zoom_buttons, labels):
+                child.config(text=label)
+            self.root.update()
         button = self.app.run_button
         self.assertLessEqual(
             button.winfo_rooty() + button.winfo_height(),
@@ -457,13 +492,23 @@ class AppTests(unittest.TestCase):
         self.assertTrue(o.winfo_ismapped())
         self.assertFalse(self.app.columns.winfo_ismapped())
         x1 = int(o.cellw * 0.5)
-        x3 = int(o.cellw * 2.8)
         c.event_generate("<ButtonPress-1>", x=x1, y=100)
         self.root.update()
-        c.event_generate("<B1-Motion>", x=x3, y=110)
+        # Page 3 may wrap to another row on narrow or high-DPI displays.
+        target_index = 2
+        target_x = int((target_index % o.columns + 0.8) * o.cellw)
+        target_canvas_y = int((target_index // o.columns) * o.cellh + 110)
+        if target_canvas_y >= c.winfo_height() - 35:
+            total_height = float(c.cget("scrollregion").split()[-1])
+            c.yview_moveto(max(0, (target_canvas_y - c.winfo_height() / 2) / total_height))
+            o.draw()
+            self.root.update()
+        target_y = int(target_canvas_y - c.canvasy(0))
+        self.assertEqual(o.hit(target_x, target_y), target_index)
+        c.event_generate("<B1-Motion>", x=target_x, y=target_y)
         self.root.update()
         self.assertIsNotNone(o.boundary)
-        c.event_generate("<ButtonRelease-1>", x=x3, y=110)
+        c.event_generate("<ButtonRelease-1>", x=target_x, y=target_y)
         self.root.update()
         self.assertEqual([p[1] for p in o.model.items], [1, 2, 0, 3, 4, 5, 6, 7])
         o.model.selected = {1}
@@ -624,7 +669,7 @@ class AppTests(unittest.TestCase):
         dialog = self.app.organizer_settings()
         buttons = dialog.winfo_children()[0].winfo_children()
         next(
-            b for b in buttons if isinstance(b, tk.ttk.Button) and b.cget("text") == "확인"
+            b for b in buttons if isinstance(b, ctk.CTkButton) and b.cget("text") == "확인"
         ).invoke()
         self.root.update()
         self.assertEqual(len(self.app.organizer.model.items), 2)
@@ -885,19 +930,19 @@ class AppTests(unittest.TestCase):
         def enter():
             dialog = next(w for w in self.root.winfo_children() if isinstance(w, tk.Toplevel))
             all_widgets = widgets(dialog)
-            entry = next(w for w in all_widgets if isinstance(w, tk.ttk.Entry))
+            entry = next(w for w in all_widgets if isinstance(w, ctk.CTkEntry))
             observed.append(entry.cget("show"))
             entry.insert(0, "wrong")
             next(
                 w
                 for w in all_widgets
-                if isinstance(w, tk.ttk.Button) and w.cget("text") == "문서 열기"
+                if isinstance(w, ctk.CTkButton) and w.cget("text") == "문서 열기"
             ).invoke()
             observed.append(
                 any(
                     "올바르지" in str(w.cget("text"))
                     for w in all_widgets
-                    if isinstance(w, tk.ttk.Label)
+                    if isinstance(w, ctk.CTkLabel)
                 )
             )
             entry.delete(0, "end")
@@ -905,7 +950,7 @@ class AppTests(unittest.TestCase):
             next(
                 w
                 for w in all_widgets
-                if isinstance(w, tk.ttk.Button) and w.cget("text") == "문서 열기"
+                if isinstance(w, ctk.CTkButton) and w.cget("text") == "문서 열기"
             ).invoke()
 
         self.root.after(30, enter)
@@ -917,7 +962,7 @@ class AppTests(unittest.TestCase):
             next(
                 w
                 for w in widgets(dialog)
-                if isinstance(w, tk.ttk.Button) and w.cget("text") == "취소"
+                if isinstance(w, ctk.CTkButton) and w.cget("text") == "취소"
             ).invoke()
 
         self.root.after(30, cancel)
@@ -959,7 +1004,9 @@ class AppTests(unittest.TestCase):
         with pdf.open(self.app.result_files[0]) as doc:
             self.assertIn("RETAIN TEXT", doc[0].get_text())
             self.assertEqual(doc[0].get_images()[0][2:4], (64, 48))
-        self.assertIn("0.8.7", self.root.title())
+        from offline_pdf import __version__
+
+        self.assertIn(__version__, self.root.title())
 
     def test_ze_mixed_import_replaces_sidebar_only_after_success(self):
         from PIL import Image
@@ -1110,7 +1157,7 @@ class AppTests(unittest.TestCase):
 
         def visit(widget):
             for child in widget.winfo_children():
-                if isinstance(child, tk.ttk.Button) and child.cget("text") == "뒤로가기":
+                if isinstance(child, ctk.CTkButton) and child.cget("text") == "뒤로가기":
                     buttons.append(child)
                 visit(child)
 
