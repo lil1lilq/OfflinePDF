@@ -23,7 +23,11 @@ Windows에서 PDF를 병합·분할·편집하는 데스크톱 프로그램입�
 
 ## 스크린샷
 
+- **최상단 페이지**
 <img width="1273" height="795" alt="image" src="https://github.com/user-attachments/assets/35c46ec9-970c-49ee-a867-6230f96e3f31" />
+- **윈도우 탐색기 우클릭 시**
+<img width="842" height="350" alt="image" src="https://github.com/user-attachments/assets/3d4e7733-67ce-4f52-9772-8d189e6aac42" />
+
 
 ## 주요 기능
 
