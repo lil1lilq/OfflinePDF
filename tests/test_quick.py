@@ -63,7 +63,9 @@ class QuickGuiTests(unittest.TestCase):
             doc.save(self.source)
         self.inbox = SimpleNamespace(messages=queue.Queue(), close=Mock())
         self.app = QuickWindow(self.root, self.inbox)
-        self.root.update_idletasks()
+        # Deliver the native Map event before testing visibility. No job is
+        # running yet, so dispatching timers here cannot race completion.
+        self.root.update()
         self.assertTrue(self.app.footer.winfo_ismapped())
         self.assertTrue(self.app.buttons[0].winfo_ismapped())
 
