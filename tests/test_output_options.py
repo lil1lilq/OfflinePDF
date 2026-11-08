@@ -196,14 +196,14 @@ class OutputOptionsTests(unittest.TestCase):
             self.assertTrue(doc.authenticate("new"))
             self.assertEqual(len(doc), 1)
 
-    def test_image_inputs_keep_inputpdf_but_clean_result(self):
+    def test_image_inputs_are_not_published_and_result_is_clean(self):
         white = self.root / "하양.png"
         with Image.new("RGB", (64, 64), "white") as image:
             image.save(white)
         folder = self.run_job(
             "merge", files=[str(white), str(self.source)], remove_blank=BLANK_MODE
         )
-        self.assertEqual(len(list((folder / "입력PDF").glob("*.pdf"))), 1)
+        self.assertEqual(len(list(folder.iterdir())), 1)
         with pdf.open(next(folder.glob("*.pdf"))) as doc:
             self.assertEqual(len(doc), 1)
 

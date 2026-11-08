@@ -361,8 +361,8 @@ class EngineTests(unittest.TestCase):
             page = doc.new_page()
             page.insert_image(page.rect, stream=pix.tobytes("png"))
             doc.save(source)
-        models = Path(__file__).resolve().parents[1] / "tessdata"
-        folder = self.run_tool("ocr", [str(source)], tessdata=str(models), language="eng")
+        # No folder option: the app always uses the language data it ships with.
+        folder = self.run_tool("ocr", [str(source)], language="eng")
         with pdf.open(self.output_pdf(folder)) as result:
             self.assertIn("OFFLINE", result[0].get_text())
 

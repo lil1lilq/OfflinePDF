@@ -55,117 +55,36 @@ CARD_SUMMARIES = {
 CARD_TEXT = {key: (title, CARD_SUMMARIES[key]) for key, (title, _) in TOOLS.items()}
 
 
-def tool_color(key):
-    from .appearance import palette
+def chip_color(key):
+    """Light/dark background of a tool's icon chip, by its card group."""
+    group = CARD_GROUP[key]
+    return colors("default")[group][0], colors("dark")[group][0]
 
-    colors = palette()
-    return colors["BLUE"], colors["SOFT"]
+
+_TINTED_ICONS = {}
 
 
-def icon(canvas, key, x, y, color=BLUE, scale=1):
-    """Draw small original line icons with Tk primitives (24 by 24 units)."""
+def tool_icon(key, size=24):
+    """The tool's bundled Lucide icon, tinted for light and dark themes.
 
-    before = set(canvas.find_all())
+    The tinted pictures are cached; each caller gets its own CTkImage, which
+    binds to the Tk interpreter that first draws it.
+    """
+    if key not in _TINTED_ICONS:
+        group = CARD_GROUP[key]
+        light, dark = colors("default")[group][1], colors("dark")[group][1]
+        with Image.open(resource_path("lucide", f"{key}.png")) as image:
+            mask = image.getchannel("A")
 
-    def line(*coords, **kwargs):
-        points = [v + (x if i % 2 == 0 else y) for i, v in enumerate(coords)]
-        canvas.create_line(
-            *points, fill=color, width=1.8, capstyle="round", joinstyle="round", **kwargs
-        )
+            def tinted(color):
+                rgb = tuple(int(color[i : i + 2], 16) for i in (1, 3, 5))
+                result = Image.new("RGBA", image.size, (*rgb, 0))
+                result.putalpha(mask)
+                return result
 
-    def box(a, b, c, d):
-        canvas.create_rectangle(x + a, y + b, x + c, y + d, outline=color, width=1.7)
-
-    def oval(a, b, c, d):
-        canvas.create_oval(x + a, y + b, x + c, y + d, outline=color, width=1.7)
-
-    if key == "upload":
-        line(3, 15, 3, 22, 21, 22, 21, 15)
-        line(12, 17, 12, 2)
-        line(6, 8, 12, 2, 18, 8)
-    elif key in ("merge", "images_pdf"):
-        box(2, 2, 11, 15)
-        box(13, 8, 22, 22)
-        line(6, 19, 11, 19, 11, 22)
-        line(8, 16, 11, 19, 8, 22)
-    elif key == "split":
-        oval(2, 2, 8, 8)
-        oval(2, 16, 8, 22)
-        line(7, 7, 22, 21)
-        line(7, 17, 22, 3)
-    elif key == "extract":
-        box(1, 3, 23, 21)
-        line(8, 3, 8, 21)
-        line(12, 8, 19, 8)
-        line(12, 13, 19, 13)
-    elif key == "nup":
-        box(3, 1, 21, 23)
-        box(6, 4, 11, 10)
-        box(13, 4, 18, 10)
-        box(6, 13, 11, 19)
-        box(13, 13, 18, 19)
-    elif key == "compress":
-        line(2, 2, 9, 9, 3, 9)
-        line(9, 9, 9, 3)
-        line(22, 22, 15, 15, 21, 15)
-        line(15, 15, 15, 21)
-    elif key in ("pdf_images", "stamp"):
-        box(2, 3, 22, 21)
-        oval(14, 6, 18, 10)
-        line(3, 19, 9, 12, 15, 18, 18, 15, 22, 20)
-    elif key == "redact":
-        line(2, 15, 13, 3, 22, 11, 11, 22, 2, 15)
-        line(7, 10, 16, 18)
-        line(11, 22, 23, 22)
-    elif key in ("protect", "unlock"):
-        box(4, 10, 21, 23)
-        line(8, 10, 8, 4, 12, 1, 17, 4, 17, 10 if key == "protect" else 6)
-        oval(11, 14, 14, 17)
-        line(12.5, 17, 12.5, 20)
-    elif key == "rotate":
-        canvas.create_arc(
-            x + 3,
-            y + 3,
-            x + 21,
-            y + 21,
-            start=45,
-            extent=280,
-            style="arc",
-            outline=color,
-            width=1.8,
-        )
-        line(21, 2, 21, 9, 14, 9)
-    elif key == "crop":
-        line(1, 6, 18, 6, 18, 23)
-        line(6, 1, 6, 18, 23, 18)
-    elif key in ("watermark", "text", "number"):
-        if key == "number":
-            line(8, 2, 6, 22)
-            line(17, 2, 15, 22)
-            line(2, 9, 22, 9)
-            line(1, 16, 21, 16)
-        else:
-            line(3, 6, 3, 3, 21, 3, 21, 6)
-            line(12, 3, 12, 21)
-            line(7, 21, 17, 21)
-    elif key == "delete":
-        box(4, 2, 20, 22)
-        line(8, 12, 16, 12)
-    elif key == "clean":
-        box(3, 2, 21, 22)
-        line(7, 12, 11, 16, 18, 8)
-    else:
-        line(8, 2, 2, 2, 2, 8)
-        line(16, 2, 22, 2, 22, 8)
-        line(2, 16, 2, 22, 8, 22)
-        line(16, 22, 22, 22, 22, 16)
-        line(6, 9, 18, 9)
-        line(6, 14, 18, 14)
-
-    if scale != 1:
-        for item in set(canvas.find_all()) - before:
-            canvas.scale(item, x, y, scale, scale)
-            canvas.itemconfigure(item, width=1.8 * scale)
+            _TINTED_ICONS[key] = tinted(light), tinted(dark)
+    light_image, dark_image = _TINTED_ICONS[key]
+    return ctk.CTkImage(light_image=light_image, dark_image=dark_image, size=(size, size))
 
 
 class ScrollPane(ctk.CTkScrollableFrame):
@@ -284,29 +203,16 @@ class ToolCard(ctk.CTkFrame):
         self.compact = False
         self.pack_propagate(False)
         self.tooltip = Tooltip(self, TOOLS[key][1])
-        group = CARD_GROUP[key]
-        light, dark = colors("default")[group], colors("dark")[group]
         self.chip = ctk.CTkFrame(
             self,
             width=40,
             height=40,
             corner_radius=10,
-            fg_color=(light[0], dark[0]),
+            fg_color=chip_color(key),
         )
         self.chip.pack(anchor="w", padx=CARD_PADDING, pady=(14, 0))
         self.chip.pack_propagate(False)
-        with Image.open(resource_path("lucide", f"{key}.png")) as image:
-            mask = image.getchannel("A")
-
-            def tinted(color):
-                rgb = tuple(int(color[i : i + 2], 16) for i in (1, 3, 5))
-                result = Image.new("RGBA", image.size, (*rgb, 0))
-                result.putalpha(mask)
-                return result
-
-            self.icon_image = ctk.CTkImage(
-                light_image=tinted(light[1]), dark_image=tinted(dark[1]), size=(24, 24)
-            )
+        self.icon_image = tool_icon(key)
         self.icon = ctk.CTkLabel(self.chip, text="", image=self.icon_image, width=24, height=24)
         self.icon.place(relx=0.5, rely=0.5, anchor="center")
         title, description = CARD_TEXT[key]

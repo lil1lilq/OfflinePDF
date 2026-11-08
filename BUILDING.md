@@ -78,7 +78,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File packaging\build_windows.ps1 
 
 | 위치 | 값의 형식 |
 | --- | --- |
-| `offline_pdf/__init__.py` | 앱 표시 버전, 예: `0.8.10.4` |
+| `offline_pdf/__init__.py` | 앱 표시 버전, 예: `1.0.0` |
 | `packaging/windows-version.txt` | 실행파일 제품·파일 버전, 숫자 버전은 4자리 |
 
 소스 버전을 바꿀 때 관련 검사와 문서의 버전 표기도 함께 갱신합니다.

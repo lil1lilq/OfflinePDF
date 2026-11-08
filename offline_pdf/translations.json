@@ -417,5 +417,18 @@
   "파일 {0}": "File {0}",
   "완료 · {0}": "Done · {0}",
   "① 작업 선택 → ② 파일 추가 → ③ 설정 → ④ 실행\n\nWindows 탐색기에서 파일을 창 안으로 끌어놓아 추가할 수 있습니다.\n여러 파일을 한 번에 추가할 수 있으며 중복은 제외합니다.\n왼쪽 사이드바에서 파일을 확인할 수 있으며 도구를 바꿔도 파일은 유지됩니다.\n전체 도구 보기는 간략 카드로 전환하며 창 크기에 맞춰 정렬됩니다.\nN개 나누기: 다음 파일의 시작 쪽을 쉼표로 구분합니다. 예: 5,8\n페이지 공란은 전체 페이지입니다. 예: 1-3,5 / 역순: 3-1\n합치기는 목록 순서입니다. 파일을 선택하고 위로·아래로 이동하세요.\n결과는 선택한 폴더 안에 새 PDF결과 폴더로 저장됩니다.\n완료 후 “결과로 다음 작업”을 누르면 결과 파일로 다른 작업을 이어갑니다.\n기존 파일을 덮어쓰지 않으며 실패한 작업 결과는 정리합니다.\n\n영구 삭제: 미리보기에서 드래그 → 실행 → 결과를 검색·복사·추출해 확인\nOCR: 배포 담당자가 준비한 kor/eng.traineddata 폴더를 선택\nWord·Excel·PPT·HWP·PDF/A 변환은 이 버전에 포함하지 않습니다.\n\n외부 통신·자동 업데이트·사용기록 수집이 없습니다.\nOneDrive 등 자동 동기화 폴더는 저장 위치로 사용하지 마세요.\n강제 전원 종료 후 .offline-pdf- 임시폴더가 남으면 직접 삭제하세요.\n\n버전 {0} · AGPL-3.0-or-later · PyMuPDF / Python Tkinter": "Choose a tool, add files, check settings and run.\n\nDrag PDFs or images from File Explorer into the window. Duplicates are skipped. The file list is shared between tools.\nSplit into N files by entering the start page of each following file, e.g. 5,8. Leave Pages blank for all pages. Ranges such as 1-3,5 and 3-1 are supported.\nResults are saved in a new PDF결과 folder. Use results for next operation to continue. Originals are never overwritten; failed results are removed.\n\nRedaction permanently removes selected regions. Check the saved document.\nOCR requires offline kor/eng.traineddata files.\nOffice, HWP and PDF/A conversion are not supported.\n\nNo external communication, automatic update or usage tracking. Avoid network or synced folders. After a forced shutdown, remove any remaining .offline-pdf- temporary folders.\n\nVersion {0} · AGPL-3.0-or-later · PyMuPDF / Python Tkinter",
-  "생성할 파일  {0}": "Output files  {0}"
+  "생성할 파일  {0}": "Output files  {0}",
+  "이 페이지 선택 초기화": "Clear selection on this page",
+  "선택 영역 영구 삭제": "Permanently redact selection",
+  "빈 페이지 삭제 켜짐": "Blank-page removal on",
+  "결과물에서 아무것도 없는 흰 페이지를 지웁니다. 글자·선·이미지가 있는 페이지는 남깁니다.": "Removes completely white pages from the result. Pages with any text, lines or images are kept.",
+  "확대 배율": "Scale",
+  "2배 (권장)": "2x (recommended)",
+  "4배 (더 선명·느림)": "4x (sharper, slower)",
+  "상세 옵션 ▾": "Advanced ▾",
+  "상세 옵션 접기 ▴": "Hide advanced ▴",
+  "최소 DPI·품질은 최대 용량을 입력했을 때만 사용합니다. 용량을 맞추느라 화질이 낮아질 수 있습니다.": "Minimum DPI and quality apply only when a maximum size is set. Meeting the size may lower image quality.",
+  "OCR 언어자료를 찾을 수 없습니다. 배포본 전체를 다시 압축 해제한 뒤 실행하세요.": "OCR language data was not found. Extract the whole distribution again, then run the program.",
+  "선택 영역 {0}개": "{0} selected region(s)",
+  "선택 영역 0개": "0 selected regions"
 }

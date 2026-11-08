@@ -33,21 +33,8 @@ def show_settings(app):
         ttk.Label(body, text=label, font=(theme.BOLD_FAMILY, 15, "bold")).grid(
             row=row, column=0, sticky="w", padx=(0, 24), pady=8
         )
-        control = ctk.CTkSegmentedButton(
-            body,
-            values=list(names),
-            font=font,
-            height=36,
-            width=260,
-            corner_radius=10,
-            border_width=3,
-            dynamic_resizing=False,
-            fg_color=("#e6eaf1", "#2b3442"),
-            unselected_color=("#e6eaf1", "#2b3442"),
-            unselected_hover_color=("#d7deea", "#36414f"),
-            selected_color=("#3759da", "#a9bcff"),
-            selected_hover_color=("#2948c3", "#c3d0ff"),
-            text_color=("#111827", "#f8fafc"),
+        control = ttk.SegmentedChoice(
+            body, values=names, font=font, width=260, dynamic_resizing=False
         )
         control.set(next(name for name, value in names.items() if value == current))
         control.grid(row=row, column=1, sticky="ew", pady=8)
@@ -64,19 +51,6 @@ def show_settings(app):
     def selected(label):
         control, names = choices[label]
         return names[control.get()]
-
-    def paint_selected_text():
-        # The selected segment is filled, so its text must contrast with the fill.
-        for control, _ in choices.values():
-            for name, button in control._buttons_dict.items():
-                active = name == control.get()
-                button.configure(
-                    text_color=("#ffffff", "#172135") if active else ("#111827", "#f8fafc")
-                )
-
-    for control, _ in choices.values():
-        control.configure(command=lambda _value: paint_selected_text())
-    paint_selected_text()
 
     def apply():
         lang, theme_name = selected("언어"), selected("테마")
