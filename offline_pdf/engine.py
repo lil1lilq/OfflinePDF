@@ -146,14 +146,14 @@ def open_pdf(path, password="", *, extraction=False):
         if not doc.is_pdf:
             raise UserError("PDF 파일을 선택하세요.")
         encrypted = bool((doc.metadata or {}).get("encryption")) or doc.needs_pass
-        if encrypted:
-            if doc.needs_pass and not password:
+        # A PDF with only an owner password opens for anyone, as in a browser.
+        # Its permission flags (no editing, no copying) are not enforced here.
+        if doc.needs_pass:
+            if not password:
                 raise UserError("암호화된 PDF입니다. 입력 암호를 입력하세요.")
-            auth = 0
-            if password:
-                auth = doc.authenticate(password)
-                if not auth:
-                    raise UserError("PDF 암호가 올바르지 않습니다.")
+            auth = doc.authenticate(password)
+            if not auth:
+                raise UserError("PDF 암호가 올바르지 않습니다.")
             permission = pdf.PDF_PERM_COPY if extraction else pdf.PDF_PERM_MODIFY
             if not auth & 4 and not doc.permissions & permission:
                 raise UserError("이 작업의 권한이 없습니다. 소유자 암호를 사용하세요.")
@@ -161,6 +161,12 @@ def open_pdf(path, password="", *, extraction=False):
     except BaseException:
         doc.close()
         raise
+
+
+def requires_open_password(path):
+    """True when the PDF cannot be opened without a password."""
+    with pdf.open(path) as probe:
+        return bool(probe.needs_pass)
 
 
 def save_pdf(doc, target, password=""):
@@ -369,7 +375,9 @@ def _process(job, paths, stage, emit, cancel):
             )
             store_password = output_password or (password if encrypted else "")
             if tool == "unlock":
-                if encrypted and not doc.authenticate(password) & 4:
+                # Only an opening password needs the owner password to remove;
+                # owner-only restrictions are removed like any other edit.
+                if requires_open_password(path) and not doc.authenticate(password) & 4:
                     raise UserError("암호 해제에는 소유자 암호가 필요합니다.")
                 save_pdf(doc, target)
             elif tool == "split":
