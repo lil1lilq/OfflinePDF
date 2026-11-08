@@ -21,6 +21,10 @@ Windows에서 PDF를 병합·분할·편집하는 데스크톱 프로그램입�
 현재 소스 버전은 **1.0.1**입니다. 다운로드 파일의 버전은 Releases에 표시된 버전을 확인하세요.
 소스에 추가된 기능이나 수정 사항은 이전 배포본에 포함되지 않을 수 있습니다.
 
+## 스크린샷
+
+<img width="1273" height="795" alt="image" src="https://github.com/user-attachments/assets/35c46ec9-970c-49ee-a867-6230f96e3f31" />
+
 ## 주요 기능
 
 | 기능 | 내용 |
