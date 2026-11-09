@@ -15,8 +15,9 @@
 GitHub Actions의 외부 액션도 버전 태그가 아니라 커밋 SHA로 고정되어 있습니다.
 Windows 실행파일은 Windows에서 빌드합니다.
 화면은 CustomTkinter 5.2.2를 사용합니다. 빌드 스크립트에 `--collect-all customtkinter`와
-`--add-data assets;assets`가 포함되어 있어 Lucide 아이콘과 Pretendard 글꼴을 함께 묶습니다.
-Pretendard를 사용할 수 없는 환경에서는 사용 가능한 시스템 글꼴로 전환합니다.
+`--add-data assets;assets`가 포함되어 있어 Lucide 아이콘 등 화면 자산을 함께 묶습니다.
+UI는 Windows의 맑은 고딕을 우선 사용합니다. 사용할 수 없으면 Segoe UI 등 시스템 글꼴로 전환합니다.
+기존 Pretendard 자산은 유지하지만 UI에 등록하거나 우선 적용하지 않습니다.
 
 ## 가장 쉬운 빌드 방법
 
