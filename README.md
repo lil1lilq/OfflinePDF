@@ -7,7 +7,7 @@ Windows에서 PDF를 병합·분할·편집하는 데스크톱 프로그램입�
 
 ## 다운로드
 
-[Releases에서 Windows용 프로그램 다운로드](https://github.com/lil1lilq/OfflinePDF/releases/latest)
+[프로그램 다운로드](https://github.com/lil1lilq/OfflinePDF/releases/latest)
 
 | 파일 | 실행 방법 |
 | --- | --- |
