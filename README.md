@@ -5,9 +5,7 @@
 Windows에서 PDF를 병합·분할·편집하는 데스크톱 프로그램입니다.
 문서 처리는 PC 안에서 이루어지며, 파일을 외부 변환 서버에 업로드하지 않습니다.
 
-## 다운로드
-
-[프로그램 다운로드](https://github.com/lil1lilq/OfflinePDF/releases/latest)
+## [다운로드](https://github.com/lil1lilq/OfflinePDF/releases/latest)
 
 | 파일 | 실행 방법 |
 | --- | --- |
