@@ -5,21 +5,28 @@
 A Windows desktop program for merging, splitting and editing PDFs.
 Documents are processed on your PC. Files are never uploaded to an external conversion server.
 
-## Download
-
-[Download the Windows program from Releases](https://github.com/lil1lilq/OfflinePDF/releases/latest)
+## [Download](https://github.com/lil1lilq/OfflinePDF/releases/latest)
 
 | File | How to run |
 | --- | --- |
-| `OfflinePDF-Setup-Windows-x64.exe` | Run it to install (no administrator rights needed). Start the program from the Start menu; uninstall it from Apps & features |
-| `OfflinePDF-Windows-x64-portable.zip` | Extract it and run `OfflinePDF.exe` inside the folder |
-| `OfflinePDF-<version>-source.zip` | Source code of the program and its components (AGPL-3.0). Not needed to run it |
+| OfflinePDF-Setup-Windows-x64.exe | Installer (recommended) |
+| OfflinePDF-Windows-x64-portable.zip | Portable version. Extract it and run `OfflinePDF.exe` inside the folder |
+| OfflinePDF-1.2.2-source.zip | Source code of the program and its components (AGPL-3.0). Not needed to run it |
+| SHA256SUMS.txt | Hashes for verifying file integrity. Not needed to run the program |
 
 Two downloads are available: an installer, and a portable ZIP that needs no installation. Windows 10 and 11, 64-bit, are supported. Everything the program needs is included, so Python does not have to be installed.
 Keep the portable version's folder together with the executable.
 
 The current source version is **1.2.3**. Check the version shown on Releases for the downloaded files.
 Features or fixes added to the source may not be in earlier releases.
+
+## Program screenshots
+
+| Feature | Screenshot |
+| :--- | :--- |
+| **Main screen** | <img width="900" alt="OfflinePDF main screen" src="https://github.com/user-attachments/assets/35c46ec9-970c-49ee-a867-6230f96e3f31" /> |
+| **Windows Explorer context menu** | <img width="650" alt="Windows Explorer context menu" src="https://github.com/user-attachments/assets/3d4e7733-67ce-4f52-9772-8d189e6aac42" /> |
+| **PDF redaction** | <img width="1000" alt="Before and after redacting personal information in a PDF" src="https://github.com/user-attachments/assets/af76e58a-3bc9-4315-8c75-2a9cdf5f2f43" /><br><sub>**Before (left)** → **After (right)**: Personal information removed from the selected area</sub> |
 
 ## Features
 
@@ -77,19 +84,19 @@ Notices for third-party components and models are in [THIRD_PARTY_NOTICES.md](TH
 
 ## Explorer context menu
 
-The Explorer menu is checked by default during installation; uncheck to opt out.
-Windows 11 shows it under Show more options. The menu uses the application icon.
+**Add Explorer PDF menu** is checked by default during installation. Uncheck it if you do not want it.
+On Windows 11, find it under **Show more options → OfflinePDF**. It uses the same icon as the program.
 
-- **Quick run** opens a compact progress window and starts automatically: merge in name order, split into pages, recommended compression, or 1.5x AI enhancement. Password protection/removal prompts only for required passwords.
-- **Open in OfflinePDF** opens the full task screen for adjusting settings and file order.
+- **Quick run**: Processes files automatically in a compact progress window. Merging uses file-name order, splitting creates one file per page, compression uses Recommended quality, and AI enhancement uses 1.5x. Password protection/removal asks only for the passwords it needs.
+- **Open in OfflinePDF**: Opens the task screen so you can review file order and settings before running.
 
-Both groups offer merge, split, compression, AI enhancement and password protection/removal.
-Output goes into a new folder beside the inputs, or a folder picker for inputs from different folders.
-Originals are preserved. The quick window supports cancellation and opening results.
-Merging PDFs with different passwords requests a new output password. Requests are briefly batched;
-files delivered after processing starts may become a separate task. Progress is per processing phase.
-Custom split boundaries in the full app apply to the selected file; per-page split processes the list.
+Files from the same folder are saved in a result folder under that folder. If the files come from different folders, you are asked to choose an output location.
+Originals are preserved. The quick-run window shows cancellation, errors and completion.
+When merging PDFs with different passwords, you are asked to set a new password for the result.
+File requests are briefly collected into batches. Files arriving after processing starts may be handled as a separate job.
+Progress reflects the current processing phase and does not guarantee the total remaining time.
+In the full app, splitting at specified start pages applies to the selected file only; per-page splitting applies to the whole list.
 
-Portable users: run Register-Explorer.cmd / Unregister-Explorer.cmd to register/remove the menu.
-Unregister before moving the folder and re-register afterwards. Avoid registering installed and
-portable copies together. Equivalent flags: --register-explorer / --unregister-explorer.
+Portable users can register the current-user menu with `Register-Explorer.cmd` and remove it with `Unregister-Explorer.cmd`.
+Unregister before moving the folder and register again at the new location. Do not register installed and portable copies at the same time.
+The command-line flags `--register-explorer` and `--unregister-explorer` are also supported.
