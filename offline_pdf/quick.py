@@ -398,11 +398,12 @@ class QuickWindow:
 
 def main(inbox):
     disable_network()
-    from .theme import avoid_native_titlebar_updates, register_fonts
+    from .theme import avoid_native_titlebar_updates, font_family, register_fonts
 
     avoid_native_titlebar_updates()
     register_fonts()
     ctk.set_appearance_mode("light")
     root = ctk.CTk()
+    ctk.ThemeManager.theme["CTkFont"]["family"] = font_family(root)
     QuickWindow(root, inbox)
     root.mainloop()

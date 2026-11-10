@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import ctypes
 import sys
 import tkinter.font as tkfont
 from pathlib import Path
@@ -67,7 +66,6 @@ CARD_GAP = 14
 CARD_PADDING = 18
 FONT_SIZES = {"title": 20, "card_title": 14, "body": 12, "caption": 11}
 FALLBACK_FONTS = ("맑은 고딕", "Malgun Gothic", "Segoe UI")
-_registered = []
 FONT_FAMILY = "맑은 고딕"
 BOLD_FAMILY = "맑은 고딕"
 
@@ -78,28 +76,17 @@ def resource_path(*parts):
 
 
 def register_fonts():
-    """Expose bundled font only in this process; never alter system font installation."""
-    if sys.platform != "win32" or _registered:
-        return
-    for path in sorted(resource_path("fonts").glob("Pretendard-*.otf")):
-        try:
-            if ctypes.windll.gdi32.AddFontResourceExW(str(path), 0x10, 0):
-                _registered.append(str(path))
-        except (OSError, AttributeError):
-            continue
+    """Use Windows system fonts without registering bundled fonts."""
+    return
 
 
 def font_family(root):
     """Pick the body family; bold text uses BOLD_FAMILY for a real bold face."""
     global FONT_FAMILY, BOLD_FAMILY
     installed = set(tkfont.families(root))
-    for family in ("Pretendard", *FALLBACK_FONTS):
+    for family in FALLBACK_FONTS:
         if family in installed:
             FONT_FAMILY = BOLD_FAMILY = family
-            # Pretendard Regular is thin on screen; Medium reads clearly. Bold
-            # stays on the base family, whose own Bold face is used.
-            if family == "Pretendard" and "Pretendard Medium" in installed:
-                FONT_FAMILY = "Pretendard Medium"
             return FONT_FAMILY
     FONT_FAMILY = BOLD_FAMILY = "TkDefaultFont"
     return FONT_FAMILY
