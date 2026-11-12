@@ -14,6 +14,7 @@ from .. import ctk_widgets as ttk
 from .. import theme
 from ..engine import UserError, check_local_path, open_pdf, pages, split_ranges
 from ..images import open_image_document
+from ..overlays import OverlayError
 from ..passwords import cached_password
 from ..ui import BLUE, MUTED, PANEL
 
@@ -30,7 +31,7 @@ class PreviewController:
     def show_preview(self):
         # Redaction is drawn on the preview itself, so that preview is the tool's
         # main work screen: keep its settings visible and let "back" go home.
-        inline = self.tool == "redact"
+        inline = self.tool == "redact" or self.stamp_mode()
         if self.screen != "preview" and not inline:
             self.preview_origin = self.capture_preview_origin()
         self.preview_mode = "width"
@@ -50,7 +51,7 @@ class PreviewController:
         self.update_back_state()
 
     def hide_preview(self, restore=True):
-        if self.tool == "redact" and self.work.winfo_manager():
+        if (self.tool == "redact" or self.stamp_mode()) and self.work.winfo_manager():
             # Redaction always works on the preview; never swap it for the overview.
             self.preview_origin = None
             self.show_preview()
@@ -201,6 +202,8 @@ class PreviewController:
         self.preview_timer = None
         self.canvas.delete("all")
         self.preview_rect = None
+        self._stamp_box = None
+        self._stamp_drag = None
         self.overview_canvas.delete("all")
         if reset:
             self.page_index = 0
@@ -341,6 +344,8 @@ class PreviewController:
                     self.page_label.config(
                         text=f"원본 {self.page_index + 1}쪽 · 정리 후 {position + 1}/{len(self.organizer.model.items)}"
                     )
+                if self.stamp_mode():
+                    self.preview_stamp(page, doc.page_count)
                 if self.tool == "redact":
                     for coords in self.regions.get(path, {}).get(str(self.page_index), []):
                         self.canvas.create_rectangle(
@@ -354,7 +359,7 @@ class PreviewController:
                 if nup_doc is not None:
                     nup_doc.close()
                 doc.close()
-        except UserError as exc:
+        except (UserError, OverlayError) as exc:
             self.canvas.create_text(15, 25, anchor="nw", width=420, text=str(exc))
             self.overview_canvas.create_text(15, 25, anchor="nw", width=420, text=str(exc))
             self.page_label.config(text="설정을 확인하세요")
@@ -386,6 +391,9 @@ class PreviewController:
         self.refresh_preview()
 
     def draw_start(self, event):
+        if self.stamp_mode():
+            self.stamp_drag_start(event)
+            return
         if self.tool != "redact" or not self.preview_rect or self.busy():
             return
         self.drag_start = self.canvas_point(event)
@@ -405,6 +413,9 @@ class PreviewController:
         )
 
     def draw_move(self, event):
+        if self.stamp_mode():
+            self.stamp_drag_move(event)
+            return
         if self.drag_start and self.drag_id:
             x, y = self.drag_start
             xx, yy = self.canvas_point(event)
@@ -417,6 +428,9 @@ class PreviewController:
             )
 
     def draw_end(self, event):
+        if self.stamp_mode():
+            self.stamp_drag_end(event)
+            return
         if not self.drag_start:
             return
         x, y = self.drag_start

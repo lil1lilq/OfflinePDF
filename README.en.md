@@ -38,7 +38,7 @@ Features or fixes added to the source may not be in earlier releases.
 | Compress PDF | Lossless, High quality, Recommended or Small, or a target size in MB per file |
 | PDF to images · Images to PDF | Save PDF pages as images, or turn images into A4 PDFs |
 | Password | Set or remove a PDF opening password |
-| Text and image overlay · Page numbers | Add text, signature or stamp images, and page numbers |
+| Text and image overlay · Page numbers | Add text, signature or seal images, and page numbers; remove light image backgrounds and drag images in the preview to position and resize them |
 | Crop margins · Redact | Cover page edges; permanently delete the content of selected areas |
 | Extract text · Scan OCR | Save text; recognize Korean and English text in scanned documents |
 | AI enhancement | Sharpen scanned images at the same size, or upscale them 1.5x or 2x (4x under advanced options); compare a before/after detail |
@@ -66,6 +66,17 @@ Images you add are converted to PDF automatically before the selected job.
 
 Use **Settings** at the bottom of the window to choose Korean or English and the Default or Dark mode theme. Both are kept for the next start.
 **About** shows the version, the license and where the source code is.
+
+### Position a signature or seal image
+
+Choose **Text and image overlay → Image**, then select an image to open the preview.
+Light paper backgrounds become transparent automatically. Adjust removal strength or disable removal if faint ink is lost. This is not general-purpose background segmentation for photos.
+**View original** is display-only and does not change save settings.
+Drag inside the image to move it, or drag a corner to resize. Aspect ratio is kept by default; choose **Free transform** to stretch width and height independently.
+You can also enter width and height in points or reset the position and size.
+The existing page range still applies: **blank means every page in every listed file**.
+Dragged positions and widths are relative to each page; keeping the aspect ratio preserves image proportions on different page sizes.
+The source image is never modified. Image signatures are not certificate-based digital signatures.
 
 ## Before you rely on the results
 

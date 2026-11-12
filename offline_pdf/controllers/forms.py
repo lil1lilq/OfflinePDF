@@ -36,7 +36,7 @@ def wrap_captions(form, rows, columns, width=None):
 
 
 # Options made of several side-by-side choices need more than one column.
-WIDE_FIELDS = {"compression": 3, "scale": 3}
+WIDE_FIELDS = {"compression": 3, "scale": 3, "stamp_path": 2, "stamp_actions": 2}
 UPSCALE_ADVANCED = ("scale4", "max_output_mb", "min_dpi", "min_quality")
 
 
@@ -183,7 +183,17 @@ class FormController:
             if self.tool == "watermark":
                 image = self.options["insert_mode"].get() == "이미지"
                 if (image and key in ("text", "font_size")) or (
-                    not image and key in ("stamp_path", "stamp_width")
+                    not image
+                    and key
+                    in (
+                        "stamp_path",
+                        "stamp_width",
+                        "stamp_height",
+                        "remove_background",
+                        "background_tolerance",
+                        "stamp_lock",
+                        "stamp_actions",
+                    )
                 ):
                     continue
             visible.append((key, cell))
@@ -193,6 +203,9 @@ class FormController:
             [(key, cell) for key, cell in visible if key not in below],
             [(key, cell) for key, cell in visible if key in below],
         ]
+        if self.tool == "watermark" and self.stamp_mode():
+            # Image placement has more controls; keep each row readable.
+            rows = [visible[i : i + 4] for i in range(0, len(visible), 4)]
         rows = [row for row in rows if row]
         # Every cell spans equal columns (wide choices span 3); at least four
         # columns, so a few options keep a quarter of the row each.
@@ -412,6 +425,7 @@ class FormController:
                 ],
             )
             self.field("불투명도", "opacity", "0.25")
+            self.setup_stamp_controls()
             self.options["insert_mode"].trace_add("write", self.update_insert_mode)
         if self.tool == "number":
             self.field("시작 번호", "start", "1")
@@ -544,6 +558,12 @@ class FormController:
         self.options["position"].set("오른쪽 아래" if image else "가운데")
         self.options["opacity"].set("1" if image else "0.25")
         self.arrange_fields()
+        if image:
+            self.show_preview()
+        else:
+            self._stamp_drag = None
+            self.hide_preview(restore=False)
+            self.schedule_preview()
 
     def compression_note(self, *_):
         notes = {

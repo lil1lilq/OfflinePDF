@@ -447,5 +447,21 @@
   "4배 (용량·시간 매우 큼)": "4x (very large, slow)",
   "AI 보정 배율을 원본 크기·1.5배·2배·4배 중에서 선택하세요.": "Choose an AI scale: same size, 1.5x, 2x or 4x.",
   "AI 보정 결과가 너무 큽니다. 더 작은 배율을 선택하거나 이미지 해상도를 줄이세요.": "The AI result would be too large. Choose a smaller scale or reduce the image resolution.",
-  "PDF, JPG, PNG 등 파일을\n드래그해 화면 아무 데나 놓으세요.\n\n지원: PDF · JPG/JPEG · PNG\nBMP · GIF · TIF/TIFF · WebP": "Drag PDF, JPG, PNG and other files\nand drop them anywhere in the window.\n\nSupported: PDF · JPG/JPEG · PNG\nBMP · GIF · TIF/TIFF · WebP"
+  "PDF, JPG, PNG 등 파일을\n드래그해 화면 아무 데나 놓으세요.\n\n지원: PDF · JPG/JPEG · PNG\nBMP · GIF · TIF/TIFF · WebP": "Drag PDF, JPG, PNG and other files\nand drop them anywhere in the window.\n\nSupported: PDF · JPG/JPEG · PNG\nBMP · GIF · TIF/TIFF · WebP",
+  "원하는 문구(워터마크) 또는 서명·직인 이미지를 넣습니다": "Insert custom text (watermark) or a signature or seal image",
+  "이미지 높이 pt (공란=자동)": "Image height, pt (blank = auto)",
+  "배경 제거": "Remove background",
+  "배경 제거 강도 (0~120)": "Background removal strength (0–120)",
+  "이미지 비율": "Image aspect ratio",
+  "유지": "Keep aspect ratio",
+  "자유변형": "Free transform",
+  "원본 보기": "View original",
+  "위치·크기 초기화": "Reset position and size",
+  "이미지 위치와 크기를 다시 지정하세요.": "Set the image position and size again.",
+  "이미지 높이": "Image height",
+  "배경 제거 강도": "Background removal strength",
+  "이미지를 선택한 뒤 미리보기에서 드래그해 배치하세요. 페이지 공란은 전체에 적용됩니다.": "Choose an image and drag it in the preview. A blank page range applies to all pages.",
+  "이 페이지는 적용 범위에 포함되지 않습니다.": "This page is outside the selected range.",
+  "원본 보기 중입니다. 저장에는 배경 제거 설정이 적용됩니다.": "Viewing the original. Saving still uses the background removal setting.",
+  "안쪽 드래그: 이동 · 모서리 드래그: 크기 조절 · 페이지 공란: 전체 적용 · 인증서 전자서명이 아닙니다.": "Drag inside to move · Drag corners to resize · Blank page range: all pages · Not a certificate-based digital signature."
 }
