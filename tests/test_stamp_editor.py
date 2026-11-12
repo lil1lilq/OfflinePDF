@@ -177,14 +177,18 @@ class StampEditorGuiTests(unittest.TestCase):
         app.draw_start(self.event(*centre))
         app.draw_move(self.event(centre[0] - 30, centre[1] - 40))
         app.draw_end(self.event(centre[0] - 30, centre[1] - 40))
-        self.assertAlmostEqual(app._stamp_box[0], x0 - 30, places=3)
+        # Tk canvas coordinates round to screen pixels; compare pointer motion
+        # at one-pixel accuracy, then verify saved PDF geometry more strictly.
+        self.assertAlmostEqual(app._stamp_box[0], x0 - 30, delta=1 / app.preview_scale)
         self.assertTrue(app.options["stamp_rect"].get())
         app.options["stamp_lock"].set("자유변형")
         app.refresh_preview()
         x0, y0, x1, y1 = app._stamp_box
         app.draw_start(self.event(x1, y1))
         app.draw_end(self.event(x1 + 25, y1 + 10))
-        self.assertAlmostEqual(app._stamp_box[2] - app._stamp_box[0], 125, places=2)
+        self.assertAlmostEqual(
+            app._stamp_box[2] - app._stamp_box[0], 125, delta=1 / app.preview_scale
+        )
         before = {key: value.get() for key, value in app.options.items()}
         result = execute(
             {
