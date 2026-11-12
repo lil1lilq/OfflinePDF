@@ -12,6 +12,7 @@ from .controllers.forms import FormController
 from .controllers.jobs import JobController
 from .controllers.navigation import NavigationController
 from .controllers.preview import PreviewController
+from .controllers.stamp import StampController
 from .engine import disable_network
 from .theme import avoid_native_titlebar_updates
 from .tools import TOOLS
@@ -20,7 +21,14 @@ from .windows_drop import NativeFileDrop
 avoid_native_titlebar_updates()  # Called before either application or test creates a CTk root.
 
 
-class App(NavigationController, FileController, FormController, PreviewController, JobController):
+class App(
+    StampController,
+    NavigationController,
+    FileController,
+    FormController,
+    PreviewController,
+    JobController,
+):
     def __init__(self, root):
         from .appearance import apply_theme
         from .localization import apply_language, install
@@ -96,7 +104,7 @@ class App(NavigationController, FileController, FormController, PreviewControlle
         self.update_back_state()
 
     def busy(self):
-        return self.process is not None
+        return self.process is not None or getattr(self, "_installing", False)
 
     def close(self):
         if self.process:
@@ -110,6 +118,8 @@ class App(NavigationController, FileController, FormController, PreviewControlle
                 self.process.terminate()
                 self.process.join(timeout=2)
             self.cleanup_stage()
+        if getattr(self, "_stamp_source", None):
+            self._stamp_source.close()
         self.close_ai_comparison()
         if self.file_drop:
             self.file_drop.close()
@@ -127,6 +137,8 @@ class App(NavigationController, FileController, FormController, PreviewControlle
         self.password_cache.clear()
         self.result_passwords.clear()
         self.job_passwords.clear()
+        if getattr(self, "update_dialog", None):
+            self.update_dialog.close()
         # Cancel every queued UI callback before destroying its Tcl commands.
         for timer in self.root.tk.call("after", "info"):
             self.root.tk.call("after", "cancel", timer)

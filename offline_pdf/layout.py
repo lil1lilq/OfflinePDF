@@ -129,6 +129,23 @@ def build(app):
     )
     app.about_button.source_text = "정보"
     app.about_button.pack(side="right", padx=(0, 6), pady=4)
+    from .updates import show_updates
+
+    app.update_button = ctk.CTkButton(
+        status_box,
+        text="최신버전 확인",
+        command=lambda: show_updates(app),
+        width=120,
+        height=34,
+        corner_radius=10,
+        border_width=1,
+        fg_color=("#ffffff", "#222a36"),
+        border_color=("#dfe5ef", "#394557"),
+        hover_color=("#eaf0ff", "#303b53"),
+        text_color=("#111827", "#f8fafc"),
+    )
+    app.update_button.source_text = "최신버전 확인"
+    app.update_button.pack(side="right", padx=(0, 6), pady=4)
     status = tk.Label(status_box, text="", anchor="w", bg=PANEL, fg=MUTED, font=(FONT, 11), padx=16)
     status.pack(fill="both", expand=True)
     status.bind("<Configure>", lambda e: status.configure(wraplength=max(300, e.width - 30)))
@@ -485,6 +502,8 @@ def build(app):
     app.preview_hscroll = ttk.Scrollbar(preview, orient="horizontal", command=app.canvas.xview)
     app.preview_hscroll.pack(fill="x", padx=8, pady=(0, 5))
     app.canvas.configure(xscrollcommand=app.preview_hscroll.set)
+    app.canvas.bind("<Motion>", app.stamp_hover)
+    app.canvas.bind("<Leave>", lambda e: app.canvas.config(cursor=""))
     app.canvas.bind("<ButtonPress-1>", app.draw_start)
     app.canvas.bind("<B1-Motion>", app.draw_move)
     app.canvas.bind("<ButtonRelease-1>", app.draw_end)

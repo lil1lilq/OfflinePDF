@@ -11,13 +11,13 @@ Documents are processed on your PC. Files are never uploaded to an external conv
 | --- | --- |
 | OfflinePDF-Setup-Windows-x64.exe | Installer (recommended) |
 | OfflinePDF-Windows-x64-portable.zip | Portable version. Extract it and run `OfflinePDF.exe` inside the folder |
-| OfflinePDF-1.2.2-source.zip | Source code of the program and its components (AGPL-3.0). Not needed to run it |
+| OfflinePDF-1.2.4-source.zip | Source code of the program and its components (AGPL-3.0). Not needed to run it |
 | SHA256SUMS.txt | Hashes for verifying file integrity. Not needed to run the program |
 
 Two downloads are available: an installer, and a portable ZIP that needs no installation. Windows 10 and 11, 64-bit, are supported. Everything the program needs is included, so Python does not have to be installed.
 Keep the portable version's folder together with the executable.
 
-The current source version is **1.2.3**. Check the version shown on Releases for the downloaded files.
+The current source version is **1.2.4**. Check the version shown on Releases for the downloaded files.
 Features or fixes added to the source may not be in earlier releases.
 
 ## Program screenshots
@@ -38,7 +38,7 @@ Features or fixes added to the source may not be in earlier releases.
 | Compress PDF | Lossless, High quality, Recommended or Small, or a target size in MB per file |
 | PDF to images · Images to PDF | Save PDF pages as images, or turn images into A4 PDFs |
 | Password | Set or remove a PDF opening password |
-| Text and image overlay · Page numbers | Add text, signature or stamp images, and page numbers |
+| Text and image overlay · Page numbers | Add text, signature or seal images, and page numbers; remove light image backgrounds and drag images in the preview to position and resize them |
 | Crop margins · Redact | Cover page edges; permanently delete the content of selected areas |
 | Extract text · Scan OCR | Save text; recognize Korean and English text in scanned documents |
 | AI enhancement | Sharpen scanned images at the same size, or upscale them 1.5x or 2x (4x under advanced options); compare a before/after detail |
@@ -66,6 +66,27 @@ Images you add are converted to PDF automatically before the selected job.
 
 Use **Settings** at the bottom of the window to choose Korean or English and the Default or Dark mode theme. Both are kept for the next start.
 **About** shows the version, the license and where the source code is.
+
+### Position a signature or seal image
+
+Choose **Text and image overlay → Image**, then select an image to open the preview.
+Light paper backgrounds become transparent automatically. Adjust removal strength or disable removal if faint ink is lost. This is not general-purpose background segmentation for photos.
+**View original** is display-only and does not change save settings.
+Drag inside the image to move it, or drag a corner to resize. Corner handles preserve the current aspect ratio. Handles at the centre of each edge stretch only that edge. Hover over a handle to see the hand cursor.
+You can also enter width and height in points or reset the position and size.
+The existing page range still applies: **blank means every page in every listed file**.
+Dragged positions and sizes are relative to each page. Check the placement on pages with different sizes or orientations.
+The source image is never modified. Image signatures are not certificate-based digital signatures.
+
+Page numbers support a starting number, nine positions and font sizes from 8 to 72 pt, with placement shown in the preview.
+
+### Check for updates
+
+Click **Check for updates** beside **About** in the bottom bar to query the latest stable GitHub release. No update requests are made at startup.
+For a registered installed copy, **Update** downloads the installer and verifies its SHA256. **Install update** closes the program and starts the installer at the existing location after PDF processing has finished. You can relaunch from the installer’s completion screen.
+Portable/source copies and releases without an installer or checksum are directed to the official download page.
+Document processing remains offline. A separate process connects to GitHub only when you request an update check or download. Documents, file names and passwords are not sent; ordinary connection information such as your IP address is visible to the server.
+SHA256 checks file integrity and does not replace code signing. Windows or company security policies can still block installation.
 
 ## Before you rely on the results
 
