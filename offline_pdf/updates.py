@@ -62,12 +62,6 @@ class UpdateDialog:
             body, text="정식 릴리즈를 확인하고 있습니다…", wraplength=450, justify="left"
         )
         self.status.pack(fill="x", pady=10)
-        ttk.Label(
-            body,
-            text="이 기능은 GitHub에 접속합니다. 문서·파일명·암호는 전송하지 않습니다.",
-            wraplength=450,
-            style="Muted.TLabel",
-        ).pack(fill="x", pady=8)
         self.progress = ctk.CTkProgressBar(body, mode="indeterminate")
         self.progress.pack(fill="x", pady=8)
         self.progress.start()

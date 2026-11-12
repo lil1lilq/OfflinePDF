@@ -11,13 +11,13 @@ Documents are processed on your PC. Files are never uploaded to an external conv
 | --- | --- |
 | OfflinePDF-Setup-Windows-x64.exe | Installer (recommended) |
 | OfflinePDF-Windows-x64-portable.zip | Portable version. Extract it and run `OfflinePDF.exe` inside the folder |
-| OfflinePDF-1.2.2-source.zip | Source code of the program and its components (AGPL-3.0). Not needed to run it |
+| OfflinePDF-1.2.4-source.zip | Source code of the program and its components (AGPL-3.0). Not needed to run it |
 | SHA256SUMS.txt | Hashes for verifying file integrity. Not needed to run the program |
 
 Two downloads are available: an installer, and a portable ZIP that needs no installation. Windows 10 and 11, 64-bit, are supported. Everything the program needs is included, so Python does not have to be installed.
 Keep the portable version's folder together with the executable.
 
-The current source version is **1.2.3**. Check the version shown on Releases for the downloaded files.
+The current source version is **1.2.4**. Check the version shown on Releases for the downloaded files.
 Features or fixes added to the source may not be in earlier releases.
 
 ## Program screenshots
