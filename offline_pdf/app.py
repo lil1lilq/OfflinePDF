@@ -104,7 +104,7 @@ class App(
         self.update_back_state()
 
     def busy(self):
-        return self.process is not None
+        return self.process is not None or getattr(self, "_installing", False)
 
     def close(self):
         if self.process:
@@ -137,6 +137,8 @@ class App(
         self.password_cache.clear()
         self.result_passwords.clear()
         self.job_passwords.clear()
+        if getattr(self, "update_dialog", None):
+            self.update_dialog.close()
         # Cancel every queued UI callback before destroying its Tcl commands.
         for timer in self.root.tk.call("after", "info"):
             self.root.tk.call("after", "cancel", timer)

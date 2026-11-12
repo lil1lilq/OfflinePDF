@@ -80,6 +80,14 @@ The source image is never modified. Image signatures are not certificate-based d
 
 Page numbers support a starting number, nine positions and font sizes from 8 to 72 pt, with placement shown in the preview.
 
+### Check for updates
+
+Click **Check for updates** beside **About** in the bottom bar to query the latest stable GitHub release. No update requests are made at startup.
+For a registered installed copy, **Update** downloads the installer and verifies its SHA256. **Install update** closes the program and starts the installer at the existing location after PDF processing has finished. You can relaunch from the installer’s completion screen.
+Portable/source copies and releases without an installer or checksum are directed to the official download page.
+Document processing remains offline. A separate process connects to GitHub only when you request an update check or download. Documents, file names and passwords are not sent; ordinary connection information such as your IP address is visible to the server.
+SHA256 checks file integrity and does not replace code signing. Windows or company security policies can still block installation.
+
 ## Before you rely on the results
 
 - **Crop margins** and A4 handouts' **Fill (crop edges)** only cover content. The covered information may remain in the document.
