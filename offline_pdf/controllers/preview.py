@@ -204,6 +204,7 @@ class PreviewController:
         self.preview_rect = None
         self._stamp_box = None
         self._stamp_drag = None
+        self.canvas.config(cursor="")
         self.overview_canvas.delete("all")
         if reset:
             self.page_index = 0
@@ -254,6 +255,13 @@ class PreviewController:
                 if nup_doc is None:
                     self.page_index = max(0, min(self.page_index, doc.page_count - 1))
                 page = nup_doc[0] if nup_doc is not None else doc[self.page_index]
+                if self.tool == "number":
+                    from ..numbering import draw_number
+
+                    options = {key: value.get() for key, value in self.options.items()}
+                    chosen = pages(options.get("pages", ""), doc.page_count)
+                    if self.page_index in chosen:
+                        draw_number(page, chosen.index(self.page_index), options)
                 if self.file_overview.winfo_ismapped():
                     ow = max(150, self.overview_canvas.winfo_width())
                     if (

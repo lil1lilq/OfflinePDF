@@ -32,6 +32,33 @@ def resize_rect(rect, corner, point, bounds, aspect=None):
     return (min(ax, px), min(ay, py), max(ax, px), max(ay, py))
 
 
+def handle_points(rect):
+    x0, y0, x1, y1 = rect
+    return (
+        ("nw", x0, y0),
+        ("ne", x1, y0),
+        ("se", x1, y1),
+        ("sw", x0, y1),
+        ("n", (x0 + x1) / 2, y0),
+        ("e", x1, (y0 + y1) / 2),
+        ("s", (x0 + x1) / 2, y1),
+        ("w", x0, (y0 + y1) / 2),
+    )
+
+
+def stretch_rect(rect, edge, point, bounds):
+    x0, y0, x1, y1 = rect
+    if edge == "n":
+        y0 = max(0, min(y1 - 1, point[1]))
+    elif edge == "s":
+        y1 = min(bounds[1], max(y0 + 1, point[1]))
+    elif edge == "w":
+        x0 = max(0, min(x1 - 1, point[0]))
+    elif edge == "e":
+        x1 = min(bounds[0], max(x0 + 1, point[0]))
+    return x0, y0, x1, y1
+
+
 class StampController:
     def stamp_mode(self):
         return (
@@ -52,7 +79,6 @@ class StampController:
         self.field("이미지 높이 pt (공란=자동)", "stamp_height", "")
         self.field("배경 제거", "remove_background", "사용", ["사용", "사용 안 함"])
         self.field("배경 제거 강도 (0~120)", "background_tolerance", "30")
-        self.field("이미지 비율", "stamp_lock", "유지", ["유지", "자유변형"])
         self.options["stamp_rect"] = tk.StringVar()
         cell = ttk.Frame(self.form, style="Panel.TFrame")
         self.form_cells.append(("stamp_actions", cell))
@@ -71,7 +97,6 @@ class StampController:
             "opacity",
             "remove_background",
             "background_tolerance",
-            "stamp_lock",
             "pages",
         ):
             self.options[key].trace_add("write", lambda *_, key=key: self.stamp_changed(key))
@@ -88,21 +113,13 @@ class StampController:
                 self.stamp_original_button.config(text="원본 보기")
             elif key == "position":
                 self.options["stamp_rect"].set("")
-            elif key in ("stamp_width", "stamp_height", "stamp_lock"):
+            elif key in ("stamp_width", "stamp_height"):
                 try:
                     width = float(self.options["stamp_width"].get())
                     height = float(
                         self.options["stamp_height"].get()
                         or width / getattr(self, "_stamp_aspect", 1)
                     )
-                    if self.options["stamp_lock"].get() == "유지":
-                        aspect = getattr(self, "_stamp_aspect", 1)
-                        if key == "stamp_height":
-                            width = height * aspect
-                            self.options["stamp_width"].set(f"{width:.3f}")
-                        else:
-                            height = width / aspect
-                            self.options["stamp_height"].set(f"{height:.3f}")
                     if math.isfinite(width) and math.isfinite(height) and width > 0 and height > 0:
                         value = self.options["stamp_rect"].get()
                         if value and self._stamp_page_size:
@@ -201,7 +218,6 @@ class StampController:
                     if options["stamp_height"]
                     else None,
                     relative=relative_rect(options["stamp_rect"]),
-                    lock_aspect=options.get("stamp_lock") == "유지",
                 )
             rect = overlay.image_rect(page)
             self._stamp_page_size = (page.rect.width, page.rect.height)
@@ -217,7 +233,7 @@ class StampController:
             self.status.set(
                 "원본 보기 중입니다. 저장에는 배경 제거 설정이 적용됩니다."
                 if self.stamp_original
-                else "안쪽 드래그: 이동 · 모서리 드래그: 크기 조절 · 페이지 공란: 전체 적용 · 인증서 전자서명이 아닙니다."
+                else "안쪽: 이동 · 모서리: 비율 유지 크기 조절 · 변 중앙: 한 방향 늘리기 · 페이지 공란: 전체 적용 · 인증서 전자서명이 아닙니다."
             )
         except OverlayError as exc:
             self.status.set(str(exc))
@@ -233,26 +249,35 @@ class StampController:
             self._stamp_photo = ImageTk.PhotoImage(image, master=self.canvas)
         self.canvas.create_image(box[0], box[1], anchor="nw", image=self._stamp_photo, tags="stamp")
         self.canvas.create_rectangle(*box, outline=BLUE, width=2, tags="stamp")
-        for x, y in ((box[0], box[1]), (box[2], box[1]), (box[2], box[3]), (box[0], box[3])):
+        for _, x, y in handle_points(box):
             self.canvas.create_rectangle(
                 x - 5, y - 5, x + 5, y + 5, fill="white", outline=BLUE, width=2, tags="stamp"
             )
+
+    def stamp_handle_at(self, event):
+        if not self.stamp_mode() or self.busy() or not getattr(self, "_stamp_box", None):
+            return None
+        x, y = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
+        for name, px, py in handle_points(self._stamp_box):
+            if (
+                abs(x - (12 + px * self.preview_scale)) <= 7
+                and abs(y - (12 + py * self.preview_scale)) <= 7
+            ):
+                return name
+        return None
+
+    def stamp_hover(self, event):
+        self.canvas.config(cursor="hand2" if self.stamp_handle_at(event) else "")
 
     def stamp_drag_start(self, event):
         if self.busy() or not getattr(self, "_stamp_box", None):
             return
         point = self.canvas_point(event)
         rect = self._stamp_box
-        tolerance = 10 / self.preview_scale
-        for corner, x, y in (
-            ("nw", rect[0], rect[1]),
-            ("ne", rect[2], rect[1]),
-            ("se", rect[2], rect[3]),
-            ("sw", rect[0], rect[3]),
-        ):
-            if abs(point[0] - x) <= tolerance and abs(point[1] - y) <= tolerance:
-                self._stamp_drag = (corner, point, rect)
-                return
+        handle = self.stamp_handle_at(event)
+        if handle:
+            self._stamp_drag = (handle, point, rect)
+            return
         if rect[0] <= point[0] <= rect[2] and rect[1] <= point[1] <= rect[3]:
             self._stamp_drag = ("move", point, rect)
 
@@ -266,12 +291,10 @@ class StampController:
             dx = min(pw - rect[2], max(-rect[0], point[0] - start[0]))
             dy = min(ph - rect[3], max(-rect[1], point[1] - start[1]))
             self._stamp_box = (rect[0] + dx, rect[1] + dy, rect[2] + dx, rect[3] + dy)
+        elif kind in ("n", "e", "s", "w"):
+            self._stamp_box = stretch_rect(rect, kind, point, (pw, ph))
         else:
-            aspect = (
-                (rect[2] - rect[0]) / (rect[3] - rect[1])
-                if self.options["stamp_lock"].get() == "유지"
-                else None
-            )
+            aspect = (rect[2] - rect[0]) / (rect[3] - rect[1])
             self._stamp_box = resize_rect(rect, kind, point, (pw, ph), aspect)
         self.draw_stamp_layer()
 

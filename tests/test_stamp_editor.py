@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import pymupdf as pdf
 from PIL import Image, ImageDraw
 
-from offline_pdf.controllers.stamp import resize_rect
+from offline_pdf.controllers.stamp import resize_rect, stretch_rect
 from offline_pdf.engine import execute
 from offline_pdf.overlays import (
     OverlayError,
@@ -140,6 +140,16 @@ class StampEngineTests(unittest.TestCase):
         rect = resize_rect((50, 50, 150, 100), "se", (200, 200), (300, 400))
         self.assertEqual(rect, (50, 50, 200, 200))
 
+    def test_edge_handles_stretch_only_their_axis(self):
+        rect = (50, 50, 150, 100)
+        for edge, point, expected in (
+            ("n", (100, 20), (50, 20, 150, 100)),
+            ("s", (100, 150), (50, 50, 150, 150)),
+            ("e", (200, 75), (50, 50, 200, 100)),
+            ("w", (10, 75), (10, 50, 150, 100)),
+        ):
+            self.assertEqual(stretch_rect(rect, edge, point, (300, 400)), expected)
+
 
 class StampEditorGuiTests(unittest.TestCase):
     def setUp(self):
@@ -181,6 +191,20 @@ class StampEditorGuiTests(unittest.TestCase):
             y=12 + y * self.app.preview_scale - self.app.canvas.canvasy(0),
         )
 
+    def test_page_number_controls_and_preview_preserve_source(self):
+        app = self.app
+        original = self.source.read_bytes()
+        app.select_tool("number")
+        app.options["number_position"].set("오른쪽 위")
+        app.options["number_font_size"].set("24")
+        app.options["start"].set("10")
+        app.show_preview()
+        self.root.update()
+        app.refresh_preview()
+        self.assertIsNotNone(app.preview_rect)
+        self.assertTrue(app.preview_panel.winfo_ismapped())
+        self.assertEqual(self.source.read_bytes(), original)
+
     def test_drag_resize_reset_and_original_view_do_not_change_save_settings(self):
         app = self.app
         self.assertTrue(app.preview_panel.winfo_ismapped())
@@ -193,13 +217,23 @@ class StampEditorGuiTests(unittest.TestCase):
         # at one-pixel accuracy, then verify saved PDF geometry more strictly.
         self.assertAlmostEqual(app._stamp_box[0], x0 - 30, delta=1 / app.preview_scale)
         self.assertTrue(app.options["stamp_rect"].get())
-        app.options["stamp_lock"].set("자유변형")
-        app.refresh_preview()
+        self.assertNotIn("stamp_lock", app.options)
         x0, y0, x1, y1 = app._stamp_box
-        app.draw_start(self.event(x1, y1))
-        app.draw_end(self.event(x1 + 25, y1 + 10))
+        app.stamp_hover(self.event(x1, (y0 + y1) / 2))
+        self.assertEqual(app.canvas.cget("cursor"), "hand2")
+        app.draw_start(self.event(x1, (y0 + y1) / 2))
+        app.draw_end(self.event(x1 + 25, (y0 + y1) / 2))
         self.assertAlmostEqual(
             app._stamp_box[2] - app._stamp_box[0], 125, delta=1 / app.preview_scale
+        )
+        self.assertAlmostEqual(app._stamp_box[3] - app._stamp_box[1], y1 - y0, places=3)
+        x0, y0, x1, y1 = app._stamp_box
+        aspect = (x1 - x0) / (y1 - y0)
+        app.draw_start(self.event(x1, y1))
+        app.draw_end(self.event(x1 + 10, y1 + 10))
+        self.assertAlmostEqual(
+            (app._stamp_box[2] - app._stamp_box[0]) / (app._stamp_box[3] - app._stamp_box[1]),
+            aspect,
         )
         before = {key: value.get() for key, value in app.options.items()}
         result = execute(

@@ -72,11 +72,13 @@ Use **Settings** at the bottom of the window to choose Korean or English and the
 Choose **Text and image overlay → Image**, then select an image to open the preview.
 Light paper backgrounds become transparent automatically. Adjust removal strength or disable removal if faint ink is lost. This is not general-purpose background segmentation for photos.
 **View original** is display-only and does not change save settings.
-Drag inside the image to move it, or drag a corner to resize. Aspect ratio is kept by default; choose **Free transform** to stretch width and height independently.
+Drag inside the image to move it, or drag a corner to resize. Corner handles preserve the current aspect ratio. Handles at the centre of each edge stretch only that edge. Hover over a handle to see the hand cursor.
 You can also enter width and height in points or reset the position and size.
 The existing page range still applies: **blank means every page in every listed file**.
-Dragged positions and widths are relative to each page; keeping the aspect ratio preserves image proportions on different page sizes.
+Dragged positions and sizes are relative to each page. Check the placement on pages with different sizes or orientations.
 The source image is never modified. Image signatures are not certificate-based digital signatures.
+
+Page numbers support a starting number, nine positions and font sizes from 8 to 72 pt, with placement shown in the preview.
 
 ## Before you rely on the results
 

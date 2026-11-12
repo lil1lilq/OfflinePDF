@@ -465,5 +465,17 @@
   "원본 보기 중입니다. 저장에는 배경 제거 설정이 적용됩니다.": "Viewing the original. Saving still uses the background removal setting.",
   "안쪽 드래그: 이동 · 모서리 드래그: 크기 조절 · 페이지 공란: 전체 적용 · 인증서 전자서명이 아닙니다.": "Drag inside to move · Drag corners to resize · Blank page range: all pages · Not a certificate-based digital signature.",
   "사용": "On",
-  "배경 제거 결과 보기": "View background removal result"
+  "배경 제거 결과 보기": "View background removal result",
+  "문구(워터마크) 또는 서명·직인 이미지를 넣습니다": "Insert text (watermark) or a signature or seal image",
+  "선택 영역만 삭제합니다. 미리보기 화면에 드래그해서 영역을 지정하세요": "Delete only the selected areas. Drag in the preview to select an area",
+  "위치와 글자 크기를 지정해 쪽 번호를 넣습니다.": "Insert page numbers with a chosen position and font size.",
+  "쪽 번호 위치": "Page number position",
+  "쪽 번호 글자 크기 pt": "Page number font size (pt)",
+  "쪽 번호 글자 크기": "Page number font size",
+  "왼쪽 가운데": "Middle left",
+  "오른쪽 가운데": "Middle right",
+  "쪽 번호 위치를 다시 선택하세요.": "Choose a valid page number position.",
+  "쪽 번호가 페이지보다 큽니다. 글자 크기를 줄이세요.": "The page number is too large for the page. Reduce the font size.",
+  "쪽 번호를 삽입할 수 없습니다. 글자 크기를 줄이세요.": "Cannot insert the page number. Reduce the font size.",
+  "안쪽: 이동 · 모서리: 비율 유지 크기 조절 · 변 중앙: 한 방향 늘리기 · 페이지 공란: 전체 적용 · 인증서 전자서명이 아닙니다.": "Inside: move · Corners: resize proportionally · Edge centres: stretch · Blank page range: all pages · Not a certificate-based digital signature."
 }

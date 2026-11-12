@@ -191,7 +191,6 @@ class FormController:
                         "stamp_height",
                         "remove_background",
                         "background_tolerance",
-                        "stamp_lock",
                         "stamp_actions",
                     )
                 ):
@@ -429,6 +428,12 @@ class FormController:
             self.options["insert_mode"].trace_add("write", self.update_insert_mode)
         if self.tool == "number":
             self.field("시작 번호", "start", "1")
+            from ..overlays import POSITIONS
+
+            self.field("쪽 번호 위치", "number_position", "가운데 아래", list(POSITIONS))
+            self.field("쪽 번호 글자 크기 pt", "number_font_size", "11")
+            for key in ("pages", "start", "number_position", "number_font_size"):
+                self.options[key].trace_add("write", lambda *_: self.schedule_preview())
         if self.tool == "crop":
             self.field("여백 mm", "margin", "10")
         if self.tool == "ocr":

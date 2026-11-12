@@ -537,17 +537,9 @@ def _process(job, paths, stage, emit, cancel):
                         except OverlayError as exc:
                             raise UserError(str(exc)) from None
                     elif tool == "number":
-                        start = number(opt.get("start", "1"), 0, 999999, "시작 번호", integer=True)
-                        rect = (
-                            pdf.Rect(
-                                10,
-                                page.rect.height - 35,
-                                page.rect.width - 10,
-                                page.rect.height - 10,
-                            )
-                            * page.derotation_matrix
-                        )
-                        page.insert_textbox(rect, str(start + index), fontsize=11, align=1)
+                        from .numbering import draw_number
+
+                        draw_number(page, index, opt)
                     elif tool == "crop":
                         margin = number(opt.get("margin", "10"), 0, 100, "여백 자르기") * 72 / 25.4
                         rect = page.cropbox + (margin, margin, -margin, -margin)
