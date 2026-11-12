@@ -56,9 +56,10 @@ class StampController:
         self.options["stamp_rect"] = tk.StringVar()
         cell = ttk.Frame(self.form, style="Panel.TFrame")
         self.form_cells.append(("stamp_actions", cell))
-        ttk.Button(cell, text="원본 보기", command=self.toggle_stamp_original).pack(
-            side="left", padx=3
+        self.stamp_original_button = ttk.Button(
+            cell, text="원본 보기", command=self.toggle_stamp_original
         )
+        self.stamp_original_button.pack(side="left", padx=3)
         ttk.Button(cell, text="위치·크기 초기화", command=self.reset_stamp).pack(
             side="left", padx=3
         )
@@ -84,6 +85,7 @@ class StampController:
                 self.options["stamp_rect"].set("")
                 self.options["stamp_height"].set("")
                 self.stamp_original = False
+                self.stamp_original_button.config(text="원본 보기")
             elif key == "position":
                 self.options["stamp_rect"].set("")
             elif key in ("stamp_width", "stamp_height", "stamp_lock"):
@@ -135,12 +137,16 @@ class StampController:
         self.options["position"].set("오른쪽 아래")
         self._stamp_syncing = False
         self.stamp_original = False
+        self.stamp_original_button.config(text="원본 보기")
         self.schedule_preview()
 
     def toggle_stamp_original(self):
         if self.busy() or not self.stamp_mode():
             return
         self.stamp_original = not self.stamp_original
+        self.stamp_original_button.config(
+            text="배경 제거 결과 보기" if self.stamp_original else "원본 보기"
+        )
         self.schedule_preview()
 
     def preview_stamp(self, page, total):
@@ -200,6 +206,13 @@ class StampController:
             rect = overlay.image_rect(page)
             self._stamp_page_size = (page.rect.width, page.rect.height)
             self._stamp_box = tuple(rect)
+            if overlay.relative:
+                self._stamp_syncing = True
+                try:
+                    self.options["stamp_width"].set(f"{rect.width:.3f}")
+                    self.options["stamp_height"].set(f"{rect.height:.3f}")
+                finally:
+                    self._stamp_syncing = False
             self.draw_stamp_layer()
             self.status.set(
                 "원본 보기 중입니다. 저장에는 배경 제거 설정이 적용됩니다."

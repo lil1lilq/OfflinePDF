@@ -463,5 +463,7 @@
   "이미지를 선택한 뒤 미리보기에서 드래그해 배치하세요. 페이지 공란은 전체에 적용됩니다.": "Choose an image and drag it in the preview. A blank page range applies to all pages.",
   "이 페이지는 적용 범위에 포함되지 않습니다.": "This page is outside the selected range.",
   "원본 보기 중입니다. 저장에는 배경 제거 설정이 적용됩니다.": "Viewing the original. Saving still uses the background removal setting.",
-  "안쪽 드래그: 이동 · 모서리 드래그: 크기 조절 · 페이지 공란: 전체 적용 · 인증서 전자서명이 아닙니다.": "Drag inside to move · Drag corners to resize · Blank page range: all pages · Not a certificate-based digital signature."
+  "안쪽 드래그: 이동 · 모서리 드래그: 크기 조절 · 페이지 공란: 전체 적용 · 인증서 전자서명이 아닙니다.": "Drag inside to move · Drag corners to resize · Blank page range: all pages · Not a certificate-based digital signature.",
+  "사용": "On",
+  "배경 제거 결과 보기": "View background removal result"
 }
