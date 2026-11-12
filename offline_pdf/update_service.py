@@ -5,7 +5,6 @@ import json
 import re
 import time
 import urllib.parse
-import urllib.request
 from pathlib import Path
 
 API = "https://api.github.com/repos/lil1lilq/OfflinePDF/releases/latest"
@@ -47,12 +46,6 @@ def release_info(data, current):
     }
 
 
-class TrustedRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, request, fp, code, message, headers, newurl):
-        validate_url(newurl)
-        return super().redirect_request(request, fp, code, message, headers, newurl)
-
-
 def validate_url(url):
     parsed = urllib.parse.urlsplit(url)
     if (
@@ -65,6 +58,16 @@ def validate_url(url):
 
 
 def open_url(url):
+    # The GUI replaces socket.socket to block document-process networking.
+    # Importing ssl after that replacement cannot define SSLSocket. Only the
+    # fresh update worker may load HTTP/TLS modules, never GUI initialization.
+    import urllib.request
+
+    class TrustedRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, request, fp, code, message, headers, newurl):
+            validate_url(newurl)
+            return super().redirect_request(request, fp, code, message, headers, newurl)
+
     validate_url(url)
     request = urllib.request.Request(
         url, headers={"User-Agent": "OfflinePDF-Update", "Accept": "application/vnd.github+json"}

@@ -3,6 +3,8 @@ import io
 import json
 import multiprocessing as mp
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
 import uuid
@@ -30,6 +32,20 @@ def socket_probe(events):
 
 
 class UpdateServiceTests(unittest.TestCase):
+    def test_gui_import_after_network_guard_in_fresh_interpreter(self):
+        # Full test discovery can preload ssl and hide frozen-app startup errors.
+        script = (
+            "from offline_pdf.engine import disable_network; "
+            "disable_network(); "
+            "from offline_pdf import updates; "
+            "import socket; "
+            "assert socket.socket.__name__ == 'denied'"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", script], capture_output=True, text=True, timeout=30
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_network_capable_child_does_not_enable_parent_network(self):
         import socket
 
