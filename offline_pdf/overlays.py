@@ -118,7 +118,12 @@ class Overlay:
         if available_width <= 0 or available_height <= 0:
             raise OverlayError("페이지가 너무 작아 삽입할 수 없습니다.")
         if self.image:
-            width, height = self.width, self.height or self.width / self.aspect
+            width = self.width
+            height = (
+                self.width / self.aspect
+                if self.lock_aspect
+                else self.height or self.width / self.aspect
+            )
         else:
             width = available_width
             height = max(50, self.font_size * 2.5)

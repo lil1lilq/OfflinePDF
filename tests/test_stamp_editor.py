@@ -100,6 +100,18 @@ class StampEngineTests(unittest.TestCase):
                 image.putpixel((15, 10), (0, 0, 0))
                 image.save(path)
             original = path.read_bytes()
+            locked = prepare_overlay(
+                {
+                    "stamp_path": str(path),
+                    "stamp_width": "80",
+                    "stamp_height": "80",
+                    "stamp_lock": "유지",
+                },
+                image=True,
+            )
+            with pdf.open() as doc:
+                rect = locked.image_rect(doc.new_page())
+                self.assertAlmostEqual(rect.width / rect.height, 1.5)
             for mode, expected in (("사용", 0), ("사용 안 함", 128)):
                 overlay = prepare_overlay(
                     {"stamp_path": str(path), "remove_background": mode, "opacity": "0.5"},
