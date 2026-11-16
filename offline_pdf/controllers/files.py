@@ -11,6 +11,7 @@ import pymupdf as pdf
 from ..engine import UserError, check_local_path
 from ..images import IMAGE_EXTENSIONS, IMAGE_LABEL, IMAGE_PATTERN
 from ..passwords import cached_password, ensure_password
+from ..ui import CARD_TEXT
 
 
 class FileController:
@@ -171,24 +172,31 @@ class FileController:
         )
         if self.tool == "extract" and self.organizer.model:
             self.summary.set(f"{len(self.organizer.model.items)}페이지를 저장합니다")
-        if self.tool == "split" and self.selected_file():
+        single = self.tool == "extract" or (
+            self.tool == "split" and self.options["split_mode"].get() == "N개 파일로 나누기"
+        )
+        if self.tool == "split" and single and self.selected_file():
             self.summary.set("왼쪽에서 선택한 PDF 한 개를 나눕니다.")
-        compatible = bool(self.files) and all(self.accepted_path(path) for path in self.files)
-        if self.tool in ("extract", "split"):
-            compatible = bool(self.selected_file() and self.accepted_path(self.selected_file()))
+        active = self.active_job_files()
+        compatible = bool(active) and all(path and self.accepted_path(path) for path in active)
+        action = CARD_TEXT[self.tool][0]
+        if self.tool == "protect":
+            action = (
+                "암호 제거" if self.options["password_mode"].get() == "암호 제거" else "암호 설정"
+            )
+        elif self.tool == "extract":
+            action = "정리한 PDF 저장"
+        elif self.tool == "redact":
+            action = "선택 영역 영구 삭제"
+        scope = "선택 파일" if single else f"전체 {len(active)}개"
+        self.run_button.config(text=f"{scope} · {action}  →")
         self.run_button.config(state="normal" if compatible and not self.busy() else "disabled")
         if self.files and not compatible:
             self.summary.set("지원하지 않는 파일이 있습니다. 왼쪽 목록을 확인하세요.")
         if self.tool == "extract" and not self.organizer.model:
             self.run_button.config(state="disabled")
         if self.files and self.save_mode.get() == "원본 파일과 같은 폴더":
-            self.output.set(
-                str(
-                    Path(
-                        self.selected_file() if self.tool in ("extract", "split") else self.files[0]
-                    ).parent
-                )
-            )
+            self.output.set(str(Path(self.selected_file() if single else self.files[0]).parent))
 
     def remove_files(self):
         if self.busy() or self.pending_results is not None:

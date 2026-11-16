@@ -9,10 +9,12 @@ from tkinter import filedialog
 import customtkinter as ctk
 
 from .. import ctk_widgets as ttk
+from ..compact_controls import ChoicePopup, PercentOpacity
 from ..engine import UserError, open_pdf, split_ranges
 from ..images import EXPORT_FORMATS, IMAGE_EXTENSIONS, IMAGE_PATTERN, open_image_document
 from ..localization import ChoiceVar
 from ..output_options import BLANK_MODE
+from ..overlays import POSITIONS
 from ..passwords import ask_password, cached_password, ensure_password
 from ..tools import TOOLS
 from ..ui import BLUE, CARD_TEXT, MUTED, RED, chip_color, tool_icon
@@ -38,6 +40,12 @@ def wrap_captions(form, rows, columns, width=None):
 # Options made of several side-by-side choices need more than one column.
 WIDE_FIELDS = {"compression": 3, "scale": 3, "stamp_path": 2, "stamp_actions": 2}
 UPSCALE_ADVANCED = ("scale4", "max_output_mb", "min_dpi", "min_quality")
+TOOL_ADVANCED = {
+    "upscale": UPSCALE_ADVANCED,
+    "compress": ("min_dpi", "min_quality"),
+    "nup": ("nup_columns", "nup_margin", "nup_gap", "nup_order"),
+    "watermark": ("stamp_width", "stamp_height", "background_tolerance", "stamp_actions"),
+}
 
 
 class FormController:
@@ -109,6 +117,21 @@ class FormController:
         controls = ttk.Frame(cell, style="Panel.TFrame")
         # Bottom-aligned, so inputs line up even when a neighbouring caption wraps.
         controls.pack(side="bottom", fill="x")
+        if key in ("number_position", "position", "nup_count"):
+            widget = ChoicePopup(controls, var, "nup" if key == "nup_count" else "position")
+            widget.pack(fill="x")
+            self.option_widgets[key] = widget
+            return
+        if key == "opacity":
+            widget = PercentOpacity(controls, var)
+            widget.pack(fill="x")
+            self.option_widgets[key] = widget
+            return
+        if key in ("password_mode", "insert_mode", "nup_orientation", "orientation"):
+            widget = ttk.SegmentedChoice(controls, values=choices, variable=var)
+            widget.pack(fill="x")
+            self.option_widgets[key] = widget
+            return
         if key == "scale":
             # Plain choices instead of a numeric dropdown. "Same size" only
             # sharpens; 4x, far larger and slower, is under advanced options.
@@ -136,11 +159,24 @@ class FormController:
             widget = ttk.Combobox(controls, textvariable=var, values=choices, state="readonly")
         else:
             widget = ttk.Entry(controls, textvariable=var, show="●" if secret else "")
+            if key == "pages":
+                # CTk does not show a placeholder on a textvariable-backed entry.
+                cell.caption.configure(text="페이지 (공란=전체 · 예: 1-3,5)")
         # A small natural width lets the shared row shrink; the cell's weight
         # stretches the control to fill whatever room the row has.
         widget.configure(width=70)
         widget.pack(side="left", fill="x", expand=True)
         self.option_widgets[key] = widget
+        if secret:
+
+            def reveal():
+                hidden = bool(widget.cget("show"))
+                widget.configure(show="" if hidden else "●")
+                reveal_button.configure(text="숨기기" if hidden else "보기")
+
+            reveal_button = ttk.Button(controls, text="보기", width=5, command=reveal)
+            reveal_button.pack(side="right", padx=(4, 0))
+            widget.reveal_button = reveal_button
         if key == "input_password":
             widget.bind("<FocusOut>", lambda e: self.refresh_preview())
         if browse:
@@ -166,7 +202,14 @@ class FormController:
             and self.options.get("split_mode")
             and self.options["split_mode"].get() == "N개 파일로 나누기"
         )
+        advanced = TOOL_ADVANCED.get(self.tool, ())
+        expanded = getattr(self, "show_advanced", False)
         for key, cell in self.form_cells:
+            if key in advanced and not expanded:
+                continue
+            if self.tool == "compress" and key == "advanced":
+                if self.options["compression"].get() != "목표 용량":
+                    continue
             if key in ("target_mb", "min_dpi", "min_quality") and self.tool == "compress":
                 if self.options["compression"].get() != "목표 용량":
                     continue
@@ -174,8 +217,6 @@ class FormController:
                 (key == "pages" and n_split)
                 or (key in ("split_count", "split_starts") and not n_split)
             ):
-                continue
-            if self.tool == "upscale" and key in UPSCALE_ADVANCED and not self.show_advanced:
                 continue
             if self.tool == "protect" and key == "output_password":
                 if self.options["password_mode"].get() == "암호 제거":
@@ -192,19 +233,22 @@ class FormController:
                         "remove_background",
                         "background_tolerance",
                         "stamp_actions",
+                        "advanced",
                     )
                 ):
                     continue
             visible.append((key, cell))
         # Options sit on one row; opened advanced options go on a row below it.
-        below = UPSCALE_ADVANCED if self.tool == "upscale" else ()
+        below = advanced
         rows = [
             [(key, cell) for key, cell in visible if key not in below],
             [(key, cell) for key, cell in visible if key in below],
         ]
-        if self.tool == "watermark" and self.stamp_mode():
-            # Image placement has more controls; keep each row readable.
-            rows = [visible[i : i + 4] for i in range(0, len(visible), 4)]
+        # Wrap long rows instead of shrinking every entry to an unreadable width.
+        limit = 5 if self.tool == "nup" else 4
+        rows = [
+            part for row in rows for part in (row[i : i + limit] for i in range(0, len(row), limit))
+        ]
         rows = [row for row in rows if row]
         # Every cell spans equal columns (wide choices span 3); at least four
         # columns, so a few options keep a quarter of the row each.
@@ -249,6 +293,7 @@ class FormController:
         if self.tool != "split" or self.split_updating:
             return
         self.arrange_fields()
+        self.update_file_summary()
         if self.options["split_mode"].get() != "N개 파일로 나누기":
             self.security.config(text="페이지를 비워 두면 전체 페이지를 처리합니다.")
             self.split_summary.config(
@@ -333,6 +378,7 @@ class FormController:
         ):
             self.field("페이지", "pages", "")
         if self.tool == "split":
+            self.split_cut_cell()
             self.field(
                 "나누는 방식",
                 "split_mode",
@@ -365,6 +411,7 @@ class FormController:
             self.field("목표 용량 MB / 파일", "target_mb", "5")
             self.field("최소 이미지 DPI", "min_dpi", "96")
             self.field("최소 JPEG 품질 (30~95)", "min_quality", "50")
+            self.advanced_toggle_cell()
             self.options["compression"].trace_add("write", self.compression_note)
         if self.tool == "upscale":
             self.field("확대 배율", "scale", "1.5")
@@ -387,6 +434,7 @@ class FormController:
             self.field("바깥 여백 (mm)", "nup_margin", "0")
             self.field("쪽 사이 간격 (mm)", "nup_gap", "0")
             self.field("배치 순서", "nup_order", "가로 우선", ["가로 우선", "세로 우선"])
+            self.advanced_toggle_cell()
             for key in (
                 "pages",
                 "nup_count",
@@ -409,27 +457,13 @@ class FormController:
             self.field("글자 크기", "font_size", "24")
             self.field("이미지 파일", "stamp_path", browse="file")
             self.field("이미지 너비 pt", "stamp_width", "100")
-            self.field(
-                "삽입 위치",
-                "position",
-                "가운데",
-                [
-                    "왼쪽 위",
-                    "가운데 위",
-                    "오른쪽 위",
-                    "가운데",
-                    "왼쪽 아래",
-                    "가운데 아래",
-                    "오른쪽 아래",
-                ],
-            )
+            self.field("삽입 위치", "position", "가운데", list(POSITIONS))
             self.field("불투명도", "opacity", "0.25")
             self.setup_stamp_controls()
+            self.advanced_toggle_cell()
             self.options["insert_mode"].trace_add("write", self.update_insert_mode)
         if self.tool == "number":
             self.field("시작 번호", "start", "1")
-            from ..overlays import POSITIONS
-
             self.field("쪽 번호 위치", "number_position", "가운데 아래", list(POSITIONS))
             self.field("쪽 번호 글자 크기 pt", "number_font_size", "11")
             for key in ("pages", "start", "number_position", "number_font_size"):
@@ -466,11 +500,48 @@ class FormController:
         self.hide_preview(restore=False)
         if self.tool == "extract":
             self.refresh_organizer()
-            self.run_button.config(text="정리한 PDF 저장  →")
         elif self.tool == "redact":
             # Distinct from "clear this page's selection" on the preview toolbar.
-            self.run_button.config(text="선택 영역 영구 삭제  →")
             self.show_preview()
+
+    def split_cut_cell(self):
+        cell = ttk.Frame(self.form, style="Panel.TFrame")
+        self.form_cells.append(("split_cut", cell))
+        ttk.Button(
+            cell,
+            text="현재 쪽 뒤에서 나누기",
+            command=self.add_split_cut,
+        ).pack(side="bottom", fill="x")
+
+    def add_split_cut(self):
+        if self.busy():
+            return
+        total = self.document_page_count()
+        if total < 2 or not 0 <= self.page_index < total - 1:
+            self.status.set("마지막 쪽 앞의 미리보기 페이지를 선택하세요.")
+            return
+        try:
+            starts = {
+                int(value.strip())
+                for value in self.options["split_starts"].get().split(",")
+                if value.strip()
+            }
+            if any(value < 2 or value > total for value in starts):
+                raise ValueError()
+        except ValueError:
+            self.status.set("다음 파일의 시작 쪽을 먼저 확인하세요.")
+            return
+        starts.add(self.page_index + 2)
+        self.split_updating = True
+        try:
+            self.options["split_mode"].set("N개 파일로 나누기")
+            self.options["split_starts"].set(",".join(map(str, sorted(starts))))
+            self.options["split_count"].set(str(len(starts) + 1))
+        finally:
+            self.split_updating = False
+        self.update_split_preview()
+        self.update_file_summary()
+        self.show_preview()
 
     def scale4_cell(self):
         var = tk.BooleanVar(value=False)
@@ -505,7 +576,8 @@ class FormController:
             text="상세 옵션 접기 ▴" if self.show_advanced else "상세 옵션 ▾"
         )
         self.arrange_fields()
-        self.update_advanced_note()
+        if self.tool == "upscale":
+            self.update_advanced_note()
 
     def update_advanced_note(self):
         if self.show_advanced:
@@ -555,7 +627,10 @@ class FormController:
         removing = self.options["password_mode"].get() == "암호 제거"
         if removing:
             self.options["output_password"].set("")
-        self.run_button.config(text=("암호 제거" if removing else "암호 설정") + "  →")
+        password = self.option_widgets["output_password"]
+        password.configure(show="●")
+        password.reveal_button.configure(text="보기")
+        self.update_file_summary()
         self.arrange_fields()
 
     def update_insert_mode(self, *_):

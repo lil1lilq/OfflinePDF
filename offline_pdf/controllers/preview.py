@@ -39,7 +39,7 @@ class PreviewController:
         self.canvas.xview_moveto(0)
         self.organizer.pack_forget()
         self.file_overview.pack_forget()
-        if inline and self.settings_panel_needed():
+        if self.tool != "extract" and self.settings_panel_needed():
             self.columns.pack(fill="x", before=self.document_host)
         else:
             self.columns.pack_forget()

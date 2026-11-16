@@ -504,5 +504,16 @@
   "설치파일 검증에 실패했습니다. 다운로드를 다시 시도하세요.": "Installer verification failed. Download it again.",
   "설치파일이 너무 큽니다.": "The installer is too large.",
   "다운로드 제한을 초과했습니다. 나중에 다시 시도하세요.": "The download limit was exceeded. Try again later.",
-  "업데이트 요청을 확인하세요.": "Check the update request."
+  "업데이트 요청을 확인하세요.": "Check the update request.",
+  "{0} ▾": "{0} ▾",
+  "직접 입력 (1~64)": "Custom (1–64)",
+  "페이지 (공란=전체 · 예: 1-3,5)": "Pages (blank=all · e.g. 1-3,5)",
+  "현재 쪽 뒤에서 나누기": "Split after this page",
+  "마지막 쪽 앞의 미리보기 페이지를 선택하세요.": "Select a preview page before the last page.",
+  "다음 파일의 시작 쪽을 먼저 확인하세요.": "Check the start pages of the next files first.",
+  "파일 순서를 변경했습니다.": "File order changed.",
+  "선택 파일": "Selected file",
+  "보기": "Show",
+  "숨기기": "Hide",
+  "정리한 PDF 저장": "Save organized PDF"
 }

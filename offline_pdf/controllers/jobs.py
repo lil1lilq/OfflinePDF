@@ -20,6 +20,14 @@ from ..passwords import ask_password, cached_password, ensure_password
 class JobController:
     """Worker lifecycle, progress, cancellation and publication."""
 
+    def active_job_files(self, preview=False):
+        single = (
+            preview
+            or self.tool == "extract"
+            or (self.tool == "split" and self.options["split_mode"].get() == "N개 파일로 나누기")
+        )
+        return [self.selected_file()] if single and self.files else list(self.files)
+
     def run(self, preview=False):
         if self.busy():
             return
@@ -27,13 +35,7 @@ class JobController:
             messagebox.showinfo("파일 추가", "처리할 파일을 먼저 추가하세요.", parent=self.root)
             return
         actual_tool = self.effective_tool()
-        active_files = (
-            [self.selected_file()]
-            if preview
-            or self.tool == "extract"
-            or (self.tool == "split" and self.options["split_mode"].get() == "N개 파일로 나누기")
-            else list(self.files)
-        )
+        active_files = self.active_job_files(preview)
         if not all(path and self.accepted_path(path) for path in active_files):
             messagebox.showinfo(
                 "파일 형식",

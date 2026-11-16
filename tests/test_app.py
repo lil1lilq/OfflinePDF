@@ -46,6 +46,7 @@ class CardLayoutTests(unittest.TestCase):
             for mode in ("목표 용량", "권장"):
                 state = SimpleNamespace(
                     tool="compress",
+                    show_advanced=True,
                     options={"compression": Mock(get=Mock(return_value=mode))},
                     form=Mock(),
                     form_cells=[(key, Mock()) for key in keys],

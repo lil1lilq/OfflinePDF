@@ -48,6 +48,12 @@ class NupGuiTests(unittest.TestCase):
         self.root.geometry("900x620")
         self.root.update()
         self.assertTrue(self.app.run_button.winfo_ismapped())
+        from offline_pdf.controllers.forms import TOOL_ADVANCED
+
+        for key, cell in self.app.form_cells:
+            self.assertEqual(bool(cell.winfo_ismapped()), key not in TOOL_ADVANCED["nup"])
+        self.app.toggle_advanced()
+        self.root.update()
         for _, cell in self.app.form_cells:
             self.assertTrue(cell.winfo_ismapped())
             self.assertLess(
