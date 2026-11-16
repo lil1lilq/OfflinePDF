@@ -125,6 +125,26 @@ class Entry(ctk.CTkEntry):
         kwargs.setdefault("border_color", _pair("LINE"))
         kwargs.setdefault("text_color", _pair("INK"))
         super().__init__(master, **kwargs)
+        # CTk's rounded background extends beyond its native text entry. Treat
+        # clicks/drags on that padding as entry input as well.
+        for sequence in ("<ButtonPress-1>", "<B1-Motion>", "<ButtonRelease-1>"):
+            self._canvas.bind(
+                sequence,
+                lambda event, sequence=sequence: self._padding_mouse(event, sequence),
+                add="+",
+            )
+
+    def _padding_mouse(self, event, sequence):
+        if str(self.cget("state")) == "disabled":
+            return
+        if sequence == "<ButtonPress-1>":
+            self._entry.focus_set()
+        self._entry.event_generate(
+            sequence,
+            x=event.x + self._canvas.winfo_rootx() - self._entry.winfo_rootx(),
+            y=event.y + self._canvas.winfo_rooty() - self._entry.winfo_rooty(),
+            state=event.state,
+        )
 
     config = ctk.CTkEntry.configure
 

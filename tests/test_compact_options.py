@@ -211,6 +211,35 @@ class CompactOptionsTests(unittest.TestCase):
         self.assertEqual(self.app.preview_zoom, 1.25)
         self.assertTrue(self.app.preview_panel.winfo_manager())
 
+    def test_crop_input_padding_focuses_and_edits_page_and_margin_fields(self):
+        self.app.select_tool("crop")
+        self.root.update()
+        self.root.focus_force()
+        for key, value in (("pages", "2"), ("margin", "8.5")):
+            with self.subTest(key=key):
+                self.app.canvas.focus_set()
+                field = self.app.option_widgets[key]
+                field._canvas.event_generate("<ButtonPress-1>", x=3, y=18)
+                field._canvas.event_generate("<ButtonRelease-1>", x=3, y=18)
+                self.root.update()
+                self.assertIs(self.root.focus_get(), field._entry)
+                field.delete(0, "end")
+                for char in value:
+                    field._entry.event_generate(
+                        "<KeyPress>", keysym="period" if char == "." else char
+                    )
+                self.root.update()
+                self.assertEqual(self.app.options[key].get(), value)
+                field._canvas.event_generate("<ButtonPress-1>", x=field.winfo_width() - 3, y=18)
+                field._canvas.event_generate("<ButtonRelease-1>", x=field.winfo_width() - 3, y=18)
+                self.root.update()
+                self.assertEqual(field._entry.index("insert"), len(value))
+        field.configure(state="disabled")
+        self.app.canvas.focus_set()
+        field._canvas.event_generate("<ButtonPress-1>", x=3, y=18)
+        self.root.update()
+        self.assertIsNot(self.root.focus_get(), field._entry)
+
     def test_packaged_navigation_check_matches_single_document_view(self):
         from offline_pdf.diagnostics import verify_ui_navigation
 
