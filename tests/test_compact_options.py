@@ -6,15 +6,79 @@ import unittest
 from collections import deque
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 import customtkinter as ctk
 import pymupdf as pdf
 
 from offline_pdf.app import App
-from offline_pdf.compact_controls import ChoicePopup
+from offline_pdf.compact_controls import ChoicePopup, picker_position
 from offline_pdf.localization import apply_language
 from offline_pdf.overlays import POSITIONS
 from offline_pdf.windows_drop import NativeFileDrop
+
+
+class PickerPositionTests(unittest.TestCase):
+    def test_secondary_monitors_edges_and_dpi_sizes(self):
+        cases = [
+            ((2500, 200, 2650, 236), (300, 160), (1920, 0, 3840, 1040), (2500, 236)),
+            ((-1400, 300, -1250, 336), (300, 160), (-1920, 0, 0, 1080), (-1400, 336)),
+            ((400, -600, 550, -564), (300, 160), (0, -1080, 1920, 0), (400, -564)),
+            ((-500, -200, -350, -164), (300, 160), (-1600, -900, -320, -100), (-620, -360)),
+            ((1850, 1000, 1900, 1036), (300, 160), (0, 0, 1920, 1040), (1620, 840)),
+            ((-200, 800, -100, 836), (300, 160), (-1920, 0, 0, 1040), (-300, 836)),
+            ((-200, 800, -100, 836), (450, 240), (-1920, 0, 0, 1040), (-450, 560)),
+            ((0, 0, 50, 36), (300, 160), (0, 0, 200, 100), (0, 0)),
+        ]
+        for anchor, size, bounds, expected in cases:
+            with self.subTest(anchor=anchor, size=size):
+                self.assertEqual(picker_position(anchor, size, bounds), expected)
+
+    def test_popup_uses_absolute_negative_coordinates_and_ignores_child_resize(self):
+        popup = Mock()
+        popup.winfo_reqwidth.return_value = 300
+        popup.winfo_reqheight.return_value = 160
+        popup.winfo_rootx.return_value = 0
+        popup.winfo_rooty.return_value = 0
+        picker = SimpleNamespace(
+            popup=popup,
+            winfo_rootx=lambda: -1400,
+            winfo_rooty=lambda: -600,
+            winfo_width=lambda: 150,
+            winfo_height=lambda: 36,
+        )
+        with patch(
+            "offline_pdf.compact_controls.monitor_work_area", return_value=(-1920, -1080, 0, 0)
+        ):
+            ChoicePopup.position_picker(picker)
+        popup.geometry.assert_called_once_with("+-1400+-564")
+        popup.geometry.reset_mock()
+        ChoicePopup.position_picker(picker, SimpleNamespace(widget=object()))
+        popup.geometry.assert_not_called()
+
+    def test_monitor_query_failure_uses_owner_bounds(self):
+        popup = Mock()
+        popup.winfo_reqwidth.return_value = 300
+        popup.winfo_reqheight.return_value = 160
+        popup.winfo_rootx.return_value = 0
+        popup.winfo_rooty.return_value = 0
+        owner = SimpleNamespace(
+            winfo_rootx=lambda: 2000,
+            winfo_rooty=lambda: 100,
+            winfo_width=lambda: 1000,
+            winfo_height=lambda: 800,
+        )
+        picker = SimpleNamespace(
+            popup=popup,
+            winfo_rootx=lambda: 2200,
+            winfo_rooty=lambda: 200,
+            winfo_width=lambda: 150,
+            winfo_height=lambda: 36,
+            winfo_toplevel=lambda: owner,
+        )
+        with patch("offline_pdf.compact_controls.monitor_work_area", return_value=None):
+            ChoicePopup.position_picker(picker)
+        popup.geometry.assert_called_once_with("+2200+236")
 
 
 class CompactOptionsTests(unittest.TestCase):

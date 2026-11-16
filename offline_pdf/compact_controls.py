@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import sys
 import tkinter as tk
 
 import customtkinter as ctk
@@ -10,6 +11,49 @@ import customtkinter as ctk
 from . import ctk_widgets as ttk
 from .localization import tr
 from .overlays import POSITIONS
+
+
+def monitor_work_area(anchor):
+    """Return the Windows work area nearest the button, in desktop pixels."""
+    if sys.platform != "win32":
+        return None
+    import ctypes
+    from ctypes import wintypes
+
+    class MonitorInfo(ctypes.Structure):
+        _fields_ = [
+            ("cbSize", wintypes.DWORD),
+            ("rcMonitor", wintypes.RECT),
+            ("rcWork", wintypes.RECT),
+            ("dwFlags", wintypes.DWORD),
+        ]
+
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    nearest = user32.MonitorFromRect
+    nearest.argtypes = [ctypes.POINTER(wintypes.RECT), wintypes.DWORD]
+    nearest.restype = wintypes.HANDLE
+    get_info = user32.GetMonitorInfoW
+    get_info.argtypes = [wintypes.HANDLE, ctypes.POINTER(MonitorInfo)]
+    get_info.restype = wintypes.BOOL
+    rect = wintypes.RECT(*anchor)
+    handle = nearest(ctypes.byref(rect), 2)  # MONITOR_DEFAULTTONEAREST
+    info = MonitorInfo()
+    info.cbSize = ctypes.sizeof(info)
+    if handle and get_info(handle, ctypes.byref(info)):
+        work = info.rcWork
+        return work.left, work.top, work.right, work.bottom
+    return None
+
+
+def picker_position(anchor, size, bounds):
+    """Prefer below the button; flip and clamp within its monitor's work area."""
+    left, top, right, bottom = bounds
+    width, height = size
+    x = max(left, min(anchor[0], right - width))
+    y = anchor[3]
+    if y + height > bottom:
+        y = anchor[1] - height
+    return x, max(top, min(y, bottom - height))
 
 
 class ChoicePopup(ttk.Button):
@@ -107,16 +151,30 @@ class ChoicePopup(ttk.Button):
                 row=3, column=2, pady=(6, 0)
             )
         popup.update_idletasks()
-        x = min(self.winfo_rootx(), popup.winfo_screenwidth() - popup.winfo_reqwidth())
-        y = self.winfo_rooty() + self.winfo_height()
-        if y + popup.winfo_reqheight() > popup.winfo_screenheight():
-            y = max(0, self.winfo_rooty() - popup.winfo_reqheight())
-        popup.geometry(f"+{max(0, x)}+{y}")
+        self.position_picker()
+        # Crossing monitors can change CTk's DPI scaling and the popup size.
+        popup.bind("<Configure>", self.position_picker)
         popup.deiconify()
         popup.lift()
         (selected or button).focus_set()
         popup.bind("<FocusOut>", lambda event: root.after_idle(self.dismiss_if_outside))
         self.outside_binding = root.bind("<ButtonPress-1>", self.outside_click, add="+")
+
+    def position_picker(self, event=None):
+        popup = self.popup
+        if popup is None or (event is not None and event.widget is not popup):
+            return
+        x, y = self.winfo_rootx(), self.winfo_rooty()
+        anchor = (x, y, x + self.winfo_width(), y + self.winfo_height())
+        bounds = monitor_work_area(anchor)
+        if bounds is None:
+            owner = self.winfo_toplevel()
+            left, top = owner.winfo_rootx(), owner.winfo_rooty()
+            bounds = (left, top, left + owner.winfo_width(), top + owner.winfo_height())
+        x, y = picker_position(anchor, (popup.winfo_reqwidth(), popup.winfo_reqheight()), bounds)
+        if (popup.winfo_rootx(), popup.winfo_rooty()) != (x, y):
+            # '+-1200' is an absolute negative coordinate; '-1200' is edge-relative.
+            popup.geometry(f"+{x}+{y}")
 
     def outside_click(self, event):
         if not str(event.widget).startswith(str(self) + ".") and event.widget != self:
