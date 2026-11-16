@@ -3,6 +3,7 @@
 import tempfile
 import tkinter as tk
 import unittest
+from collections import deque
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -13,6 +14,7 @@ from offline_pdf.app import App
 from offline_pdf.compact_controls import ChoicePopup
 from offline_pdf.localization import apply_language
 from offline_pdf.overlays import POSITIONS
+from offline_pdf.windows_drop import NativeFileDrop
 
 
 class CompactOptionsTests(unittest.TestCase):
@@ -32,7 +34,7 @@ class CompactOptionsTests(unittest.TestCase):
                 for j in range(5):
                     doc.new_page().insert_text((72, 72), f"Document {i} page {j}")
                 doc.save(path)
-            self.files.append(str(path))
+            self.files.append(str(path.resolve()))
         self.app.add_paths(self.files)
         self.root.update()
         self.root.report_callback_exception = self.callback_error
@@ -164,3 +166,30 @@ class CompactOptionsTests(unittest.TestCase):
         listing.drop_file(SimpleNamespace(x=20, y=15))
         self.assertEqual(self.app.files[-1], self.files[0])
         self.app.pending_results = None
+
+    def test_drop_registration_visits_segmented_controls_and_unregisters_on_destroy(self):
+        self.app.select_tool("protect")
+        control = self.app.option_widgets["password_mode"]
+        handle = control.winfo_id()
+        handles = set()
+        support = NativeFileDrop.__new__(NativeFileDrop)
+        support.root = self.root
+        support._closing = False
+        support._poll_count = 11
+        support._pending = deque()
+        support.ole = SimpleNamespace(
+            handles=handles,
+            register=handles.add,
+            unregister=handles.discard,
+        )
+        try:
+            support._poll_files()
+            self.assertIn(handle, handles)
+            for child in control.winfo_children():
+                self.assertIn(child.winfo_id(), handles)
+            self.app.select_tool("merge")
+            self.root.update()
+            self.assertNotIn(handle, handles)
+        finally:
+            support._closing = True
+            self.root.after_cancel(support._timer_id)

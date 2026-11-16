@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import ctypes
 import sys
+import tkinter as tk
 from collections import deque
 
 WM_DROPFILES = 0x0233
@@ -133,7 +134,10 @@ class NativeFileDrop:
                             if handle not in self.ole.handles:
                                 self.ole.register(handle)
                                 if handle in self.ole.handles:
-                                    widget.bind(
+                                    # Bind the actual HWND's Tk widget. Composite
+                                    # CTk controls may prohibit/redirect public bind().
+                                    tk.Misc.bind(
+                                        widget,
                                         "<Destroy>",
                                         lambda event, item=widget, hwnd=handle: (
                                             self.ole.unregister(hwnd)
