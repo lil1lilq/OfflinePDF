@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from tkinter import filedialog, messagebox
 
 import pymupdf as pdf
 
+from ..dialogs import filedialog, messagebox
 from ..engine import UserError, check_local_path
 from ..images import IMAGE_EXTENSIONS, IMAGE_LABEL, IMAGE_PATTERN
 from ..passwords import cached_password, ensure_password
@@ -88,7 +88,7 @@ class FileController:
                     if self.tool == "split":
                         self.update_split_preview()
                     if not self.preview_panel.winfo_manager():
-                        self.hide_preview(restore=False)
+                        self.show_document_view(restore=False)
                 self.refresh_preview(reset=True)
         details = [f"{added}개 추가", f"전체 {len(self.files)}개"]
         if duplicates:
@@ -161,10 +161,6 @@ class FileController:
             self.update_split_preview()
         self.update_file_summary()
         self.refresh_preview(reset=True)
-        if self.file_overview.winfo_manager():
-            self.overview_title.config(
-                text=Path(self.selected_file()).name if self.selected_file() else ""
-            )
 
     def update_file_summary(self):
         for control in self.preview_controls:

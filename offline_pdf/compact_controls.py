@@ -3,46 +3,14 @@
 from __future__ import annotations
 
 import math
-import sys
 import tkinter as tk
 
 import customtkinter as ctk
 
 from . import ctk_widgets as ttk
+from .dialogs import monitor_work_area
 from .localization import tr
 from .overlays import POSITIONS
-
-
-def monitor_work_area(anchor):
-    """Return the Windows work area nearest the button, in desktop pixels."""
-    if sys.platform != "win32":
-        return None
-    import ctypes
-    from ctypes import wintypes
-
-    class MonitorInfo(ctypes.Structure):
-        _fields_ = [
-            ("cbSize", wintypes.DWORD),
-            ("rcMonitor", wintypes.RECT),
-            ("rcWork", wintypes.RECT),
-            ("dwFlags", wintypes.DWORD),
-        ]
-
-    user32 = ctypes.WinDLL("user32", use_last_error=True)
-    nearest = user32.MonitorFromRect
-    nearest.argtypes = [ctypes.POINTER(wintypes.RECT), wintypes.DWORD]
-    nearest.restype = wintypes.HANDLE
-    get_info = user32.GetMonitorInfoW
-    get_info.argtypes = [wintypes.HANDLE, ctypes.POINTER(MonitorInfo)]
-    get_info.restype = wintypes.BOOL
-    rect = wintypes.RECT(*anchor)
-    handle = nearest(ctypes.byref(rect), 2)  # MONITOR_DEFAULTTONEAREST
-    info = MonitorInfo()
-    info.cbSize = ctypes.sizeof(info)
-    if handle and get_info(handle, ctypes.byref(info)):
-        work = info.rcWork
-        return work.left, work.top, work.right, work.bottom
-    return None
 
 
 def picker_position(anchor, size, bounds):

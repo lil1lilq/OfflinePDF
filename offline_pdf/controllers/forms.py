@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog
 
 import customtkinter as ctk
 
 from .. import ctk_widgets as ttk
 from ..compact_controls import ChoicePopup, PercentOpacity
+from ..dialogs import dialog_parent, filedialog, place_dialog
 from ..engine import UserError, open_pdf, split_ranges
 from ..images import EXPORT_FORMATS, IMAGE_EXTENSIONS, IMAGE_PATTERN, open_image_document
 from ..localization import ChoiceVar
@@ -54,10 +54,11 @@ class FormController:
     def organizer_settings(self):
         if self.busy():
             return
-        dialog = ctk.CTkToplevel(self.root)
+        owner = dialog_parent(self.root)
+        dialog = ctk.CTkToplevel(owner)
         dialog.title("페이지 정리 · 파일·저장 설정")
         dialog.geometry("560x450")
-        dialog.transient(self.root)
+        dialog.transient(owner)
         body = ttk.Frame(dialog, padding=24)
         body.pack(fill="both", expand=True)
         body.columnconfigure(0, weight=1)
@@ -86,6 +87,7 @@ class FormController:
             row=8, column=0, sticky="e", pady=15
         )
         dialog.protocol("WM_DELETE_WINDOW", done)
+        place_dialog(dialog, owner)
         dialog.grab_set()
         return dialog
 
@@ -353,7 +355,14 @@ class FormController:
         self.task_icon.configure(fg_color=chip_color(self.tool))
         self.task_icon_label.configure(image=tool_icon(self.tool))
         self.run_button.config(text=CARD_TEXT[self.tool][0] + "  →")
-        self.preview_button.config(state="normal")
+        self.preview_mode = "page"
+        self.preview_zoom = 1.0
+        if self.tool == "extract":
+            self.tool_settings.pack_forget()
+            self.organizer.header.pack(fill="x")
+        else:
+            self.organizer.header.pack_forget()
+            self.tool_settings.pack(fill="x")
         if self.tool == "redact":
             self.preview_region_row.pack(side="right", padx=(12, 0), before=self.preview_nav)
         else:
@@ -400,7 +409,6 @@ class FormController:
         elif self.tool in ("merge", "images_pdf"):
             self.options["output_password"] = tk.StringVar()
         self.output_password_button.config(text="암호 추가")
-        self.ai_preview_button.pack_forget()
         if self.tool == "compress":
             self.field(
                 "압축 수준",
@@ -423,7 +431,12 @@ class FormController:
             self.advanced_toggle_cell()
             self.options["max_output_mb"].trace_add("write", self.update_size_floor_state)
             self.update_size_floor_state()
-            self.ai_preview_button.pack(side="left", padx=8)
+            cell = ttk.Frame(self.form, style="Panel.TFrame")
+            self.form_cells.append(("ai_comparison", cell))
+            self.ai_preview_button = ttk.Button(
+                cell, text="AI 비교 미리보기", command=lambda: self.run(preview=True)
+            )
+            self.ai_preview_button.pack(side="bottom", fill="x")
         if self.tool == "nup":
             self.field("한 장당 쪽수 (1~64)", "nup_count", "4")
             self.field("A4 방향", "nup_orientation", "세로", ["세로", "가로"])
@@ -497,7 +510,7 @@ class FormController:
             )
             self.security.pack(anchor="w", pady=(4, 0))
         self.update_region_status()
-        self.hide_preview(restore=False)
+        self.show_document_view(restore=False)
         if self.tool == "extract":
             self.refresh_organizer()
         elif self.tool == "redact":
@@ -642,7 +655,7 @@ class FormController:
             self.show_preview()
         else:
             self._stamp_drag = None
-            self.hide_preview(restore=False)
+            self.show_document_view(restore=False)
             self.schedule_preview()
 
     def compression_note(self, *_):

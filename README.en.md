@@ -58,6 +58,8 @@ Word, Excel, PowerPoint and HWP conversion is not supported.
 3. Set the page range, the tool's options and the save folder, then run.
 4. Use **Open result folder** to see the saved files.
 
+Tools show the document in a full-page preview immediately. Use **Fit width, One page, zoom and Previous/Next** to adjust the view. **Organize pages** keeps draggable thumbnails; use **View selected page** to inspect one page.
+
 Original files are never overwritten. Results are saved in a `PDF결과_…` folder under the chosen location.
 After a job, **Use results for next operation** continues with the result files in another tool.
 

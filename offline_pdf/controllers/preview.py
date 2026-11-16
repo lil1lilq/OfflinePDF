@@ -12,11 +12,11 @@ import pymupdf as pdf
 
 from .. import ctk_widgets as ttk
 from .. import theme
-from ..engine import UserError, check_local_path, open_pdf, pages, split_ranges
+from ..engine import UserError, check_local_path, open_pdf, pages
 from ..images import open_image_document
 from ..overlays import OverlayError
 from ..passwords import cached_password
-from ..ui import BLUE, MUTED, PANEL
+from ..ui import PANEL
 
 
 class PreviewController:
@@ -36,39 +36,28 @@ class PreviewController:
             self.root.update_idletasks()
         return True
 
-    def toggle_preview(self):
-        if self.preview_panel.winfo_manager():
-            self.hide_preview()
-        else:
-            self.show_preview()
-
     def show_preview(self):
         self.show_preview_toolbar()
-        # Redaction is drawn on the preview itself, so that preview is the tool's
-        # main work screen: keep its settings visible and let "back" go home.
-        inline = self.tool == "redact" or self.stamp_mode()
-        if self.screen != "preview" and not inline:
+        # General tools open directly on the document with settings visible.
+        focused = self.tool == "extract"
+        if focused and self.screen != "preview":
             self.preview_origin = self.capture_preview_origin()
-        self.preview_mode = "width"
-        self.preview_zoom = 1.0
-        self.canvas.xview_moveto(0)
         self.organizer.pack_forget()
-        self.file_overview.pack_forget()
-        if self.tool != "extract" and self.settings_panel_needed():
+        if focused or self.settings_panel_needed():
             self.columns.pack(fill="x", before=self.document_host)
         else:
             self.columns.pack_forget()
         self.preview_panel.pack(fill="both", expand=True, pady=(8, 0))
-        self.preview_button.config(text="미리보기 접기")
         self.schedule_preview()
         if self.work.winfo_manager():
-            self.screen = "work" if inline else "preview"
+            self.screen = "preview" if focused else "work"
         self.update_back_state()
 
-    def hide_preview(self, restore=True):
+    def show_document_view(self, restore=True):
         self.show_preview_toolbar()
-        if (self.tool == "redact" or self.stamp_mode()) and self.work.winfo_manager():
-            # Redaction always works on the preview; never swap it for the overview.
+        # General tools have a single document view; only the organizer has a
+        # separate thumbnail editing view to return to.
+        if self.tool != "extract":
             self.preview_origin = None
             self.show_preview()
             return
@@ -94,31 +83,13 @@ class PreviewController:
                 ):
                     self.organizer.model = origin["organizer_model"]
         self.preview_panel.pack_forget()
-        self.preview_button.config(text="크게 미리보기")
         self.organizer.pack_forget()
-        self.file_overview.pack_forget()
-        self.columns.pack_forget()
-        if self.tool == "extract":
-            self.organizer.pack(fill="both", expand=True)
-        else:
-            if self.settings_panel_needed():
-                self.columns.pack(fill="x", before=self.document_host)
-            if self.files:
-                self.file_overview.pack(fill="both", expand=True)
-                self.overview_title.config(
-                    text=Path(self.selected_file()).name if self.selected_file() else ""
-                )
-                self.overview_detail.config(
-                    text=f"{len(self.files)}개 파일이 준비되었습니다. 왼쪽 목록에서 순서와 선택 항목을 확인하세요."
-                )
+        self.columns.pack(fill="x", before=self.document_host)
+        self.organizer.pack(fill="both", expand=True)
         if self.work.winfo_manager():
             self.screen = "work"
         if origin:
-            self.overview_canvas.yview_moveto(origin["overview_y"])
-            if self.tool == "extract":
-                self.root.after_idle(
-                    lambda: self.organizer.scroll_to("moveto", origin["organizer_y"])
-                )
+            self.root.after_idle(lambda: self.organizer.scroll_to("moveto", origin["organizer_y"]))
             self.schedule_preview()
         self.update_back_state()
 
@@ -142,7 +113,7 @@ class PreviewController:
         path = self.selected_file()
         self.organizer.load(path, cached_password(self, path))
         if not self.preview_panel.winfo_manager():
-            self.hide_preview()
+            self.show_document_view()
         self.update_file_summary()
         self.organizer.update_summary()
 
@@ -211,7 +182,7 @@ class PreviewController:
             self.preview_panel.pack(fill="both", expand=True, pady=(8, 0))
             self.schedule_preview()
         else:
-            self.hide_preview(restore=False)
+            self.show_document_view(restore=False)
         self.update_back_state()
 
     def schedule_preview(self):
@@ -226,7 +197,6 @@ class PreviewController:
         self._stamp_box = None
         self._stamp_drag = None
         self.canvas.config(cursor="")
-        self.overview_canvas.delete("all")
         if reset:
             self.page_index = 0
             self.canvas.yview_moveto(0)
@@ -283,59 +253,6 @@ class PreviewController:
                     chosen = pages(options.get("pages", ""), doc.page_count)
                     if self.page_index in chosen:
                         draw_number(page, chosen.index(self.page_index), options)
-                if self.file_overview.winfo_ismapped():
-                    ow = max(150, self.overview_canvas.winfo_width())
-                    if (
-                        self.tool == "split"
-                        and self.options.get("split_mode")
-                        and self.options["split_mode"].get() == "N개 파일로 나누기"
-                    ):
-                        try:
-                            ranges = split_ranges(
-                                doc.page_count,
-                                self.options["split_count"].get(),
-                                self.options["split_starts"].get(),
-                            )
-                            for i, (first, last) in enumerate(ranges):
-                                cols = max(1, min(6, int(ow / 180)))
-                                cw = ow / cols
-                                x = (i % cols) * cw
-                                y = (i // cols) * 80
-                                self.overview_canvas.create_rectangle(
-                                    x + 3, y + 3, x + cw - 8, y + 70, fill=PANEL, outline="#e2e7ef"
-                                )
-                                self.overview_canvas.create_text(
-                                    x + 15, y + 20, anchor="w", text=f"파일 {i + 1:02d}", fill=MUTED
-                                )
-                                self.overview_canvas.create_text(
-                                    x + 15,
-                                    y + 47,
-                                    anchor="w",
-                                    text=f"{first + 1}–{last + 1}쪽",
-                                    fill=BLUE,
-                                    font=(theme.BOLD_FAMILY, 12, "bold"),
-                                )
-                            self.overview_canvas.configure(
-                                scrollregion=(0, 0, ow, ((len(ranges) + cols - 1) // cols) * 80)
-                            )
-                        except UserError:
-                            pass
-                    else:
-                        scale = min(
-                            (ow - 30) / page.rect.width,
-                            math.sqrt(12_000_000 / (page.rect.width * page.rect.height)),
-                        )
-                        scale = max(0.05, scale)
-                        thumb = page.get_pixmap(
-                            matrix=pdf.Matrix(scale, scale), alpha=False, colorspace=pdf.csRGB
-                        )
-                        self.overview_photo = tk.PhotoImage(
-                            data=base64.b64encode(thumb.tobytes("png"))
-                        )
-                        self.overview_canvas.create_image(
-                            ow / 2, 5, anchor="n", image=self.overview_photo
-                        )
-                        self.overview_canvas.configure(scrollregion=(0, 0, ow, thumb.height + 15))
                 rw, rh = (
                     (page.rect.height, page.rect.width)
                     if angle % 180
@@ -390,7 +307,6 @@ class PreviewController:
                 doc.close()
         except (UserError, OverlayError) as exc:
             self.canvas.create_text(15, 25, anchor="nw", width=420, text=str(exc))
-            self.overview_canvas.create_text(15, 25, anchor="nw", width=420, text=str(exc))
             self.page_label.config(text="설정을 확인하세요")
         except Exception:
             self.canvas.create_text(

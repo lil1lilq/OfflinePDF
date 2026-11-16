@@ -148,8 +148,6 @@ class CompactOptionsTests(unittest.TestCase):
         self.assertIsNone(picker.popup)
         self.app.home_button.invoke()
         self.root.update()
-        self.assertEqual(self.app.screen, "work")
-        self.app.home_button.invoke()
         self.assertEqual(self.app.screen, "home")
         self.app.select_tool("watermark")
         apply_language(self.root, "en")
@@ -169,18 +167,15 @@ class CompactOptionsTests(unittest.TestCase):
         self.app.select_tool("split")
         self.root.update()
         self.assertTrue(self.app.preview_zoom_row.winfo_ismapped())
-        self.assertFalse(self.app.file_overview.winfo_ismapped())
+        self.assertTrue(self.app.preview_panel.winfo_ismapped())
         self.assertTrue(
             all(button.cget("state") == "disabled" for button in self.app.preview_controls)
         )
         self.app.add_paths([self.files[0]])
         self.pump()
-        self.assertTrue(self.app.file_overview.winfo_ismapped())
+        self.assertTrue(self.app.preview_panel.winfo_ismapped())
         self.assertTrue(
-            any(
-                self.app.overview_canvas.type(item) == "image"
-                for item in self.app.overview_canvas.find_all()
-            )
+            any(self.app.canvas.type(item) == "image" for item in self.app.canvas.find_all())
         )
         self.assertIsNotNone(self.app.preview_rect)
         self.assertTrue(
@@ -194,9 +189,9 @@ class CompactOptionsTests(unittest.TestCase):
         self.app.add_paths([self.files[1]])
         self.root.update()
         self.assertTrue(self.app.preview_panel.winfo_ismapped())
-        self.assertEqual(self.app.screen, "preview")
+        self.assertEqual(self.app.screen, "work")
 
-    def test_toolbar_available_in_every_tool_and_fit_controls_work_from_overview(self):
+    def test_toolbar_available_in_every_tool_and_fit_controls_work_in_single_view(self):
         for tool in TOOLS:
             with self.subTest(tool=tool):
                 self.app.select_tool(tool)
@@ -205,18 +200,34 @@ class CompactOptionsTests(unittest.TestCase):
                 self.assertTrue(self.app.preview_nav.winfo_ismapped())
         self.app.select_tool("number")
         self.root.update()
-        self.assertFalse(self.app.preview_panel.winfo_ismapped())
+        self.assertTrue(self.app.preview_panel.winfo_ismapped())
         self.app.set_preview_mode("page")
         self.root.update()
         self.assertTrue(self.app.preview_panel.winfo_ismapped())
         self.assertEqual(self.app.preview_mode, "page")
-        self.app.home_button.invoke()
-        self.root.update()
-        self.assertTrue(self.app.preview_zoom_row.winfo_ismapped())
-        self.assertFalse(self.app.preview_panel.winfo_ismapped())
+        self.assertEqual(self.app.screen, "work")
+        self.assertFalse(hasattr(self.app, "preview_button"))
         self.app.zoom_preview(0.25)
         self.assertEqual(self.app.preview_zoom, 1.25)
         self.assertTrue(self.app.preview_panel.winfo_manager())
+
+    def test_organizer_settings_precede_the_same_common_toolbar(self):
+        self.app.select_tool("extract")
+        self.root.update()
+        header = self.app.organizer.header
+        toolbar = self.app.preview_zoom_row
+        self.assertIs(header.master, self.app.columns)
+        self.assertEqual(toolbar.master, self.app.document_host)
+        self.assertLessEqual(header.winfo_rooty() + header.winfo_height(), toolbar.winfo_rooty())
+        self.assertTrue(self.app.organizer.winfo_ismapped())
+        self.app.organizer.model.selected = {self.app.organizer.model.items[0][0]}
+        self.app.organizer.enlarge()
+        self.root.update()
+        self.assertTrue(header.winfo_ismapped())
+        self.assertTrue(toolbar.winfo_ismapped())
+        self.app.home_button.invoke()
+        self.root.update()
+        self.assertTrue(self.app.organizer.winfo_ismapped())
 
     def test_folded_settings_keep_values_and_percentage_matches_worker_options(self):
         self.app.select_tool("nup")

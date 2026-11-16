@@ -11,11 +11,12 @@ import sys
 import time
 import uuid
 from pathlib import Path
-from tkinter import Canvas, filedialog
+from tkinter import Canvas
 
 import customtkinter as ctk
 
 from .branding import set_brand
+from .dialogs import filedialog
 from .engine import UserError, check_local_path, disable_network, open_pdf, worker
 from .explorer import ACTIONS
 

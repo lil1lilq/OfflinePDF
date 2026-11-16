@@ -179,7 +179,7 @@ def attach_inbox(app, inbox):
                 app.output.set(parents.pop())
                 app.save_mode.set("지정한 폴더")
             elif app.files:
-                from tkinter import filedialog
+                from .dialogs import filedialog
 
                 folder = filedialog.askdirectory(parent=app.root, title="결과 저장 폴더")
                 app.output.set(folder)

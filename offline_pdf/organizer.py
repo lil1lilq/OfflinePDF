@@ -6,12 +6,12 @@ import base64
 import tkinter as tk
 from collections import OrderedDict
 from pathlib import Path
-from tkinter import messagebox, simpledialog
 
 import pymupdf as pdf
 
 from . import ctk_widgets as ttk
 from . import theme
+from .dialogs import ask_text, messagebox
 from .engine import UserError, open_pdf, pages
 from .ui import BG, BLUE, FONT, INK, LINE, MUTED, PANEL, SOFT
 
@@ -105,8 +105,7 @@ class PageOrganizer(ttk.Frame):
         self.hover = None
         self.tile_width = tk.IntVar(value=220)
         # The same white bordered panel that holds every other tool's options.
-        header = tk.Frame(self, bg=PANEL, highlightbackground=LINE, highlightthickness=1)
-        header.pack(fill="x", pady=(0, 8))
+        header = tk.Frame(app.columns, bg=PANEL, highlightbackground=LINE, highlightthickness=1)
         self.header = header
         panel = ttk.Frame(header, style="Panel.TFrame")
         panel.pack(fill="x", padx=12, pady=8)
@@ -134,7 +133,7 @@ class PageOrganizer(ttk.Frame):
         for title, command in [
             ("회전", self.rotate),
             ("삭제", self.delete),
-            ("크게 보기", self.enlarge),
+            ("선택 쪽 보기", self.enlarge),
         ]:
             b = ttk.Button(bar, text=title, command=command)
             b.pack(side="left", padx=3)
@@ -405,6 +404,8 @@ class PageOrganizer(ttk.Frame):
             else ""
         )
         if self.app.tool == "extract":
+            if self.app.screen == "preview":
+                self.app.schedule_preview()
             self.app.summary.set(
                 f"{count}페이지를 저장합니다" if m else "PDF 파일 하나를 추가해 주세요."
             )
@@ -551,8 +552,8 @@ class PageOrganizer(ttk.Frame):
     def apply_text(self):
         if not self.model or self.app.busy():
             return
-        value = simpledialog.askstring(
-            "페이지 번호로 지정", "예: 3,1,2 / 1-3,5 / 같은 쪽 반복: 1,1,2", parent=self.app.root
+        value = ask_text(
+            self.app.root, "페이지 번호로 지정", "예: 3,1,2 / 1-3,5 / 같은 쪽 반복: 1,1,2"
         )
         if value is None:
             return

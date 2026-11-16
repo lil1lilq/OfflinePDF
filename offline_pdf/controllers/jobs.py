@@ -11,8 +11,8 @@ import sys
 import time
 import uuid
 from pathlib import Path
-from tkinter import messagebox
 
+from ..dialogs import messagebox
 from ..engine import UserError, check_local_path, open_pdf, split_ranges, worker
 from ..passwords import ask_password, cached_password, ensure_password
 

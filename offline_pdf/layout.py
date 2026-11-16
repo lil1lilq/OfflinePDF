@@ -382,6 +382,7 @@ def build(app):
     ttk.Button(app.save_bar, text="저장 폴더", command=app.choose_output).pack(side="left")
     app.columns = ttk.Frame(app.body)
     settings = panel(app.columns)
+    app.tool_settings = settings
     settings.configure(padx=12, pady=8)
     settings.pack(fill="x")
     # Options, the merged file name and the redaction count share one row.
@@ -415,40 +416,6 @@ def build(app):
     workspace = ttk.Frame(app.body)
     app.document_host = workspace
     workspace.pack(fill="both", expand=True, pady=(8, 0))
-    app.file_overview = tk.Frame(workspace, bg=BG)
-    overview_header = ttk.Frame(app.file_overview)
-    overview_header.pack(fill="x", pady=(4, 6))
-    app.overview_title = ttk.Label(
-        overview_header, text="", font=(theme.BOLD_FAMILY, 16, "bold"), width=1, wraplength=450
-    )
-    app.overview_title.pack(side="left", fill="x", expand=True)
-    app.overview_title.bind(
-        "<Configure>", lambda e: app.overview_title.configure(wraplength=max(80, e.width))
-    )
-    app.overview_detail = ttk.Label(
-        app.file_overview, text="", style="Muted.TLabel", wraplength=700
-    )
-    app.overview_detail.pack(anchor="w", pady=(0, 12))
-    app.preview_button = ttk.Button(
-        overview_header, text="크게 미리보기", command=app.toggle_preview
-    )
-    app.preview_button.pack(side="right")
-    app.ai_preview_button = ttk.Button(
-        overview_header, text="AI 비교 미리보기", command=lambda: app.run(preview=True)
-    )
-    overview_area = ttk.Frame(app.file_overview)
-    overview_area.pack(fill="both", expand=True, pady=(10, 0))
-    app.overview_canvas = tk.Canvas(overview_area, bg=BG, highlightthickness=0, height=120)
-    app.overview_canvas.own_wheel = True
-    overview_scroll = ttk.Scrollbar(overview_area, command=app.overview_canvas.yview)
-    overview_scroll.pack(side="right", fill="y")
-    app.overview_canvas.configure(yscrollcommand=overview_scroll.set)
-    app.overview_canvas.pack(fill="both", expand=True)
-    app.overview_canvas.bind(
-        "<MouseWheel>",
-        lambda e: app.overview_canvas.yview_scroll(-2 if e.delta > 0 else 2, "units"),
-    )
-    app.overview_canvas.bind("<Configure>", lambda e: app.schedule_preview())
     from .organizer import PageOrganizer
 
     app.organizer = PageOrganizer(workspace, app)

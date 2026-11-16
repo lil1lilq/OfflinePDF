@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import tkinter as tk
-from tkinter import messagebox
 
 import customtkinter as ctk
 
@@ -13,6 +12,7 @@ from .controllers.jobs import JobController
 from .controllers.navigation import NavigationController
 from .controllers.preview import PreviewController
 from .controllers.stamp import StampController
+from .dialogs import messagebox
 from .engine import disable_network
 from .theme import avoid_native_titlebar_updates
 from .tools import TOOLS
@@ -58,7 +58,7 @@ class App(
         self.result_output = None
         self.result_tool = None
         self.pending_results = None
-        self.preview_mode = "width"
+        self.preview_mode = "page"
         self.preview_zoom = 1.0
         self.organizer_preview_uid = None
         self.metadata_cache = {}

@@ -9,12 +9,12 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from tkinter import messagebox
 
 import customtkinter as ctk
 
 from . import __version__, theme
 from . import ctk_widgets as ttk
+from .dialogs import messagebox, place_dialog
 from .update_service import RELEASES, UpdateError, verify_file, worker
 
 UNINSTALL = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\{9DC9CDFB-9463-416E-B5AB-E5E49805C3A7}_is1"
@@ -70,6 +70,7 @@ class UpdateDialog:
         ttk.Button(actions, text="닫기", command=self.close).pack(side="right")
         self.button = ttk.Button(actions, text="업데이트", command=self.update, state="disabled")
         self.button.pack(side="right", padx=8)
+        place_dialog(self.dialog, app.root)
         self.launch("check")
         self.dialog.after(150, self.poll)
 
@@ -233,7 +234,7 @@ class UpdateDialog:
 def show_updates(app):
     current = getattr(app, "update_dialog", None)
     if current and not current.closed:
-        current.dialog.lift()
+        place_dialog(current.dialog, app.root)
         return current
     app.update_dialog = UpdateDialog(app)
     return app.update_dialog

@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-from tkinter import messagebox
 
+from ..dialogs import messagebox
 from ..engine import UserError, check_local_path
 from ..images import IMAGE_EXTENSIONS
 from ..passwords import fingerprint
@@ -149,7 +149,7 @@ class NavigationController:
             self.update_back_state()
             return
         if self.screen == "preview":
-            self.hide_preview()
+            self.show_document_view()
         elif self.screen == "work":
             self.show_home()
 
@@ -166,7 +166,6 @@ class NavigationController:
             "organizer_model": organizer.model,
             "organizer_path": organizer.path,
             "organizer_fingerprint": organizer.fingerprint,
-            "overview_y": self.overview_canvas.yview()[0],
         }
 
     @staticmethod
