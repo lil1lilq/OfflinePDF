@@ -192,6 +192,8 @@ class FileController:
         self.run_button.config(state="normal" if compatible and not self.busy() else "disabled")
         if self.files and not compatible:
             self.summary.set("지원하지 않는 파일이 있습니다. 왼쪽 목록을 확인하세요.")
+        if self.tool == "split" and single and not self.options["split_starts"].get().strip():
+            self.run_button.config(state="disabled")
         if self.tool == "extract" and not self.organizer.model:
             self.run_button.config(state="disabled")
         if self.files and self.save_mode.get() == "원본 파일과 같은 폴더":

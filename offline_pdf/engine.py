@@ -105,6 +105,14 @@ def number(value, low, high, label, integer=False):
     return n
 
 
+def crop_page_rect(page, options):
+    margin = number(options.get("margin", "10"), 0, 100, "여백 자르기") * 72 / 25.4
+    rect = page.cropbox + (margin, margin, -margin, -margin)
+    if rect.is_empty:
+        raise UserError("자를 여백이 페이지보다 큽니다.")
+    return rect
+
+
 def split_ranges(total, count, boundaries):
     """Boundary pages are one-based starts of the following output file."""
     try:
@@ -541,11 +549,7 @@ def _process(job, paths, stage, emit, cancel):
 
                         draw_number(page, index, opt)
                     elif tool == "crop":
-                        margin = number(opt.get("margin", "10"), 0, 100, "여백 자르기") * 72 / 25.4
-                        rect = page.cropbox + (margin, margin, -margin, -margin)
-                        if rect.is_empty:
-                            raise UserError("자를 여백이 페이지보다 큽니다.")
-                        page.set_cropbox(rect)
+                        page.set_cropbox(crop_page_rect(page, opt))
                     elif tool == "redact":
                         regions = opt.get("regions", {}).get(str(n), [])
                         for coords in regions:

@@ -419,6 +419,9 @@ def build(app):
     from .organizer import PageOrganizer
 
     app.organizer = PageOrganizer(workspace, app)
+    from .split_preview import SplitPreview
+
+    app.split_view = SplitPreview(workspace, app)
     preview = panel(workspace)
     app.preview_panel = preview
     # One toolbar: zoom on the left, page turning (and redaction clearing) on the right.
@@ -429,7 +432,7 @@ def build(app):
     # Packed first so it keeps its room when DPI scaling crowds the toolbar.
     app.preview_region_row = ttk.Frame(zoom, style="Panel.TFrame")
     app.clear_preview_regions = ttk.Button(
-        app.preview_region_row, text="이 페이지 선택 초기화", command=app.clear_regions
+        app.preview_region_row, text="영역 초기화", command=app.clear_regions
     )
     app.clear_preview_regions.pack(side="right")
     # Redaction: how many regions are marked, beside the button that clears them.
@@ -439,25 +442,34 @@ def build(app):
     app.region_status.pack(side="right", padx=(0, 8))
     app.preview_nav = ttk.Frame(zoom, style="Panel.TFrame")
     app.preview_nav.pack(side="right")
-    next_page = ttk.Button(app.preview_nav, text="다음 ›", command=lambda: app.turn(1), width=7)
+    next_page = ttk.Button(app.preview_nav, text="›", command=lambda: app.turn(1), width=4)
     next_page.pack(side="right")
     app.preview_controls.append(next_page)
     app.page_label = ttk.Label(app.preview_nav, text="미리보기", style="PanelMuted.TLabel")
     app.page_label.pack(side="right", padx=8)
-    previous_page = ttk.Button(
-        app.preview_nav, text="‹ 이전", command=lambda: app.turn(-1), width=7
-    )
+    previous_page = ttk.Button(app.preview_nav, text="‹", command=lambda: app.turn(-1), width=4)
     previous_page.pack(side="right")
     app.preview_controls.append(previous_page)
     for text, command, width in [
-        ("폭 맞춤", lambda: app.set_preview_mode("width"), 8),
-        ("한 페이지", lambda: app.set_preview_mode("page"), 8),
+        ("폭", lambda: app.set_preview_mode("width"), 4),
+        ("한 쪽", lambda: app.set_preview_mode("page"), 5),
         ("－", lambda: app.zoom_preview(-0.25), 4),
         ("＋", lambda: app.zoom_preview(0.25), 4),
     ]:
         control = ttk.Button(zoom, text=text, command=command, width=width)
         control.pack(side="left", padx=(0, 4))
         app.preview_controls.append(control)
+        tooltip = Tooltip(
+            control, {"폭": "폭 맞춤", "한 쪽": "한 페이지", "－": "축소", "＋": "확대"}[text]
+        )
+        control.bind("<Enter>", lambda e, tip=tooltip: tip.schedule())
+        control.bind("<Leave>", lambda e, tip=tooltip: tip.hide())
+        control.bind("<ButtonPress-1>", lambda e, tip=tooltip: tip.hide())
+    for control, explanation in ((previous_page, "이전 페이지"), (next_page, "다음 페이지")):
+        tooltip = Tooltip(control, explanation)
+        control.bind("<Enter>", lambda e, tip=tooltip: tip.schedule())
+        control.bind("<Leave>", lambda e, tip=tooltip: tip.hide())
+        control.bind("<ButtonPress-1>", lambda e, tip=tooltip: tip.hide())
     app.zoom_label = ttk.Label(zoom, text="폭 맞춤", style="PanelMuted.TLabel")
     app.zoom_label.pack(side="left", padx=4)
     area = tk.Frame(preview, bg=PANEL)

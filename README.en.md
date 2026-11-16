@@ -63,6 +63,10 @@ Tools show the document in a full-page preview immediately. Use **Fit width, One
 Original files are never overwritten. Results are saved in a `PDF결과_…` folder under the chosen location.
 After a job, **Use results for next operation** continues with the result files in another tool.
 
+In Split PDF, click **+** between thumbnails to add a cut line and scissors; click again to remove it. A horizontal cut line joins consecutive rows. By default, cuts split the selected file. Choose **Split by page** to export every listed file page by page. Scroll to access all pages of large documents.
+
+Crop preview shades the edges that will be hidden. **Ctrl+drag up** zooms in and **Ctrl+drag down** zooms out in document and thumbnail views. The compact toolbar provides fit width, one page, zoom and previous/next controls with tooltips.
+
 Leave the page field empty to process every page. `1-3,5` means pages 1 to 3 and page 5; `3-1` means reverse order.
 Images you add are converted to PDF automatically before the selected job.
 

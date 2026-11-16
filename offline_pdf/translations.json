@@ -516,5 +516,13 @@
   "보기": "Show",
   "숨기기": "Hide",
   "정리한 PDF 저장": "Save organized PDF",
-  "선택 쪽 보기": "View selected page"
+  "선택 쪽 보기": "View selected page",
+  "폭": "Width",
+  "한 쪽": "Page",
+  "영역 초기화": "Clear regions",
+  "페이지 사이를 눌러 나눌 위치를 지정하세요. 다시 누르면 해제됩니다.": "Click between pages to split. Click again to remove the cut.",
+  "확대": "Zoom in",
+  "축소": "Zoom out",
+  "이전 페이지": "Previous page",
+  "다음 페이지": "Next page"
 }

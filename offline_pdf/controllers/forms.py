@@ -296,6 +296,7 @@ class FormController:
             return
         self.arrange_fields()
         self.update_file_summary()
+        self.schedule_preview()
         if self.options["split_mode"].get() != "N개 파일로 나누기":
             self.security.config(text="페이지를 비워 두면 전체 페이지를 처리합니다.")
             self.split_summary.config(
@@ -310,6 +311,12 @@ class FormController:
         if not total:
             self.split_summary.config(
                 text="PDF 하나를 선택하면 나누기 범위가 표시됩니다.", foreground=MUTED
+            )
+            return
+        if not self.options["split_starts"].get().strip():
+            self.split_summary.config(
+                text="페이지 사이를 눌러 나눌 위치를 지정하세요. 다시 누르면 해제됩니다.",
+                foreground=MUTED,
             )
             return
         try:
@@ -391,7 +398,7 @@ class FormController:
             self.field(
                 "나누는 방식",
                 "split_mode",
-                "페이지별로 나누기",
+                "N개 파일로 나누기",
                 ["페이지별로 나누기", "N개 파일로 나누기"],
             )
             self.field("만들 파일 수 N", "split_count", "2")
@@ -483,6 +490,8 @@ class FormController:
                 self.options[key].trace_add("write", lambda *_: self.schedule_preview())
         if self.tool == "crop":
             self.field("여백 mm", "margin", "10")
+            for key in ("pages", "margin"):
+                self.options[key].trace_add("write", lambda *_: self.schedule_preview())
         if self.tool == "ocr":
             # Korean and English language data ship with the program.
             self.field(

@@ -12,11 +12,11 @@ import pymupdf as pdf
 
 from .. import ctk_widgets as ttk
 from .. import theme
-from ..engine import UserError, check_local_path, open_pdf, pages
+from ..engine import UserError, check_local_path, crop_page_rect, open_pdf, pages
 from ..images import open_image_document
 from ..overlays import OverlayError
 from ..passwords import cached_password
-from ..ui import PANEL
+from ..ui import BLUE, PANEL
 
 
 class PreviewController:
@@ -37,6 +37,10 @@ class PreviewController:
         return True
 
     def show_preview(self):
+        if self.tool == "split":
+            self.show_document_view(restore=False)
+            return
+        self.split_view.pack_forget()
         self.show_preview_toolbar()
         # General tools open directly on the document with settings visible.
         focused = self.tool == "extract"
@@ -55,6 +59,16 @@ class PreviewController:
 
     def show_document_view(self, restore=True):
         self.show_preview_toolbar()
+        self.split_view.pack_forget()
+        if self.tool == "split":
+            self.preview_panel.pack_forget()
+            self.organizer.pack_forget()
+            self.columns.pack(fill="x", before=self.document_host)
+            self.split_view.pack(fill="both", expand=True)
+            self.screen = "work"
+            self.schedule_preview()
+            self.update_back_state()
+            return
         # General tools have a single document view; only the organizer has a
         # separate thumbnail editing view to return to.
         if self.tool != "extract":
@@ -96,6 +110,11 @@ class PreviewController:
     def set_preview_mode(self, mode):
         if not self.ensure_preview_visible():
             return
+        grid = self.active_thumbnail_view()
+        if grid:
+            grid.tile_width.set(max(160, grid.canvas.winfo_width()) if mode == "width" else 220)
+            grid.draw()
+            return
         self.preview_mode = mode
         self.preview_zoom = 1.0
         self.canvas.xview_moveto(0)
@@ -104,8 +123,76 @@ class PreviewController:
     def zoom_preview(self, delta):
         if not self.ensure_preview_visible():
             return
+        grid = self.active_thumbnail_view()
+        if grid:
+            grid.tile_width.set(max(160, min(640, grid.tile_width.get() + round(delta * 220))))
+            grid.draw()
+            return
         self.preview_zoom = max(0.25, min(3.0, self.preview_zoom + delta))
         self.refresh_preview()
+
+    def active_thumbnail_view(self):
+        view = (
+            self.split_view
+            if self.tool == "split"
+            else self.organizer
+            if self.tool == "extract"
+            else None
+        )
+        return view if view and view.winfo_manager() else None
+
+    def start_zoom_drag(self, event, grid=None):
+        if not getattr(event, "state", 0) & 4:
+            self._zoom_drag = None
+            return False
+        if self.busy() or not self.selected_file():
+            return True
+        value = grid.tile_width.get() if grid else self.preview_zoom
+        self._zoom_drag = (event.y, value, grid, getattr(event, "x", 0))
+        self._zoom_moved = False
+        (grid.canvas if grid else self.canvas).configure(cursor="sb_v_double_arrow")
+        return True
+
+    def move_zoom_drag(self, event):
+        drag = getattr(self, "_zoom_drag", None)
+        if drag is None:
+            return False
+        y, initial, grid, x = drag
+        if abs(event.y - y) + abs(getattr(event, "x", x) - x) <= 6 and not self._zoom_moved:
+            return True
+        self._zoom_moved = True
+        factor = math.exp(max(-4, min(4, (y - event.y) / 160)))
+        if grid:
+            grid.tile_width.set(round(max(160, min(640, initial * factor))))
+        else:
+            self.preview_zoom = max(0.25, min(3.0, initial * factor))
+        if not getattr(self, "_zoom_timer", None):
+            self._zoom_timer = self.root.after(33, self.render_drag_zoom)
+        return True
+
+    def render_drag_zoom(self):
+        self._zoom_timer = None
+        drag = getattr(self, "_zoom_drag", None)
+        if drag is None:
+            return
+        grid = drag[2]
+        if grid:
+            grid.draw()
+        else:
+            self.refresh_preview()
+
+    def end_zoom_drag(self, event):
+        if getattr(self, "_zoom_drag", None) is None:
+            return False
+        self.move_zoom_drag(event)
+        if getattr(self, "_zoom_timer", None):
+            self.root.after_cancel(self._zoom_timer)
+            self._zoom_timer = None
+        self.render_drag_zoom()
+        grid = self._zoom_drag[2]
+        (grid.canvas if grid else self.canvas).configure(cursor="")
+        self._zoom_drag = None
+        return True
 
     def refresh_organizer(self):
         if self.tool != "extract":
@@ -201,6 +288,10 @@ class PreviewController:
             self.page_index = 0
             self.canvas.yview_moveto(0)
         path = self.selected_file()
+        if self.tool == "split":
+            self.split_view.load(path, cached_password(self, path))
+            self.split_view.draw()
+            return
         if not path:
             self.canvas.config(scrollregion=(0, 0, max(300, self.canvas.winfo_width()), 280))
             text = "파일을 추가하면 여기에서 미리 볼 수 있습니다."
@@ -253,6 +344,12 @@ class PreviewController:
                     chosen = pages(options.get("pages", ""), doc.page_count)
                     if self.page_index in chosen:
                         draw_number(page, chosen.index(self.page_index), options)
+                crop_margin = None
+                if self.tool == "crop":
+                    options = {key: value.get() for key, value in self.options.items()}
+                    chosen = pages(options.get("pages", ""), doc.page_count)
+                    if self.page_index in chosen:
+                        crop_margin = crop_page_rect(page, options).x0 - page.cropbox.x0
                 rw, rh = (
                     (page.rect.height, page.rect.width)
                     if angle % 180
@@ -273,10 +370,28 @@ class PreviewController:
                 self.canvas.create_image(12, 12, anchor="nw", image=self.preview_photo)
                 self.preview_rect = (page.rect.width, page.rect.height)
                 self.canvas.configure(scrollregion=(0, 0, pix.width + 24, pix.height + 24))
-                self.zoom_label.config(
-                    text=("폭 맞춤" if self.preview_mode == "width" else "한 페이지")
-                    + f" · {round(self.preview_zoom * 100)}%"
-                )
+                if crop_margin is not None and crop_margin > 0:
+                    margin = crop_margin * self.preview_scale
+                    x, y, right, bottom = 12, 12, 12 + pix.width, 12 + pix.height
+                    for rect in (
+                        (x, y, right, y + margin),
+                        (x, bottom - margin, right, bottom),
+                        (x, y + margin, x + margin, bottom - margin),
+                        (right - margin, y + margin, right, bottom - margin),
+                    ):
+                        self.canvas.create_rectangle(
+                            *rect, fill="#374151", outline="", stipple="gray50", tags="crop_shade"
+                        )
+                    self.canvas.create_rectangle(
+                        x + margin,
+                        y + margin,
+                        right - margin,
+                        bottom - margin,
+                        outline=BLUE,
+                        dash=(4, 3),
+                        tags="crop_boundary",
+                    )
+                self.zoom_label.config(text=f"{round(self.preview_zoom * 100)}%")
                 self.page_label.config(text=f"{self.page_index + 1} / {preview_total}쪽")
                 if self.tool == "extract" and self.organizer.model:
                     position = next(
@@ -335,9 +450,21 @@ class PreviewController:
             self.refresh_preview()
             return
         self.page_index = max(0, self.page_index + delta)
+        if self.tool == "split" and self.split_view.model:
+            view = self.split_view
+            self.page_index = min(self.page_index, len(view.model.items) - 1)
+            view.model.selected = {view.model.items[self.page_index][0]}
+            row = self.page_index // view.columns
+            view.canvas.yview_moveto(
+                row * view.cellh / max(1, float(view.canvas.cget("scrollregion").split()[-1]))
+            )
+            view.draw()
+            return
         self.refresh_preview()
 
     def draw_start(self, event):
+        if self.start_zoom_drag(event):
+            return
         if self.stamp_mode():
             self.stamp_drag_start(event)
             return
@@ -360,6 +487,8 @@ class PreviewController:
         )
 
     def draw_move(self, event):
+        if self.move_zoom_drag(event):
+            return
         if self.stamp_mode():
             self.stamp_drag_move(event)
             return
@@ -375,6 +504,8 @@ class PreviewController:
             )
 
     def draw_end(self, event):
+        if self.end_zoom_drag(event):
+            return
         if self.stamp_mode():
             self.stamp_drag_end(event)
             return

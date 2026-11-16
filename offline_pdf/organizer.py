@@ -146,15 +146,6 @@ class PageOrganizer(ttk.Frame):
         ttk.Label(
             hint, text="드래그로 순서 변경 · Ctrl/Shift 다중 선택", style="Muted.TLabel"
         ).pack(side="left")
-        ttk.Scale(
-            hint,
-            from_=160,
-            to=320,
-            variable=self.tile_width,
-            command=lambda _: self.draw(),
-            length=110,
-        ).pack(side="right")
-        ttk.Label(hint, text="썸네일 크기", style="Muted.TLabel").pack(side="right", padx=6)
         area = ttk.Frame(self)
         area.pack(fill="both", expand=True)
         self.canvas = tk.Canvas(
@@ -273,6 +264,7 @@ class PageOrganizer(ttk.Frame):
             self.after_cancel(self.timer)
             self.timer = None
         self.canvas.delete("all")
+        self.visible_photos = []
         w = max(self.canvas.winfo_width(), 300)
         self.columns = max(1, int(w / max(160, self.tile_width.get())))
         self.cellw = w / self.columns
@@ -319,11 +311,12 @@ class PageOrganizer(ttk.Frame):
                 x + 12,
                 y + 15,
                 anchor="w",
-                text=f"저장 {i + 1}번째",
+                text=f"{n + 1}쪽" if getattr(self, "split_view", False) else f"저장 {i + 1}번째",
                 fill=BLUE if selected else MUTED,
                 font=(FONT, 10),
             )
-            self.canvas.create_text(x + cw - 15, y + 15, text="⠿", fill=MUTED, font=(FONT, 13))
+            if not getattr(self, "split_view", False):
+                self.canvas.create_text(x + cw - 15, y + 15, text="⠿", fill=MUTED, font=(FONT, 13))
             self.canvas.create_rectangle(
                 x + 12, y + 32, x + cw - 12, y + thumb_height + 40, fill=BG, outline=""
             )
@@ -331,7 +324,7 @@ class PageOrganizer(ttk.Frame):
                 x + 12,
                 y + self.cellh - 34,
                 anchor="w",
-                text=("☑" if selected else "□")
+                text=("" if getattr(self, "split_view", False) else "☑" if selected else "□")
                 + f" 원본 {n + 1}쪽"
                 + (f" · {angle}°" if angle else ""),
                 font=(FONT, 10),
@@ -340,6 +333,7 @@ class PageOrganizer(ttk.Frame):
             key = (n, angle, int(cw - 38), thumb_height)
             if key in self.cache:
                 self.cache.move_to_end(key)
+                self.visible_photos.append(self.cache[key])
                 self.canvas.create_image(
                     x + cw / 2, y + 36 + thumb_height / 2, image=self.cache[key]
                 )
@@ -374,6 +368,7 @@ class PageOrganizer(ttk.Frame):
                 )
                 photo = tk.PhotoImage(data=base64.b64encode(pix.tobytes("png")))
                 self.cache[key] = photo
+                self.visible_photos.append(photo)
                 while len(self.cache) > 64:
                     self.cache.popitem(last=False)
                 self.canvas.create_image(x, y, image=photo)
@@ -404,6 +399,8 @@ class PageOrganizer(ttk.Frame):
             else ""
         )
         if self.app.tool == "extract":
+            if self.winfo_manager():
+                self.app.zoom_label.config(text=f"{round(self.tile_width.get() / 220 * 100)}%")
             if self.app.screen == "preview":
                 self.app.schedule_preview()
             self.app.summary.set(
@@ -419,6 +416,8 @@ class PageOrganizer(ttk.Frame):
         return i if 0 <= col < self.columns and 0 <= i < len(self.model.items) else None
 
     def press(self, event):
+        if self.app.start_zoom_drag(event, self):
+            return
         if self.app.busy() or not self.model:
             return
         self.canvas.focus_set()
@@ -451,6 +450,8 @@ class PageOrganizer(ttk.Frame):
         self.draw()
 
     def motion(self, event):
+        if self.app.move_zoom_drag(event):
+            return
         if self.app.busy() or not self.drag:
             return
         x, y, uid, modified = self.drag
@@ -485,6 +486,14 @@ class PageOrganizer(ttk.Frame):
         self.autoscroll = self.after(60, self.auto_scroll)
 
     def release(self, event):
+        if self.app.end_zoom_drag(event):
+            if not self.app._zoom_moved and self.model and not self.app.busy():
+                i = self.hit(event.x, event.y)
+                if i is not None:
+                    uid = self.model.items[i][0]
+                    self.model.selected.symmetric_difference_update({uid})
+                    self.draw()
+            return
         if not self.drag:
             return
         if not self.app.busy():

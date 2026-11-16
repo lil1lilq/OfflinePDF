@@ -93,6 +93,10 @@ class NavigationController:
         previous = self.tool
         self.tool = key
         self.preview_origin = None
+        self._zoom_drag = None
+        self.split_view.pack_forget()
+        if previous == "split" and key != "split":
+            self.split_view.close_document()
         self.screen = "work"
         if previous != key:
             self.organizer.close_document()
