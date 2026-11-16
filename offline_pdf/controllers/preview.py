@@ -22,6 +22,20 @@ from ..ui import BLUE, MUTED, PANEL
 class PreviewController:
     """Width-fit document preview, organizer and actual AI comparison."""
 
+    def show_preview_toolbar(self):
+        if not self.preview_zoom_row.winfo_manager():
+            visible = self.document_host.pack_slaves()
+            options = {"before": visible[0]} if visible else {}
+            self.preview_zoom_row.pack(fill="x", pady=(0, 8), **options)
+
+    def ensure_preview_visible(self):
+        if not self.selected_file() or self.screen == "comparison":
+            return False
+        if self.work.winfo_manager() and not self.preview_panel.winfo_manager():
+            self.show_preview()
+            self.root.update_idletasks()
+        return True
+
     def toggle_preview(self):
         if self.preview_panel.winfo_manager():
             self.hide_preview()
@@ -29,6 +43,7 @@ class PreviewController:
             self.show_preview()
 
     def show_preview(self):
+        self.show_preview_toolbar()
         # Redaction is drawn on the preview itself, so that preview is the tool's
         # main work screen: keep its settings visible and let "back" go home.
         inline = self.tool == "redact" or self.stamp_mode()
@@ -51,6 +66,7 @@ class PreviewController:
         self.update_back_state()
 
     def hide_preview(self, restore=True):
+        self.show_preview_toolbar()
         if (self.tool == "redact" or self.stamp_mode()) and self.work.winfo_manager():
             # Redaction always works on the preview; never swap it for the overview.
             self.preview_origin = None
@@ -107,12 +123,16 @@ class PreviewController:
         self.update_back_state()
 
     def set_preview_mode(self, mode):
+        if not self.ensure_preview_visible():
+            return
         self.preview_mode = mode
         self.preview_zoom = 1.0
         self.canvas.xview_moveto(0)
         self.refresh_preview()
 
     def zoom_preview(self, delta):
+        if not self.ensure_preview_visible():
+            return
         self.preview_zoom = max(0.25, min(3.0, self.preview_zoom + delta))
         self.refresh_preview()
 
@@ -186,6 +206,7 @@ class PreviewController:
         shutil.rmtree(self.comparison_folder, ignore_errors=True)
         self.comparison_folder = None
         self.screen = self.comparison_origin
+        self.show_preview_toolbar()
         if self.screen == "preview":
             self.preview_panel.pack(fill="both", expand=True, pady=(8, 0))
             self.schedule_preview()
@@ -389,6 +410,8 @@ class PreviewController:
         return "break"
 
     def turn(self, delta):
+        if not self.ensure_preview_visible():
+            return
         if self.tool == "extract" and self.organizer.model:
             items = self.organizer.model.items
             i = next((j for j, p in enumerate(items) if p[0] == self.organizer_preview_uid), 0)

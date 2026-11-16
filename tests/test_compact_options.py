@@ -1,6 +1,7 @@
 """User flows for compact pickers, live options, split scope and file order."""
 
 import tempfile
+import time
 import tkinter as tk
 import unittest
 from collections import deque
@@ -15,6 +16,7 @@ from offline_pdf.app import App
 from offline_pdf.compact_controls import ChoicePopup, picker_position
 from offline_pdf.localization import apply_language
 from offline_pdf.overlays import POSITIONS
+from offline_pdf.tools import TOOLS
 from offline_pdf.windows_drop import NativeFileDrop
 
 
@@ -82,6 +84,12 @@ class PickerPositionTests(unittest.TestCase):
 
 
 class CompactOptionsTests(unittest.TestCase):
+    def pump(self, seconds=0.4):
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            self.root.update()
+            time.sleep(0.01)
+
     def setUp(self):
         try:
             self.root = ctk.CTk()
@@ -155,6 +163,60 @@ class CompactOptionsTests(unittest.TestCase):
         self.app.select_tool("merge")  # also destroys any open popup and its traces
         self.root.update()
         self.assertIsNone(getattr(self.root, "_option_picker", None))
+
+    def test_empty_split_screen_shows_document_after_import_without_reentry(self):
+        self.app.clear_files()
+        self.app.select_tool("split")
+        self.root.update()
+        self.assertTrue(self.app.preview_zoom_row.winfo_ismapped())
+        self.assertFalse(self.app.file_overview.winfo_ismapped())
+        self.assertTrue(
+            all(button.cget("state") == "disabled" for button in self.app.preview_controls)
+        )
+        self.app.add_paths([self.files[0]])
+        self.pump()
+        self.assertTrue(self.app.file_overview.winfo_ismapped())
+        self.assertTrue(
+            any(
+                self.app.overview_canvas.type(item) == "image"
+                for item in self.app.overview_canvas.find_all()
+            )
+        )
+        self.assertIsNotNone(self.app.preview_rect)
+        self.assertTrue(
+            all(button.cget("state") == "normal" for button in self.app.preview_controls)
+        )
+        self.app.preview_controls[0].invoke()  # Next, without pressing large preview first.
+        self.root.update()
+        self.assertTrue(self.app.preview_panel.winfo_ismapped())
+        self.assertEqual(self.app.page_index, 1)
+        self.assertEqual(self.app.page_label.cget("text"), "2 / 5쪽")
+        self.app.add_paths([self.files[1]])
+        self.root.update()
+        self.assertTrue(self.app.preview_panel.winfo_ismapped())
+        self.assertEqual(self.app.screen, "preview")
+
+    def test_toolbar_available_in_every_tool_and_fit_controls_work_from_overview(self):
+        for tool in TOOLS:
+            with self.subTest(tool=tool):
+                self.app.select_tool(tool)
+                self.root.update()
+                self.assertTrue(self.app.preview_zoom_row.winfo_ismapped())
+                self.assertTrue(self.app.preview_nav.winfo_ismapped())
+        self.app.select_tool("number")
+        self.root.update()
+        self.assertFalse(self.app.preview_panel.winfo_ismapped())
+        self.app.set_preview_mode("page")
+        self.root.update()
+        self.assertTrue(self.app.preview_panel.winfo_ismapped())
+        self.assertEqual(self.app.preview_mode, "page")
+        self.app.home_button.invoke()
+        self.root.update()
+        self.assertTrue(self.app.preview_zoom_row.winfo_ismapped())
+        self.assertFalse(self.app.preview_panel.winfo_ismapped())
+        self.app.zoom_preview(0.25)
+        self.assertEqual(self.app.preview_zoom, 1.25)
+        self.assertTrue(self.app.preview_panel.winfo_manager())
 
     def test_folded_settings_keep_values_and_percentage_matches_worker_options(self):
         self.app.select_tool("nup")

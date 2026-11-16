@@ -455,9 +455,10 @@ def build(app):
     preview = panel(workspace)
     app.preview_panel = preview
     # One toolbar: zoom on the left, page turning (and redaction clearing) on the right.
-    zoom = ttk.Frame(preview, style="Panel.TFrame")
+    zoom = ttk.Frame(workspace, style="Panel.TFrame")
     app.preview_zoom_row = zoom
-    zoom.pack(fill="x", padx=10, pady=8)
+    zoom.pack(fill="x", pady=(0, 8))
+    app.preview_controls = []
     # Packed first so it keeps its room when DPI scaling crowds the toolbar.
     app.preview_region_row = ttk.Frame(zoom, style="Panel.TFrame")
     app.clear_preview_regions = ttk.Button(
@@ -471,21 +472,25 @@ def build(app):
     app.region_status.pack(side="right", padx=(0, 8))
     app.preview_nav = ttk.Frame(zoom, style="Panel.TFrame")
     app.preview_nav.pack(side="right")
-    ttk.Button(app.preview_nav, text="다음 ›", command=lambda: app.turn(1), width=7).pack(
-        side="right"
-    )
+    next_page = ttk.Button(app.preview_nav, text="다음 ›", command=lambda: app.turn(1), width=7)
+    next_page.pack(side="right")
+    app.preview_controls.append(next_page)
     app.page_label = ttk.Label(app.preview_nav, text="미리보기", style="PanelMuted.TLabel")
     app.page_label.pack(side="right", padx=8)
-    ttk.Button(app.preview_nav, text="‹ 이전", command=lambda: app.turn(-1), width=7).pack(
-        side="right"
+    previous_page = ttk.Button(
+        app.preview_nav, text="‹ 이전", command=lambda: app.turn(-1), width=7
     )
+    previous_page.pack(side="right")
+    app.preview_controls.append(previous_page)
     for text, command, width in [
         ("폭 맞춤", lambda: app.set_preview_mode("width"), 8),
         ("한 페이지", lambda: app.set_preview_mode("page"), 8),
         ("－", lambda: app.zoom_preview(-0.25), 4),
         ("＋", lambda: app.zoom_preview(0.25), 4),
     ]:
-        ttk.Button(zoom, text=text, command=command, width=width).pack(side="left", padx=(0, 4))
+        control = ttk.Button(zoom, text=text, command=command, width=width)
+        control.pack(side="left", padx=(0, 4))
+        app.preview_controls.append(control)
     app.zoom_label = ttk.Label(zoom, text="폭 맞춤", style="PanelMuted.TLabel")
     app.zoom_label.pack(side="left", padx=4)
     area = tk.Frame(preview, bg=PANEL)

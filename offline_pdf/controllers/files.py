@@ -84,10 +84,11 @@ class FileController:
             if not home:
                 if self.tool == "extract":
                     self.refresh_organizer()
-                elif self.tool == "split":
-                    self.update_split_preview()
                 else:
-                    self.hide_preview(restore=False)
+                    if self.tool == "split":
+                        self.update_split_preview()
+                    if not self.preview_panel.winfo_manager():
+                        self.hide_preview(restore=False)
                 self.refresh_preview(reset=True)
         details = [f"{added}개 추가", f"전체 {len(self.files)}개"]
         if duplicates:
@@ -166,6 +167,8 @@ class FileController:
             )
 
     def update_file_summary(self):
+        for control in self.preview_controls:
+            control.configure(state="normal" if self.selected_file() else "disabled")
         self.file_count.config(text=f"작업 파일  {len(self.files)}개")
         self.summary.set(
             f"파일 {len(self.files)}개 선택됨" if self.files else "파일을 추가해 주세요."
