@@ -40,6 +40,27 @@ def worker_result(job):
         events.close()
 
 
+def verify_ui_navigation(app, source):
+    """Check the same initial document view and Back behavior as the desktop UI."""
+    from .tools import TOOLS
+
+    window = app.root
+    window.geometry("900x650")
+    window.update()
+    assert str(app.home_button.cget("state")) == "disabled"
+    for tool in TOOLS:
+        app.select_tool(tool)
+        window.update()
+        assert app.run_button.winfo_ismapped()
+    app.add_paths([str(source)])
+    window.update()
+    assert app.preview_panel.winfo_ismapped(), "Document preview must be visible initially"
+    assert app.preview_mode == "page", "Initial preview must show the whole page"
+    app.go_back()
+    window.update()
+    assert app.screen == "home", "Back must return directly to the tool list"
+
+
 def self_test():
     """Exercise the frozen executable, child workers, native UI and AI/OCR."""
     import socket
@@ -48,7 +69,7 @@ def self_test():
     from PIL import Image
 
     from . import __version__
-    from .app import TOOLS, App
+    from .app import App
     from .engine import disable_network
     from .enhance import model_folder
 
@@ -115,18 +136,7 @@ def self_test():
         app = App(window)
         app.auto_open.set(False)
         try:
-            window.geometry("900x650")
-            window.update()
-            assert str(app.home_button.cget("state")) == "disabled"
-            for tool in TOOLS:
-                app.select_tool(tool)
-                window.update()
-                assert app.run_button.winfo_ismapped()
-            app.add_paths([str(source)])
-            app.show_preview()
-            window.update()
-            app.go_back()
-            assert app.screen == "work"
+            verify_ui_navigation(app, source)
             checks.append("native-ui-tools-navigation")
         finally:
             app.close()
@@ -143,7 +153,9 @@ def run_diagnostic(command, report):
         return 0
     except Exception as exc:
         path.write_text(
-            json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False, indent=2),
+            json.dumps(
+                {"ok": False, "error": str(exc) or type(exc).__name__}, ensure_ascii=False, indent=2
+            ),
             encoding="utf-8",
         )
         return 1

@@ -211,6 +211,14 @@ class CompactOptionsTests(unittest.TestCase):
         self.assertEqual(self.app.preview_zoom, 1.25)
         self.assertTrue(self.app.preview_panel.winfo_manager())
 
+    def test_packaged_navigation_check_matches_single_document_view(self):
+        from offline_pdf.diagnostics import verify_ui_navigation
+
+        self.app.show_home()
+        verify_ui_navigation(self.app, self.files[0])
+        self.assertEqual(self.app.screen, "home")
+        self.assertTrue(self.app.home.winfo_ismapped())
+
     def test_organizer_settings_precede_the_same_common_toolbar(self):
         self.app.select_tool("extract")
         self.root.update()
