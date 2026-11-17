@@ -90,7 +90,8 @@ class PreviewController:
         self.preview_zoom = 1.0
         self.canvas.xview_moveto(0)
         self.canvas.yview_moveto(0)
-        self.screen = "preview" if self.tool == "extract" else "work"
+        if self.work.winfo_manager():
+            self.screen = "preview" if self.tool == "extract" else "work"
         self.update_preview_controls()
         self.schedule_preview()
         self.update_back_state()
@@ -116,7 +117,8 @@ class PreviewController:
         grid.draw()
         if restore and grid.path == getattr(self, "_overview_path", None):
             self.root.after_idle(lambda: grid.scroll_to("moveto", getattr(self, "_overview_y", 0)))
-        self.screen = "work"
+        if self.work.winfo_manager():
+            self.screen = "work"
         self.update_preview_controls()
         self.update_back_state()
 

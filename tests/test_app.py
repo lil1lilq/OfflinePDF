@@ -89,6 +89,35 @@ class CardLayoutTests(unittest.TestCase):
             self.assertLessEqual(height, CARD_MAX_HEIGHT)
 
 
+class StartupTests(unittest.TestCase):
+    def test_fresh_app_keeps_home_until_a_tool_is_selected(self):
+        try:
+            root = ctk.CTk()
+        except tk.TclError:
+            self.skipTest("GUI requires a desktop or X display.")
+        app = App(root)
+        try:
+            root.update()
+            self.assertEqual(app.screen, "home")
+            self.assertTrue(app.home.winfo_ismapped())
+            self.assertFalse(app.work.winfo_ismapped())
+            self.assertEqual(str(app.home_button.cget("state")), "disabled")
+            self.assertFalse(app.home_button.winfo_ismapped())
+            # The packaged self-test starts from precisely this fresh state.
+            from offline_pdf.diagnostics import verify_ui_navigation
+
+            with tempfile.TemporaryDirectory() as folder:
+                source = Path(folder) / "startup.pdf"
+                with pdf.open() as doc:
+                    doc.new_page()
+                    doc.save(source)
+                verify_ui_navigation(app, source)
+                self.assertEqual(app.screen, "home")
+                self.assertTrue(app.home.winfo_ismapped())
+        finally:
+            app.close()
+
+
 class AppTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

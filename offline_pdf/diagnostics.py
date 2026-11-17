@@ -47,11 +47,13 @@ def verify_ui_navigation(app, source):
     window = app.root
     window.geometry("900x650")
     window.update()
-    assert str(app.home_button.cget("state")) == "disabled"
+    assert str(app.home_button.cget("state")) == "disabled", (
+        "Home screen must keep Back disabled after startup"
+    )
     for tool in TOOLS:
         app.select_tool(tool)
         window.update()
-        assert app.run_button.winfo_ismapped()
+        assert app.run_button.winfo_ismapped(), f"Run button must be visible for {tool}"
     app.add_paths([str(source)])
     window.update()
     assert app.preview_panel.winfo_ismapped(), "Document preview must be visible initially"
