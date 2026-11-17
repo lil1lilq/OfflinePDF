@@ -32,12 +32,12 @@ FONT = "맑은 고딕"
 # Card heights sized for 16:9 desktop windows: all 16 tools fit on one screen.
 CARD_MIN_HEIGHT = 140
 CARD_MAX_HEIGHT = 168
-POPULAR = ("merge", "split", "extract", "compress", "ocr", "pdf_images")
+POPULAR = ("merge", "extract", "compress", "ocr", "pdf_images")
 # Titles share one source; compact summaries fit the basic cards.
 CARD_SUMMARIES = {
     "merge": "여러 파일을 하나의 PDF로 합칩니다",
     "split": "페이지별 또는 N개 파일로 나눕니다",
-    "extract": "페이지 순서·삭제·회전을 편집합니다",
+    "extract": "페이지 순서·삭제·회전·분할을 편집합니다",
     "nup": "A4 한 장에 원하는 쪽수만큼 배치합니다",
     "compress": "압축 수준을 선택해 용량을 줄입니다",
     "upscale": "스캔 이미지를 AI로 확대·보정합니다",
@@ -52,7 +52,9 @@ CARD_SUMMARIES = {
     "clean": "문서에 포함된 부가정보를 정리합니다",
     "ocr": "스캔 문서의 글자를 인식합니다",
 }
-CARD_TEXT = {key: (title, CARD_SUMMARIES[key]) for key, (title, _) in TOOLS.items()}
+CARD_TEXT = {
+    key: (title, CARD_SUMMARIES[key]) for key, (title, _) in TOOLS.items() if key != "split"
+}
 
 
 def chip_color(key):

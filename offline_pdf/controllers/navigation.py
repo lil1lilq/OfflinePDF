@@ -67,6 +67,8 @@ class NavigationController:
         self.arrange_cards(self.cards_frame.winfo_width(), force=True)
 
     def select_tool(self, key):
+        # Old Explorer/CLI links enter the unified page workspace.
+        key = "extract" if key == "split" else key
         if self.busy() or key not in TOOLS:
             return
         self.close_ai_comparison()
@@ -94,9 +96,10 @@ class NavigationController:
         self.tool = key
         self.preview_origin = None
         self._zoom_drag = None
+        self._overview_y = 0
+        self.overview.close_document()
+        self.overview.pack_forget()
         self.split_view.pack_forget()
-        if previous == "split" and key != "split":
-            self.split_view.close_document()
         self.screen = "work"
         if previous != key:
             self.organizer.close_document()
@@ -178,7 +181,7 @@ class NavigationController:
             return set()
         extensions = {Path(path).suffix.lower() for path in paths}
         if extensions <= IMAGE_EXTENSIONS | {".pdf"}:
-            return set(TOOLS)
+            return set(CARD_TEXT)
         return set()
 
     def cancel_continue(self):

@@ -184,11 +184,8 @@ class CompactOptionsTests(unittest.TestCase):
         self.assertTrue(
             all(button.cget("state") == "normal" for button in self.app.preview_controls)
         )
-        self.app.preview_controls[0].invoke()  # Next, without pressing large preview first.
-        self.root.update()
-        self.assertTrue(self.app.split_view.winfo_ismapped())
-        self.assertEqual(self.app.page_index, 1)
-        self.assertEqual(self.app.page_label.cget("text"), "2 / 5쪽")
+        self.assertFalse(self.app.single_page_controls.winfo_ismapped())
+        self.assertFalse(self.app.preview_nav.winfo_ismapped())
         self.app.add_paths([self.files[1]])
         self.root.update()
         self.assertTrue(self.app.split_view.winfo_ismapped())
@@ -200,7 +197,9 @@ class CompactOptionsTests(unittest.TestCase):
                 self.app.select_tool(tool)
                 self.root.update()
                 self.assertTrue(self.app.preview_zoom_row.winfo_ismapped())
-                self.assertTrue(self.app.preview_nav.winfo_ismapped())
+                self.assertEqual(
+                    bool(self.app.preview_nav.winfo_ismapped()), self.app.tool != "extract"
+                )
         self.app.select_tool("number")
         self.root.update()
         self.assertTrue(self.app.preview_panel.winfo_ismapped())
@@ -210,17 +209,135 @@ class CompactOptionsTests(unittest.TestCase):
         self.assertEqual(self.app.preview_mode, "page")
         self.assertEqual(self.app.screen, "work")
         self.assertFalse(hasattr(self.app, "preview_button"))
+        scale = self.app.preview_scale
         self.app.zoom_preview(0.25)
-        self.assertEqual(self.app.preview_zoom, 1.25)
+        self.assertAlmostEqual(self.app.preview_zoom, scale + 0.25)
         self.assertTrue(self.app.preview_panel.winfo_manager())
+
+    def test_every_tool_can_switch_grid_double_click_page_and_restore_scroll(self):
+        for tool in TOOLS:
+            with self.subTest(tool=tool):
+                self.app.select_tool(tool)
+                self.app.show_document_view()
+                self.pump(0.08)
+                view = self.app.active_thumbnail_view()
+                self.assertIsNotNone(view)
+                self.assertFalse(self.app.single_page_controls.winfo_ismapped())
+                width = view.tile_width.get()
+                self.app.set_preview_mode("width")
+                self.app.zoom_preview(1)
+                self.assertEqual(view.tile_width.get(), width)
+                event = SimpleNamespace(x=50, y=80, state=0)
+                view.double_click(event)
+                self.pump(0.08)
+                self.assertIsNone(self.app.active_thumbnail_view())
+                self.assertTrue(self.app.single_page_controls.winfo_ismapped())
+                self.assertEqual(self.app.preview_mode, "width")
+                self.app.show_document_view()
+                self.pump(0.08)
+                self.assertIs(self.app.active_thumbnail_view(), view)
+
+    def test_percent_is_absolute_and_height_fit_uses_actual_pdf_dimensions(self):
+        self.app.select_tool("number")
+        self.pump()
+        self.app.set_preview_mode("width")
+        expected = max(self.app.canvas.winfo_width() - 24, 150) / 595
+        self.assertAlmostEqual(self.app.preview_scale, expected, places=3)
+        self.app.zoom_value.set("150%")
+        self.app.set_preview_percent()
+        self.assertAlmostEqual(self.app.preview_scale, 1.5)
+        self.app.zoom_preview(-0.1)
+        self.assertAlmostEqual(self.app.preview_scale, 1.4)
+        self.app.set_preview_mode("height")
+        self.assertAlmostEqual(
+            self.app.preview_scale, max(100, self.app.canvas.winfo_height() - 24) / 842, places=3
+        )
+        previous = self.app.preview_scale
+        for invalid in ("NaN", "0%", "99999%", "text"):
+            self.app.zoom_value.set(invalid)
+            self.app.set_preview_percent()
+            self.assertEqual(self.app.preview_scale, previous)
+
+    def test_cut_and_checkbox_double_click_do_not_open_page(self):
+        self.app.select_tool("extract")
+        self.pump()
+        view = self.app.organizer
+        x0, y0, x1, y1 = view.separators[1]
+        event = SimpleNamespace(x=(x0 + x1) / 2, y=(y0 + y1) / 2 - view.canvas.canvasy(0), state=0)
+        view.press(event)
+        view.release(event)
+        view.double_click(event)
+        self.assertIs(self.app.active_thumbnail_view(), view)
+
+        self.assertEqual(view.model.cuts(), {1})
+        event = SimpleNamespace(x=24, y=view.cellh - 34, state=0)
+        view.press(event)
+        view.release(event)
+        selection = set(view.model.selected)
+        view.double_click(event)
+        self.assertEqual(view.model.selected, selection)
+        self.assertIs(self.app.active_thumbnail_view(), view)
+
+    def test_grid_scroll_selection_and_cuts_survive_single_page_view(self):
+        self.app.select_tool("extract")
+        self.pump()
+        view = self.app.organizer
+        view.model.set_cuts({2})
+        view.model.selected = {view.model.items[3][0]}
+        view.scroll_to("moveto", 0.5)
+        self.pump()
+        y = view.canvas.yview()[0]
+        selected = set(view.model.selected)
+        view.enlarge()
+        self.pump()
+        self.assertEqual(self.app.page_index, 3)
+        self.app.show_document_view()
+        self.pump()
+        self.assertEqual(view.model.selected, selected)
+        self.assertEqual(view.model.cuts(), {2})
+        self.assertAlmostEqual(view.canvas.yview()[0], y, places=2)
+
+    def test_split_settings_interval_and_undo(self):
+        self.app.select_tool("extract")
+        self.pump()
+        view = self.app.organizer
+        dialog = view.split_settings()
+        self.root.update()
+        body = dialog.winfo_children()[0]
+        row = next(w for w in body.winfo_children() if isinstance(w, ctk.CTkFrame))
+        next(w for w in row.winfo_children() if isinstance(w, ctk.CTkButton)).invoke()
+        self.root.update()
+        self.assertEqual(view.model.cuts(), {1, 2, 3, 4})
+        self.assertIn("PDF 5개로 나눠 저장", self.app.run_button.source_text)
+        view.undo()
+        self.assertEqual(view.model.cuts(), set())
+
+    def test_nup_overview_counts_output_sheets_and_renders_crop_and_number(self):
+        for tool in ("nup", "crop", "number"):
+            self.app.select_tool(tool)
+            if tool == "nup":
+                self.app.options["nup_count"].set("2")
+            self.app.show_document_view()
+            self.pump()
+            view = self.app.overview
+            page, temporary = view.thumbnail_page(0)
+            try:
+                self.assertGreater(page.rect.width, 0)
+                self.assertTrue(
+                    any(view.canvas.type(item) == "image" for item in view.canvas.find_all())
+                )
+            finally:
+                temporary.close()
+            if tool == "nup":
+                self.assertEqual(len(view.model.items), 3)
 
     def test_split_boundaries_toggle_on_click_and_saved_ranges_match(self):
         self.app.select_tool("split")
         self.pump()
         view = self.app.split_view
         self.assertEqual(len(view.model.items), 5)
-        self.assertEqual(view.cuts(), set())
-        self.assertEqual(self.app.run_button.cget("state"), "disabled")
+        self.assertEqual(view.model.cuts(), set())
+        self.assertEqual(self.app.run_button.cget("state"), "normal")
         for boundary in (1, view.columns):
             if boundary >= 5:
                 continue
@@ -230,23 +347,22 @@ class CompactOptionsTests(unittest.TestCase):
                 event = SimpleNamespace(x=x, y=y, state=0)
                 view.press(event)
                 view.release(event)
-                self.assertIn(boundary, view.cuts())
+                self.assertIn(boundary, view.model.cuts())
                 self.assertTrue(view.canvas.find_withtag("cut_scissors"))
                 view.press(event)
                 view.release(event)
-                self.assertNotIn(boundary, view.cuts())
-        view.set_cuts({1, 3})
-        self.assertEqual(self.app.options["split_starts"].get(), "2,4")
-        self.assertEqual(self.app.options["split_count"].get(), "3")
+                self.assertNotIn(boundary, view.model.cuts())
+        view.model.set_cuts({1, 3})
+        self.assertEqual(len(view.model.segments()), 3)
         from offline_pdf.engine import execute
 
         before = Path(self.files[0]).read_bytes()
         folder = execute(
             {
-                "tool": "split",
+                "tool": "extract",
                 "files": self.app.active_job_files(),
                 "output": self.temp.name,
-                "options": {key: value.get() for key, value in self.app.options.items()},
+                "options": {"page_plan": view.model.plan(), "page_cuts": sorted(view.model.cuts())},
             }
         )
         counts = []
@@ -259,7 +375,7 @@ class CompactOptionsTests(unittest.TestCase):
         self.app.file_list.selection_set(1)
         self.app.file_selected()
         self.pump()
-        self.assertEqual(view.cuts(), set())
+        self.assertEqual(view.model.cuts(), set())
 
     def test_split_grid_can_scroll_to_last_page_without_rendering_all_at_once(self):
         source = Path(self.temp.name) / "many-pages.pdf"
@@ -355,30 +471,21 @@ class CompactOptionsTests(unittest.TestCase):
         self.app.draw_start(start)
         self.app.draw_move(end)
         self.app.draw_end(end)
-        self.assertGreater(self.app.preview_zoom, 1)
+        self.assertEqual(self.app.preview_mode, "custom")
         self.assertEqual(self.app.regions, {})
         self.assertIsNone(self.app._zoom_drag)
-        for tool in ("split", "extract"):
-            self.app.select_tool(tool)
-            self.pump()
-            view = self.app.active_thumbnail_view()
-            plan = view.model.plan()
-            width = view.tile_width.get()
-            view.press(start)
-            view.motion(end)
-            view.release(end)
-            self.assertGreater(view.tile_width.get(), width)
-            self.assertEqual(view.model.plan(), plan)
-            if tool == "split":
-                self.assertEqual(view.cuts(), set())
-            else:
-                selected = set(view.model.selected)
-                click = SimpleNamespace(x=100, y=100, state=4)
-                index = view.hit(click.x, click.y)
-                uid = view.model.items[index][0]
-                view.press(click)
-                view.release(click)
-                self.assertEqual(view.model.selected, selected ^ {uid})
+        self.app.select_tool("extract")
+        self.pump()
+        view = self.app.active_thumbnail_view()
+        width = view.tile_width.get()
+        self.app.zoom_preview(0.25)
+        self.assertEqual(view.tile_width.get(), width)
+        click = SimpleNamespace(x=100, y=100, state=4)
+        selected = set(view.model.selected)
+        uid = view.model.items[view.hit(click.x, click.y)][0]
+        view.press(click)
+        view.release(click)
+        self.assertEqual(view.model.selected, selected ^ {uid})
 
     def test_crop_input_padding_focuses_and_edits_page_and_margin_fields(self):
         self.app.select_tool("crop")
@@ -465,29 +572,15 @@ class CompactOptionsTests(unittest.TestCase):
         self.app.options["opacity"].set("0")
         self.assertEqual(opacity.percent.get(), 0)
 
-    def test_split_cut_updates_count_scope_and_ignores_last_page(self):
+    def test_split_entry_opens_unified_workspace_and_saves_selected_file(self):
         self.app.select_tool("split")
+        self.assertEqual(self.app.tool, "extract")
         self.assertEqual(self.app.active_job_files(), [self.files[0]])
-        self.assertIn("선택 파일", self.app.run_button.source_text)
-        self.app.page_index = 1
-        self.app.add_split_cut()
-        self.assertEqual(self.app.options["split_starts"].get(), "3")
-        self.assertEqual(self.app.options["split_count"].get(), "2")
-        self.assertEqual(self.app.active_job_files(), [self.files[0]])
-        self.assertIn("선택 파일", self.app.run_button.source_text)
-        self.app.page_index = 1
-        self.app.add_split_cut()
-        self.assertEqual(self.app.options["split_starts"].get(), "3")
-        self.app.page_index = 3
-        self.app.add_split_cut()
-        self.assertEqual(self.app.options["split_starts"].get(), "3,5")
-        self.assertEqual(self.app.options["split_count"].get(), "3")
-        self.app.page_index = 4
-        self.app.add_split_cut()
-        self.assertEqual(self.app.options["split_starts"].get(), "3,5")
-        self.app.options["split_mode"].set("페이지별로 나누기")
-        self.assertEqual(self.app.active_job_files(), self.files)
-        self.assertIn("전체 3개", self.app.run_button.source_text)
+        self.assertNotIn("split", self.app.cards)
+        self.app.organizer.model.set_cuts({2, 4})
+        self.app.organizer.draw()
+        self.assertIn("PDF 3개로 나눠 저장", self.app.run_button.source_text)
+        self.assertEqual([len(group) for group in self.app.organizer.model.segments()], [2, 2, 1])
 
     def test_drag_reorders_files_preserves_selection_and_blocks_busy(self):
         self.app.select_tool("merge")

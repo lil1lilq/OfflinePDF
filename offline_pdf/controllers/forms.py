@@ -349,6 +349,8 @@ class FormController:
             return 0
 
     def configure_form(self):
+        if self.tool == "split":
+            self.tool = "extract"
         for w in self.form.winfo_children():
             w.destroy()
         self.options = {}
@@ -371,7 +373,7 @@ class FormController:
             self.organizer.header.pack_forget()
             self.tool_settings.pack(fill="x")
         if self.tool == "redact":
-            self.preview_region_row.pack(side="right", padx=(12, 0), before=self.preview_nav)
+            self.preview_region_row.pack(side="right", padx=(12, 0), before=self.task_icon)
         else:
             self.preview_region_row.pack_forget()
         self.output_name.set("합친문서.pdf" if self.tool == "merge" else "이미지문서.pdf")
@@ -519,7 +521,10 @@ class FormController:
             )
             self.security.pack(anchor="w", pady=(4, 0))
         self.update_region_status()
-        self.show_document_view(restore=False)
+        if self.tool == "extract":
+            self.show_document_view(restore=False)
+        else:
+            self.show_preview()
         if self.tool == "extract":
             self.refresh_organizer()
         elif self.tool == "redact":

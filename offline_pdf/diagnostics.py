@@ -55,7 +55,7 @@ def verify_ui_navigation(app, source):
     app.add_paths([str(source)])
     window.update()
     assert app.preview_panel.winfo_ismapped(), "Document preview must be visible initially"
-    assert app.preview_mode == "page", "Initial preview must show the whole page"
+    assert app.preview_mode == "width", "Initial preview must fit the page width"
     app.go_back()
     window.update()
     assert app.screen == "home", "Back must return directly to the tool list"

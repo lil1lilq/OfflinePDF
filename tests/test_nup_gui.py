@@ -71,7 +71,7 @@ class NupGuiTests(unittest.TestCase):
         self.assertEqual(self.app.page_label.cget("text"), "2 / 3쪽")
         self.app.turn(100)
         self.assertEqual(self.app.page_label.cget("text"), "3 / 3쪽")
-        self.app.show_document_view()
+        self.app.show_preview()
         self.app.options["nup_count"].set("3")
         self.app.options["nup_orientation"].set("가로")
         self.app.refresh_preview(reset=True)

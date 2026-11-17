@@ -165,12 +165,15 @@ class FileController:
     def update_file_summary(self):
         for control in self.preview_controls:
             control.configure(state="normal" if self.selected_file() else "disabled")
+        self.update_preview_controls()
         self.file_count.config(text=f"작업 파일  {len(self.files)}개")
         self.summary.set(
             f"파일 {len(self.files)}개 선택됨" if self.files else "파일을 추가해 주세요."
         )
         if self.tool == "extract" and self.organizer.model:
-            self.summary.set(f"{len(self.organizer.model.items)}페이지를 저장합니다")
+            groups = self.organizer.model.segment_sizes()
+            detail = " · ".join(f"파일 {i + 1}: {group}쪽" for i, group in enumerate(groups[:6]))
+            self.summary.set(detail + (f" · 외 {len(groups) - 6}개" if len(groups) > 6 else ""))
         single = self.tool == "extract" or (
             self.tool == "split" and self.options["split_mode"].get() == "N개 파일로 나누기"
         )
@@ -184,7 +187,8 @@ class FileController:
                 "암호 제거" if self.options["password_mode"].get() == "암호 제거" else "암호 설정"
             )
         elif self.tool == "extract":
-            action = "정리한 PDF 저장"
+            count = len(self.organizer.model.cuts()) + 1 if self.organizer.model else 1
+            action = f"PDF {count}개로 나눠 저장" if count > 1 else "PDF 저장"
         elif self.tool == "redact":
             action = "선택 영역 영구 삭제"
         scope = "선택 파일" if single else f"전체 {len(active)}개"

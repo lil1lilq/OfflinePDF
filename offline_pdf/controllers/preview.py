@@ -36,118 +36,138 @@ class PreviewController:
             self.root.update_idletasks()
         return True
 
-    def show_preview(self):
-        if self.tool == "split":
-            self.show_document_view(restore=False)
+    def update_preview_controls(self):
+        grid = self.active_thumbnail_view()
+        self.view_choice.set("전체 페이지 보기" if grid else "페이지별 보기")
+        for widget in (self.single_page_controls, self.preview_nav):
+            if grid:
+                widget.pack_forget()
+            elif not widget.winfo_manager():
+                widget.pack(side="right" if widget is self.preview_nav else "left", padx=4)
+        for control in self.preview_controls:
+            control.configure(
+                state="normal" if self.selected_file() and not self.busy() else "disabled"
+            )
+
+    def change_page_view(self, event=None):
+        if self.busy():
+            self.update_preview_controls()
             return
+        if self.view_choice.get() == "전체 페이지 보기":
+            self.show_document_view()
+        else:
+            self.show_preview()
+
+    def undo_page_edit(self, event=None):
+        focus = self.root.focus_get()
+        if focus is not None and focus.winfo_class() in ("Entry", "TEntry", "Text"):
+            return None
+        if self.tool == "extract":
+            self.organizer.undo()
+            return "break"
+
+    def show_preview(self):
+        grid = self.active_thumbnail_view()
+        if grid:
+            self._overview_y = grid.canvas.yview()[0]
+            self._overview_path = grid.path
+            if grid is self.organizer and grid.model:
+                item = next(
+                    (p for p in grid.model.items if p[0] in grid.model.selected),
+                    grid.model.items[0],
+                )
+                self.organizer_preview_uid = item[0]
+        self.organizer.pack_forget()
+        self.overview.pack_forget()
         self.split_view.pack_forget()
         self.show_preview_toolbar()
-        # General tools open directly on the document with settings visible.
-        focused = self.tool == "extract"
-        if focused and self.screen != "preview":
-            self.preview_origin = self.capture_preview_origin()
-        self.organizer.pack_forget()
-        if focused or self.settings_panel_needed():
+        if self.tool == "extract" or self.settings_panel_needed():
             self.columns.pack(fill="x", before=self.document_host)
         else:
             self.columns.pack_forget()
         self.preview_panel.pack(fill="both", expand=True, pady=(8, 0))
+        self.preview_mode = "width"
+        self.preview_zoom = 1.0
+        self.canvas.xview_moveto(0)
+        self.canvas.yview_moveto(0)
+        self.screen = "preview" if self.tool == "extract" else "work"
+        self.update_preview_controls()
         self.schedule_preview()
-        if self.work.winfo_manager():
-            self.screen = "preview" if focused else "work"
         self.update_back_state()
 
     def show_document_view(self, restore=True):
         self.show_preview_toolbar()
-        self.split_view.pack_forget()
-        if self.tool == "split":
-            self.preview_panel.pack_forget()
-            self.organizer.pack_forget()
-            self.columns.pack(fill="x", before=self.document_host)
-            self.split_view.pack(fill="both", expand=True)
-            self.screen = "work"
-            self.schedule_preview()
-            self.update_back_state()
-            return
-        # General tools have a single document view; only the organizer has a
-        # separate thumbnail editing view to return to.
-        if self.tool != "extract":
-            self.preview_origin = None
-            self.show_preview()
-            return
-        origin = self.preview_origin if restore else None
-        self.preview_origin = None
-        if origin:
-            self.file_list.selection_clear(0, "end")
-            for i, path in enumerate(self.files):
-                if path in origin["selected_paths"]:
-                    self.file_list.selection_set(i)
-            if self.files and not self.file_list.curselection():
-                self.file_list.selection_set(0)
-            self.page_index = origin["page"]
-            self.organizer_preview_uid = origin["organizer_uid"]
-            self.file_list.yview_moveto(origin["file_y"])
-            if self.tool == "extract" and origin["organizer_path"]:
-                self.organizer.load(
-                    self.selected_file(), cached_password(self, self.selected_file())
-                )
-                if (
-                    self.organizer.path == origin["organizer_path"]
-                    and self.organizer.fingerprint == origin["organizer_fingerprint"]
-                ):
-                    self.organizer.model = origin["organizer_model"]
         self.preview_panel.pack_forget()
         self.organizer.pack_forget()
-        self.columns.pack(fill="x", before=self.document_host)
-        self.organizer.pack(fill="both", expand=True)
-        if self.work.winfo_manager():
-            self.screen = "work"
-        if origin:
-            self.root.after_idle(lambda: self.organizer.scroll_to("moveto", origin["organizer_y"]))
-            self.schedule_preview()
+        self.overview.pack_forget()
+        self.split_view.pack_forget()
+        if self.tool == "extract" or self.settings_panel_needed():
+            self.columns.pack(fill="x", before=self.document_host)
+        else:
+            self.columns.pack_forget()
+        grid = self.organizer if self.tool == "extract" else self.overview
+        try:
+            grid.load(self.selected_file(), cached_password(self, self.selected_file()))
+        except (UserError, OverlayError) as exc:
+            self.status.set(str(exc))
+        if grid is self.overview and grid.model and self.page_index < len(grid.model.items):
+            grid.model.selected = {grid.model.items[self.page_index][0]}
+        grid.pack(fill="both", expand=True)
+        grid.draw()
+        if restore and grid.path == getattr(self, "_overview_path", None):
+            self.root.after_idle(lambda: grid.scroll_to("moveto", getattr(self, "_overview_y", 0)))
+        self.screen = "work"
+        self.update_preview_controls()
         self.update_back_state()
 
     def set_preview_mode(self, mode):
-        if not self.ensure_preview_visible():
-            return
-        grid = self.active_thumbnail_view()
-        if grid:
-            grid.tile_width.set(max(160, grid.canvas.winfo_width()) if mode == "width" else 220)
-            grid.draw()
+        if self.active_thumbnail_view() or not self.ensure_preview_visible():
             return
         self.preview_mode = mode
         self.preview_zoom = 1.0
         self.canvas.xview_moveto(0)
+        self.canvas.yview_moveto(0)
         self.refresh_preview()
 
+    def set_preview_percent(self, event=None):
+        if self.active_thumbnail_view():
+            return "break"
+        try:
+            value = float(self.zoom_value.get().strip().rstrip("%")) / 100
+            if abs(value - self.preview_scale) < 0.0051:
+                return "break"
+            if not math.isfinite(value) or not 0.1 <= value <= 5:
+                raise ValueError()
+        except ValueError:
+            self.zoom_value.set(f"{round(self.preview_scale * 100)}%")
+            return "break"
+        self.preview_mode = "custom"
+        self.preview_zoom = value
+        self.refresh_preview()
+        return "break"
+
     def zoom_preview(self, delta):
-        if not self.ensure_preview_visible():
+        if self.active_thumbnail_view() or not self.ensure_preview_visible():
             return
-        grid = self.active_thumbnail_view()
-        if grid:
-            grid.tile_width.set(max(160, min(640, grid.tile_width.get() + round(delta * 220))))
-            grid.draw()
-            return
-        self.preview_zoom = max(0.25, min(3.0, self.preview_zoom + delta))
+        self.preview_zoom = max(0.1, min(5.0, self.preview_scale + delta))
+        self.preview_mode = "custom"
         self.refresh_preview()
 
     def active_thumbnail_view(self):
-        view = (
-            self.split_view
-            if self.tool == "split"
-            else self.organizer
-            if self.tool == "extract"
-            else None
-        )
-        return view if view and view.winfo_manager() else None
+        for view in (self.organizer, self.overview):
+            if view.winfo_manager():
+                return view
+        return None
 
     def start_zoom_drag(self, event, grid=None):
+        if grid is not None or self.active_thumbnail_view():
+            return False
         if not getattr(event, "state", 0) & 4:
             self._zoom_drag = None
             return False
         if self.busy() or not self.selected_file():
             return True
-        value = grid.tile_width.get() if grid else self.preview_zoom
+        value = self.preview_scale
         self._zoom_drag = (event.y, value, grid, getattr(event, "x", 0))
         self._zoom_moved = False
         (grid.canvas if grid else self.canvas).configure(cursor="sb_v_double_arrow")
@@ -165,7 +185,8 @@ class PreviewController:
         if grid:
             grid.tile_width.set(round(max(160, min(640, initial * factor))))
         else:
-            self.preview_zoom = max(0.25, min(3.0, initial * factor))
+            self.preview_mode = "custom"
+            self.preview_zoom = max(0.1, min(5.0, initial * factor))
         if not getattr(self, "_zoom_timer", None):
             self._zoom_timer = self.root.after(33, self.render_drag_zoom)
         return True
@@ -288,9 +309,14 @@ class PreviewController:
             self.page_index = 0
             self.canvas.yview_moveto(0)
         path = self.selected_file()
-        if self.tool == "split":
-            self.split_view.load(path, cached_password(self, path))
-            self.split_view.draw()
+        grid = self.active_thumbnail_view()
+        if grid:
+            try:
+                grid.load(path, cached_password(self, path))
+            except (UserError, OverlayError) as exc:
+                self.status.set(str(exc))
+            grid.cache.clear()
+            grid.draw()
             return
         if not path:
             self.canvas.config(scrollregion=(0, 0, max(300, self.canvas.winfo_width()), 280))
@@ -357,10 +383,15 @@ class PreviewController:
                 )
                 w = max(self.canvas.winfo_width() - 24, 150)
                 h = max(100, self.canvas.winfo_height() - 24)
-                fit = min(w / rw, h / rh) if self.preview_mode == "page" else w / rw
-                self.preview_scale = min(
-                    fit * self.preview_zoom, math.sqrt(16_000_000 / (rw * rh)), 20_000 / rh
+                fit = (
+                    min(w / rw, h / rh)
+                    if self.preview_mode == "page"
+                    else h / rh
+                    if self.preview_mode == "height"
+                    else w / rw
                 )
+                requested = self.preview_zoom if self.preview_mode == "custom" else fit
+                self.preview_scale = min(requested, math.sqrt(16_000_000 / (rw * rh)), 20_000 / rh)
                 pix = page.get_pixmap(
                     matrix=pdf.Matrix(self.preview_scale, self.preview_scale).prerotate(angle),
                     alpha=False,
@@ -391,7 +422,7 @@ class PreviewController:
                         dash=(4, 3),
                         tags="crop_boundary",
                     )
-                self.zoom_label.config(text=f"{round(self.preview_zoom * 100)}%")
+                self.zoom_value.set(f"{round(self.preview_scale * 100)}%")
                 self.page_label.config(text=f"{self.page_index + 1} / {preview_total}쪽")
                 if self.tool == "extract" and self.organizer.model:
                     position = next(
@@ -403,7 +434,7 @@ class PreviewController:
                         0,
                     )
                     self.page_label.config(
-                        text=f"원본 {self.page_index + 1}쪽 · 정리 후 {position + 1}/{len(self.organizer.model.items)}"
+                        text=f"{position + 1} / {len(self.organizer.model.items)}쪽"
                     )
                 if self.stamp_mode():
                     self.preview_stamp(page, doc.page_count)
@@ -441,6 +472,8 @@ class PreviewController:
         return "break"
 
     def turn(self, delta):
+        if self.active_thumbnail_view():
+            return
         if not self.ensure_preview_visible():
             return
         if self.tool == "extract" and self.organizer.model:
@@ -450,16 +483,6 @@ class PreviewController:
             self.refresh_preview()
             return
         self.page_index = max(0, self.page_index + delta)
-        if self.tool == "split" and self.split_view.model:
-            view = self.split_view
-            self.page_index = min(self.page_index, len(view.model.items) - 1)
-            view.model.selected = {view.model.items[self.page_index][0]}
-            row = self.page_index // view.columns
-            view.canvas.yview_moveto(
-                row * view.cellh / max(1, float(view.canvas.cget("scrollregion").split()[-1]))
-            )
-            view.draw()
-            return
         self.refresh_preview()
 
     def draw_start(self, event):

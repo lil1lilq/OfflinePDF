@@ -129,7 +129,7 @@ class App(
         if self.card_resize_timer:
             self.root.after_cancel(self.card_resize_timer)
         self.organizer.close_document()
-        self.split_view.close_document()
+        self.overview.close_document()
         if self.preview_timer:
             try:
                 self.root.after_cancel(self.preview_timer)

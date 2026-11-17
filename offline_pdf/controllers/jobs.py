@@ -76,6 +76,21 @@ class JobController:
         if not Path(self.output.get()).is_dir():
             messagebox.showinfo("저장 폴더", "결과를 저장할 폴더를 선택하세요.", parent=self.root)
             return
+        if self.tool == "extract" and not preview:
+            groups = self.organizer.model.segment_sizes()
+            detail = " · ".join(f"파일 {i + 1}: {group}쪽" for i, group in enumerate(groups[:12]))
+            if len(groups) > 12:
+                detail += f" · 외 {len(groups) - 12}개"
+            naming = (
+                "001_원본이름_part_001.pdf, …" if len(groups) > 1 else "001_원본이름_extract.pdf"
+            )
+            if not messagebox.askokcancel(
+                "페이지 정리·분할 저장",
+                f"PDF {len(groups)}개를 저장합니다.\n{detail}\n\n저장 위치: {self.output.get()}"
+                f"\n새 PDF결과 폴더에 저장됩니다.\n파일명: {naming}\n원본 파일은 유지됩니다.",
+                parent=self.root,
+            ):
+                return
         if actual_tool in ("redact", "unlock", "pdf_images", "text", "crop"):
             notes = {
                 "redact": "지정 영역을 실제 삭제하며 문서의 첨부파일·양식 필드·주석·링크·속성도 정리합니다. 잘린 페이지는 지원하지 않습니다. 지정 영역 밖의 정보는 남으므로 결과를 확인하세요.",
@@ -151,6 +166,7 @@ class JobController:
                 }
         if self.tool == "extract":
             job["options"]["page_plan"] = self.organizer.model.plan()
+            job["options"]["page_cuts"] = sorted(self.organizer.model.cuts())
         if self.tool == "redact":
             job["options"]["regions"] = self.regions.get(self.files[0], {})
         if self.tool == "ocr":

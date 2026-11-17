@@ -13,7 +13,7 @@ import customtkinter as ctk
 import pymupdf as pdf
 
 from offline_pdf.app import TOOLS, App
-from offline_pdf.ui import CARD_MAX_HEIGHT, CARD_MIN_HEIGHT
+from offline_pdf.ui import CARD_MAX_HEIGHT, CARD_MIN_HEIGHT, CARD_TEXT
 
 
 class CardLayoutTests(unittest.TestCase):
@@ -27,7 +27,7 @@ class CardLayoutTests(unittest.TestCase):
             card_columns=0,
             home=SimpleNamespace(canvas=Mock()),
             cards_frame=Mock(),
-            cards={key: Mock() for key in TOOLS},
+            cards={key: Mock() for key in CARD_TEXT},
         )
         state.home.canvas.winfo_height.return_value = 800
         first = next(iter(state.cards.values()))
@@ -36,7 +36,7 @@ class CardLayoutTests(unittest.TestCase):
         App.arrange_cards(state, 900, force=True)
 
         self.assertEqual(first.set_compact.call_count, 1)
-        self.assertEqual(sum(card.grid.call_count for card in state.cards.values()), 16)
+        self.assertEqual(sum(card.grid.call_count for card in state.cards.values()), 15)
 
     def test_compression_fields_do_not_overlap_when_target_mode_is_shown(self):
         from offline_pdf.controllers.forms import FormController
@@ -72,7 +72,7 @@ class CardLayoutTests(unittest.TestCase):
             card_columns=0,
             home=SimpleNamespace(canvas=Mock()),
             cards_frame=Mock(),
-            cards={key: Mock() for key in TOOLS},
+            cards={key: Mock() for key in CARD_TEXT},
         )
         state.home.canvas.winfo_height.return_value = 800
         App.arrange_cards(state, 620, force=True)
@@ -80,7 +80,7 @@ class CardLayoutTests(unittest.TestCase):
         App.arrange_cards(state, 1660, force=True)
         large_columns = state.card_columns
         self.assertGreater(large_columns, small_columns)
-        self.assertEqual(len(state.cards), 16)
+        self.assertEqual(len(state.cards), 15)
         for card in state.cards.values():
             self.assertEqual(card.grid.call_count, 2)
             compact, height = card.set_compact.call_args.args
@@ -96,6 +96,10 @@ class AppTests(unittest.TestCase):
             cls.root = ctk.CTk()
         except tk.TclError:
             raise unittest.SkipTest("GUI requires an available Windows desktop or X display.")
+        cls.confirm = patch(
+            "offline_pdf.controllers.jobs.messagebox.askokcancel", return_value=True
+        )
+        cls.confirm.start()
         cls.app = App(cls.root)
         cls.app.auto_open.set(False)
         cls.root.update()
@@ -111,6 +115,7 @@ class AppTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.app.close()
+        cls.confirm.stop()
         cls.temp.cleanup()
 
     def test_a_all_tool_forms_open(self):
@@ -119,7 +124,9 @@ class AppTests(unittest.TestCase):
             self.app.configure_form()
             self.root.update()
             self.assertNotIn("input_password", self.app.options)
-            self.assertEqual(self.app.title.cget("text"), TOOLS[tool][0])
+            self.assertEqual(
+                self.app.title.cget("text"), TOOLS["extract" if tool == "split" else tool][0]
+            )
 
     def test_b_preview_and_page_navigation(self):
         self.app.tool = "pdf_images"
@@ -205,9 +212,9 @@ class AppTests(unittest.TestCase):
         self.app.show_home()
         self.root.update()
         self.assertTrue(self.app.home.winfo_ismapped())
-        self.assertEqual(sum(card.winfo_ismapped() for card in self.app.cards.values()), 16)
+        self.assertEqual(sum(card.winfo_ismapped() for card in self.app.cards.values()), 15)
         self.root.update()
-        self.assertEqual(sum(card.winfo_ismapped() for card in self.app.cards.values()), 16)
+        self.assertEqual(sum(card.winfo_ismapped() for card in self.app.cards.values()), 15)
         sizes = {(card.winfo_width(), card.winfo_height()) for card in self.app.cards.values()}
         # One-pixel rounding across equal grid columns is normal.
         self.assertLessEqual(max(w for w, h in sizes) - min(w for w, h in sizes), 1)
@@ -231,7 +238,7 @@ class AppTests(unittest.TestCase):
         self.root.update()
         self.assertTrue(self.app.home.winfo_ismapped())
         self.root.update()
-        self.assertEqual(sum(card.winfo_ismapped() for card in self.app.cards.values()), 16)
+        self.assertEqual(sum(card.winfo_ismapped() for card in self.app.cards.values()), 15)
 
     def test_i2_card_opens_only_on_its_own_click_and_clears_hover(self):
         self.app.show_home()
@@ -333,7 +340,7 @@ class AppTests(unittest.TestCase):
             actual = (self.root.winfo_width(), self.root.winfo_height())
             with self.subTest(requested=(width, height), actual=actual):
                 layouts.append((self.app.cards_frame.winfo_width(), self.app.card_columns))
-                self.assertEqual(len(self.app.cards_frame.grid_slaves()), 16)
+                self.assertEqual(len(self.app.cards_frame.grid_slaves()), 15)
                 self.assertGreaterEqual(self.app.home.inner.winfo_height(), 158)
                 for card in self.app.cards.values():
                     self.assertLessEqual(
@@ -352,7 +359,7 @@ class AppTests(unittest.TestCase):
         self.app.select_tool("merge")
         self.root.update()
         self.assertTrue(self.app.preview_panel.winfo_ismapped())
-        self.assertEqual(self.app.preview_mode, "page")
+        self.assertEqual(self.app.preview_mode, "width")
         self.assertFalse(hasattr(self.app, "preview_button"))
         self.app.select_tool("redact")
         self.root.update()
@@ -362,7 +369,7 @@ class AppTests(unittest.TestCase):
         self.assertTrue(self.app.clear_preview_regions.winfo_ismapped())
         zoom_buttons = [
             child
-            for child in self.app.preview_zoom_row.winfo_children()
+            for child in self.app.single_page_controls.winfo_children()
             if isinstance(child, ctk.CTkButton)
         ]
         labels = [child.cget("text") for child in zoom_buttons]
@@ -496,7 +503,7 @@ class AppTests(unittest.TestCase):
             self.app.continue_with_result()
             self.root.update()
             self.assertEqual(
-                {key for key, card in self.app.cards.items() if card.enabled}, set(TOOLS)
+                {key for key, card in self.app.cards.items() if card.enabled}, set(CARD_TEXT)
             )
             self.assertTrue(self.app.show_all_tools)
             self.app.cards["images_pdf"].activate()
@@ -770,11 +777,11 @@ class AppTests(unittest.TestCase):
         self.app.status.set("0개 추가 · 전체 1개")
         self.assertEqual(self.app.feedback.serial, serial + 2)
         self.app.select_tool("split")
-        self.app.options["split_mode"].set("N개 파일로 나누기")
-        self.app.options["split_count"].set("3")
-        self.app.options["split_starts"].set("5,8")
-        self.assertIn("1–4쪽", self.app.split_summary.cget("text"))
-        self.assertIn("8–10쪽", self.app.split_summary.cget("text"))
+        self.app.organizer.model.set_cuts({4, 7})
+        self.app.organizer.draw()
+        self.assertEqual([len(group) for group in self.app.organizer.model.segments()], [4, 3, 3])
+        self.assertIn("PDF 3개로 나눠 저장", self.app.run_button.source_text)
+
         self.app.save_mode.set("지정한 폴더")
         self.app.output.set(str(self.folder))
         self.app.auto_open.set(False)
@@ -936,7 +943,7 @@ class AppTests(unittest.TestCase):
         self.assertIsNotNone(self.app.preview_rect)
         for extension in EXPORT_FORMATS:
             self.assertEqual(
-                self.app.result_input_tools([Path("result." + extension.lower())]), set(TOOLS)
+                self.app.result_input_tools([Path("result." + extension.lower())]), set(CARD_TEXT)
             )
 
     def test_zb_file_password_cache_retry_removal_and_batch(self):
@@ -1303,7 +1310,7 @@ class AppTests(unittest.TestCase):
         self.app.add_paths([str(self.source)])
         self.app.save_mode.set("지정한 폴더")
         self.app.output.set(str(self.folder))
-        self.assertEqual(len(self.app.cards), 16)
+        self.assertEqual(len(self.app.cards), 15)
         for removed in ("delete", "rotate", "unlock", "stamp"):
             self.assertNotIn(removed, self.app.cards)
         with patch("tkinter.messagebox.showerror", side_effect=AssertionError("Worker failed")):

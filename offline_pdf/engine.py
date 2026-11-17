@@ -423,19 +423,38 @@ def _process(job, paths, stage, emit, cancel):
                             or entry["rotation"] not in (0, 90, 180, 270)
                         ):
                             raise UserError("페이지 순서나 회전 값이 올바르지 않습니다.")
-                    with pdf.open() as dst:
-                        for i, entry in enumerate(plan):
-                            _tick(emit, cancel, i, len(plan), f"{i + 1}/{len(plan)} 페이지 정리")
-                            dst.insert_pdf(doc, from_page=entry["page"], to_page=entry["page"])
-                            page = dst[-1]
-                            page.set_rotation((page.rotation + entry["rotation"]) % 360)
-                        metadata = {
-                            key: value
-                            for key, value in (doc.metadata or {}).items()
-                            if key not in ("format", "encryption")
-                        }
-                        dst.set_metadata(metadata)
-                        save_pdf(dst, target, store_password)
+                    cuts = opt.get("page_cuts", [])
+                    if (
+                        not isinstance(cuts, list)
+                        or any(type(n) is not int or not 0 < n < len(plan) for n in cuts)
+                        or cuts != sorted(set(cuts))
+                    ):
+                        raise UserError("분할 위치를 확인하세요.")
+                    boundaries = [0, *cuts, len(plan)]
+                    for segment, (first, last) in enumerate(zip(boundaries, boundaries[1:])):
+                        with pdf.open() as dst:
+                            for i in range(first, last):
+                                entry = plan[i]
+                                _tick(
+                                    emit,
+                                    cancel,
+                                    i,
+                                    len(plan),
+                                    f"{i + 1}/{len(plan)} 페이지 정리·분할",
+                                )
+                                dst.insert_pdf(doc, from_page=entry["page"], to_page=entry["page"])
+                                page = dst[-1]
+                                page.set_rotation((page.rotation + entry["rotation"]) % 360)
+                            metadata = {
+                                key: value
+                                for key, value in (doc.metadata or {}).items()
+                                if key not in ("format", "encryption")
+                            }
+                            dst.set_metadata(metadata)
+                            output = (
+                                stage / f"{prefix}_part_{segment + 1:03d}.pdf" if cuts else target
+                            )
+                            save_pdf(dst, output, store_password)
                     continue
                 chosen = (
                     selected
