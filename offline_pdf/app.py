@@ -6,6 +6,7 @@ import tkinter as tk
 
 import customtkinter as ctk
 
+from .controllers.crop import CropController
 from .controllers.files import FileController
 from .controllers.forms import FormController
 from .controllers.jobs import JobController
@@ -22,6 +23,7 @@ avoid_native_titlebar_updates()  # Called before either application or test crea
 
 
 class App(
+    CropController,
     StampController,
     NavigationController,
     FileController,

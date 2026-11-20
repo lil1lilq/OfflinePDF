@@ -505,7 +505,7 @@ def build(app):
     app.preview_hscroll = ttk.Scrollbar(preview, orient="horizontal", command=app.canvas.xview)
     app.preview_hscroll.pack(fill="x", padx=8, pady=(0, 5))
     app.canvas.configure(xscrollcommand=app.preview_hscroll.set)
-    app.canvas.bind("<Motion>", app.stamp_hover)
+    app.canvas.bind("<Motion>", app.preview_hover)
     app.canvas.bind("<Leave>", lambda e: app.canvas.config(cursor=""))
     app.canvas.bind("<ButtonPress-1>", app.draw_start)
     app.canvas.bind("<B1-Motion>", app.draw_move)

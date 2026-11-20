@@ -106,11 +106,9 @@ def number(value, low, high, label, integer=False):
 
 
 def crop_page_rect(page, options):
-    margin = number(options.get("margin", "10"), 0, 100, "여백 자르기") * 72 / 25.4
-    rect = page.cropbox + (margin, margin, -margin, -margin)
-    if rect.is_empty:
-        raise UserError("자를 여백이 페이지보다 큽니다.")
-    return rect
+    from .crop import cropbox_rect
+
+    return cropbox_rect(page, options)
 
 
 def split_ranges(total, count, boundaries):
@@ -375,13 +373,20 @@ def _process(job, paths, stage, emit, cancel):
         try:
             prefix = f"{file_index + 1:03d}_{safe_stem(path)}"
             target = stage / (prefix + "_" + tool + ".pdf")
-            selected = (
-                list(range(doc.page_count))
-                if tool == "split" and opt.get("split_mode") == "N개 파일로 나누기"
-                else pages(
-                    opt.get("pages", ""), doc.page_count, duplicates=(tool in ("extract", "nup"))
+            if tool == "crop":
+                from .crop import crop_pages
+
+                selected = crop_pages(opt, doc.page_count)
+            else:
+                selected = (
+                    list(range(doc.page_count))
+                    if tool == "split" and opt.get("split_mode") == "N개 파일로 나누기"
+                    else pages(
+                        opt.get("pages", ""),
+                        doc.page_count,
+                        duplicates=(tool in ("extract", "nup")),
+                    )
                 )
-            )
             store_password = output_password or (password if encrypted else "")
             if tool == "unlock":
                 # Only an opening password needs the owner password to remove;

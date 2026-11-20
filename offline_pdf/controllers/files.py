@@ -174,8 +174,10 @@ class FileController:
             groups = self.organizer.model.segment_sizes()
             detail = " · ".join(f"파일 {i + 1}: {group}쪽" for i, group in enumerate(groups[:6]))
             self.summary.set(detail + (f" · 외 {len(groups) - 6}개" if len(groups) > 6 else ""))
-        single = self.tool == "extract" or (
-            self.tool == "split" and self.options["split_mode"].get() == "N개 파일로 나누기"
+        single = (
+            self.tool == "extract"
+            or (self.tool == "split" and self.options["split_mode"].get() == "N개 파일로 나누기")
+            or (self.tool == "crop" and self.options["crop_scope"].get() != "전체 페이지")
         )
         if self.tool == "split" and single and self.selected_file():
             self.summary.set("왼쪽에서 선택한 PDF 한 개를 나눕니다.")

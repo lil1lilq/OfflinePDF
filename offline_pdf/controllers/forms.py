@@ -95,13 +95,8 @@ class FormController:
         if self.busy():
             return
         if self.save_mode.get() == "원본 파일과 같은 폴더" and self.files:
-            self.output.set(
-                str(
-                    Path(
-                        self.selected_file() if self.tool in ("extract", "split") else self.files[0]
-                    ).parent
-                )
-            )
+            active = self.active_job_files()
+            self.output.set(str(Path(active[0]).parent))
         elif self.save_mode.get() == "지정한 폴더":
             self.choose_output()
 
@@ -163,7 +158,11 @@ class FormController:
             widget = ttk.Entry(controls, textvariable=var, show="●" if secret else "")
             if key == "pages":
                 # CTk does not show a placeholder on a textvariable-backed entry.
-                cell.caption.configure(text="페이지 (공란=전체 · 예: 1-3,5)")
+                cell.caption.configure(
+                    text="페이지 (예: 1-3,5)"
+                    if self.tool == "crop"
+                    else "페이지 (공란=전체 · 예: 1-3,5)"
+                )
         # A small natural width lets the shared row shrink; the cell's weight
         # stretches the control to fill whatever room the row has.
         widget.configure(width=70)
@@ -220,6 +219,9 @@ class FormController:
                 or (key in ("split_count", "split_starts") and not n_split)
             ):
                 continue
+            if self.tool == "crop" and key == "pages":
+                if self.options["crop_scope"].get() != "지정 페이지":
+                    continue
             if self.tool == "protect" and key == "output_password":
                 if self.options["password_mode"].get() == "암호 제거":
                     continue
@@ -393,6 +395,7 @@ class FormController:
             "clean",
             "redact",
             "upscale",
+            "crop",
         ):
             self.field("페이지", "pages", "")
         if self.tool == "split":
@@ -491,9 +494,34 @@ class FormController:
             for key in ("pages", "start", "number_position", "number_font_size"):
                 self.options[key].trace_add("write", lambda *_: self.schedule_preview())
         if self.tool == "crop":
-            self.field("여백 mm", "margin", "10")
-            for key in ("pages", "margin"):
-                self.options[key].trace_add("write", lambda *_: self.schedule_preview())
+            for side, caption in (
+                ("left", "왼쪽 mm"),
+                ("top", "위쪽 mm"),
+                ("right", "오른쪽 mm"),
+                ("bottom", "아래쪽 mm"),
+            ):
+                self.field(caption, f"margin_{side}", "10")
+            self.field(
+                "적용 범위",
+                "crop_scope",
+                "전체 페이지",
+                ["현재 페이지", "지정 페이지", "전체 페이지"],
+            )
+            self.field("페이지 (예: 1-3,5)", "pages", "")
+            cell = ttk.Frame(self.form, style="Panel.TFrame")
+            self.form_cells.append(("crop_reset", cell))
+            ttk.Button(cell, text="여백 초기화", command=self.crop_reset).pack(
+                side="bottom", fill="x"
+            )
+            for key in (
+                "pages",
+                "crop_scope",
+                "margin_left",
+                "margin_top",
+                "margin_right",
+                "margin_bottom",
+            ):
+                self.options[key].trace_add("write", self.crop_options_changed)
         if self.tool == "ocr":
             # Korean and English language data ship with the program.
             self.field(
@@ -518,6 +546,11 @@ class FormController:
         if self.tool == "nup":
             self.security.config(
                 text="파일별 저장 · 원본의 흰 여백은 유지됩니다. 꽉 채우기는 가장자리를 가리며 영구 삭제하지 않습니다."
+            )
+            self.security.pack(anchor="w", pady=(4, 0))
+        if self.tool == "crop":
+            self.security.config(
+                text="핸들을 드래그해 여백을 조절하세요. 잘린 영역의 정보는 문서에 남습니다."
             )
             self.security.pack(anchor="w", pady=(4, 0))
         self.update_region_status()

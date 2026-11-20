@@ -12,11 +12,11 @@ import pymupdf as pdf
 
 from .. import ctk_widgets as ttk
 from .. import theme
-from ..engine import UserError, check_local_path, crop_page_rect, open_pdf, pages
+from ..engine import UserError, check_local_path, open_pdf, pages
 from ..images import open_image_document
 from ..overlays import OverlayError
 from ..passwords import cached_password
-from ..ui import BLUE, PANEL
+from ..ui import PANEL
 
 
 class PreviewController:
@@ -248,6 +248,9 @@ class PreviewController:
         self.preview_timer = None
         self.canvas.delete("all")
         self.preview_rect = None
+        self._crop_box = None
+        self._crop_drag = None
+        self._crop_handles = {}
         self._stamp_box = None
         self._stamp_drag = None
         self.canvas.config(cursor="")
@@ -312,12 +315,15 @@ class PreviewController:
                     chosen = pages(options.get("pages", ""), doc.page_count)
                     if self.page_index in chosen:
                         draw_number(page, chosen.index(self.page_index), options)
-                crop_margin = None
+                crop_rect = None
                 if self.tool == "crop":
                     options = {key: value.get() for key, value in self.options.items()}
-                    chosen = pages(options.get("pages", ""), doc.page_count)
+                    from ..crop import crop_pages, visible_crop_rect
+
+                    options["crop_page"] = self.page_index + 1
+                    chosen = crop_pages(options, doc.page_count)
                     if self.page_index in chosen:
-                        crop_margin = crop_page_rect(page, options).x0 - page.cropbox.x0
+                        crop_rect = visible_crop_rect(page, options)
                 rw, rh = (
                     (page.rect.height, page.rect.width)
                     if angle % 180
@@ -343,27 +349,9 @@ class PreviewController:
                 self.canvas.create_image(12, 12, anchor="nw", image=self.preview_photo)
                 self.preview_rect = (page.rect.width, page.rect.height)
                 self.canvas.configure(scrollregion=(0, 0, pix.width + 24, pix.height + 24))
-                if crop_margin is not None and crop_margin > 0:
-                    margin = crop_margin * self.preview_scale
-                    x, y, right, bottom = 12, 12, 12 + pix.width, 12 + pix.height
-                    for rect in (
-                        (x, y, right, y + margin),
-                        (x, bottom - margin, right, bottom),
-                        (x, y + margin, x + margin, bottom - margin),
-                        (right - margin, y + margin, right, bottom - margin),
-                    ):
-                        self.canvas.create_rectangle(
-                            *rect, fill="#374151", outline="", stipple="gray50", tags="crop_shade"
-                        )
-                    self.canvas.create_rectangle(
-                        x + margin,
-                        y + margin,
-                        right - margin,
-                        bottom - margin,
-                        outline=BLUE,
-                        dash=(4, 3),
-                        tags="crop_boundary",
-                    )
+                if crop_rect is not None:
+                    self._crop_box = tuple(crop_rect)
+                    self.draw_crop_overlay()
                 self.zoom_value.set(f"{round(self.preview_scale * 100)}%")
                 self.page_label.config(text=f"{self.page_index + 1} / {preview_total}쪽")
                 if self.tool == "extract" and self.organizer.model:
@@ -422,6 +410,7 @@ class PreviewController:
                 and self.preview_rect
                 and not self.drag_start
                 and not getattr(self, "_stamp_drag", None)
+                and not getattr(self, "_crop_drag", None)
             ):
                 self.zoom_preview(-step * 0.1)
             return "break"
@@ -445,6 +434,9 @@ class PreviewController:
     def draw_start(self, event):
         if self.busy() or getattr(event, "state", 0) & 4:
             return
+        if self.tool == "crop":
+            self.crop_drag_start(event)
+            return
         if self.stamp_mode():
             self.stamp_drag_start(event)
             return
@@ -467,6 +459,9 @@ class PreviewController:
         )
 
     def draw_move(self, event):
+        if self.tool == "crop":
+            self.crop_drag_move(event)
+            return
         if self.stamp_mode():
             self.stamp_drag_move(event)
             return
@@ -482,6 +477,9 @@ class PreviewController:
             )
 
     def draw_end(self, event):
+        if self.tool == "crop":
+            self.crop_drag_end(event)
+            return
         if self.stamp_mode():
             self.stamp_drag_end(event)
             return

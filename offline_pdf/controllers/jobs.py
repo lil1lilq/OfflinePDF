@@ -24,6 +24,7 @@ class JobController:
         single = (
             preview
             or self.tool == "extract"
+            or (self.tool == "crop" and self.options["crop_scope"].get() != "전체 페이지")
             or (self.tool == "split" and self.options["split_mode"].get() == "N개 파일로 나누기")
         )
         return [self.selected_file()] if single and self.files else list(self.files)
@@ -130,6 +131,8 @@ class JobController:
             "output": self.output.get(),
             "options": {k: v.get() for k, v in self.options.items() if k != "hint"},
         }
+        if self.tool == "crop":
+            job["options"]["crop_page"] = str(self.page_index + 1)
         job["options"]["remove_blank"] = self.blank_mode()
         job["passwords"] = {p: cached_password(self, p) for p in active_files}
         if actual_tool == "unlock":

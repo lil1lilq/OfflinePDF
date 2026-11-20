@@ -4,7 +4,7 @@ import math
 
 import pymupdf as pdf
 
-from .engine import crop_page_rect, pages
+from .engine import pages
 from .organizer import PageOrder, PageOrganizer
 
 
@@ -37,7 +37,13 @@ class ThumbnailOverview(PageOrganizer):
         try:
             temporary.insert_pdf(self.doc, from_page=n, to_page=n)
             page = temporary[0]
-            chosen = pages(options.get("pages", ""), self.doc.page_count)
+            if tool == "crop":
+                from .crop import crop_pages
+
+                options["crop_page"] = self.app.page_index + 1
+                chosen = crop_pages(options, self.doc.page_count)
+            else:
+                chosen = pages(options.get("pages", ""), self.doc.page_count)
             if n in chosen:
                 if tool == "number":
                     from .numbering import draw_number
@@ -49,9 +55,10 @@ class ThumbnailOverview(PageOrganizer):
                     if not self.app.stamp_mode() or options.get("stamp_path"):
                         prepare_overlay(options, image=bool(self.app.stamp_mode())).draw(page)
                 elif tool == "crop":
-                    margin = crop_page_rect(page, options).x0 - page.cropbox.x0
+                    from .crop import visible_crop_rect
+
                     bounds = page.rect
-                    rect = bounds + (margin, margin, -margin, -margin)
+                    rect = visible_crop_rect(page, options)
                     for edge in (
                         (0, 0, bounds.width, rect.y0),
                         (0, rect.y1, bounds.width, bounds.height),

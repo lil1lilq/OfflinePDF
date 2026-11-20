@@ -396,12 +396,85 @@ class CompactOptionsTests(unittest.TestCase):
         self.assertNotIn(100, view.separators)
         self.assertLessEqual(len(view.cache), 64)
 
+    def set_crop_margins(self, value):
+        for side in ("left", "top", "right", "bottom"):
+            self.app.options[f"margin_{side}"].set(value)
+
+    def test_crop_handles_update_only_overlays_and_keep_mm_values_in_save(self):
+        from offline_pdf.crop import MM
+        from offline_pdf.engine import execute
+
+        self.app.select_tool("crop")
+        self.app.options["margin_top"].set("10.1234")
+        self.pump()
+        self.app.set_preview_mode("height")
+        self.assertEqual(len(self.app.canvas.find_withtag("crop_handle")), 8)
+        x, y = self.app._crop_handles["w"]
+        event = SimpleNamespace(
+            x=x - self.app.canvas.canvasx(0), y=y - self.app.canvas.canvasy(0), state=0
+        )
+        self.app.preview_hover(event)
+        self.assertEqual(self.app.canvas.cget("cursor"), "hand2")
+        photo = self.app.preview_photo
+        scale = self.app.preview_scale
+        self.app.draw_start(event)
+        end = SimpleNamespace(x=event.x + 5 * MM * scale, y=event.y, state=0)
+        self.app.draw_move(end)
+        self.assertIs(self.app.preview_photo, photo)
+        self.assertAlmostEqual(
+            float(self.app.options["margin_left"].get()), 15, delta=0.011 + 1 / (MM * scale)
+        )
+        self.assertEqual(self.app.options["margin_top"].get(), "10.1234")
+        self.app.preview_wheel(SimpleNamespace(delta=120, state=4))
+        self.assertEqual(self.app.preview_scale, scale)
+        self.app.draw_end(end)
+        self.assertIsNone(self.app._crop_drag)
+        options = {key: value.get() for key, value in self.app.options.items()}
+        folder = execute(
+            {"tool": "crop", "files": [self.files[0]], "output": self.temp.name, "options": options}
+        )
+        with pdf.open(next(folder.glob("*.pdf"))) as doc:
+            self.assertAlmostEqual(doc[0].cropbox.x0, float(options["margin_left"]) * MM, places=3)
+        self.app.crop_reset()
+        self.assertTrue(
+            all(
+                self.app.options[f"margin_{side}"].get() == "0"
+                for side in ("left", "top", "right", "bottom")
+            )
+        )
+        self.assertFalse(self.app.canvas.find_withtag("crop_shade"))
+        self.assertEqual(len(self.app.canvas.find_withtag("crop_handle")), 8)
+        self.app.show_document_view()
+        self.assertIsNotNone(self.app.active_thumbnail_view())
+        self.assertIsNone(self.app.crop_handle_at(event))
+
+    def test_crop_scope_selects_job_files_and_updates_page_controls(self):
+        self.app.select_tool("crop")
+        self.pump()
+        self.assertEqual(self.app.active_job_files(), self.files)
+        self.assertFalse(self.app.option_widgets["pages"].winfo_ismapped())
+        self.app.options["crop_scope"].set("현재 페이지")
+        self.app.page_index = 2
+        self.app.refresh_preview()
+        self.assertEqual(self.app.active_job_files(), [self.files[0]])
+        self.assertEqual(len(self.app.canvas.find_withtag("crop_handle")), 8)
+        self.app.options["crop_scope"].set("지정 페이지")
+        self.app.options["pages"].set("2")
+        self.app.refresh_preview()
+        self.root.update()
+        self.assertTrue(self.app.option_widgets["pages"].winfo_ismapped())
+        self.assertFalse(self.app.canvas.find_withtag("crop_handle"))
+        self.app.page_index = 1
+        self.app.refresh_preview()
+        self.assertEqual(len(self.app.canvas.find_withtag("crop_handle")), 8)
+
     def test_crop_shading_follows_pages_margin_and_saved_crop_box(self):
         from offline_pdf.engine import execute
 
         self.app.select_tool("crop")
+        self.app.options["crop_scope"].set("지정 페이지")
         self.app.options["pages"].set("2")
-        self.app.options["margin"].set("5")
+        self.set_crop_margins("5")
         self.root.update()
         self.app.refresh_preview(reset=True)
         self.assertFalse(self.app.canvas.find_withtag("crop_shade"))
@@ -428,10 +501,10 @@ class CompactOptionsTests(unittest.TestCase):
                 doc[1].cropbox.width, doc[1].mediabox.width - 2 * inset, places=3
             )
         self.assertEqual(Path(self.files[0]).read_bytes(), before)
-        self.app.options["margin"].set("0")
+        self.set_crop_margins("0")
         self.app.refresh_preview()
         self.assertFalse(self.app.canvas.find_withtag("crop_shade"))
-        self.app.options["margin"].set("invalid")
+        self.set_crop_margins("invalid")
         self.app.refresh_preview()
         self.assertIsNone(self.app.preview_rect)
         self.assertEqual(self.app.page_label.cget("text"), "설정을 확인하세요")
@@ -447,7 +520,7 @@ class CompactOptionsTests(unittest.TestCase):
         self.app.clear_files()
         self.app.select_tool("crop")
         self.app.add_paths([str(source)])
-        self.app.options["margin"].set("7")
+        self.set_crop_margins("7")
         self.root.update()
         for index in range(4):
             self.app.page_index = index
@@ -458,7 +531,7 @@ class CompactOptionsTests(unittest.TestCase):
                 inset = 7 * 72 / 25.4 * self.app.preview_scale
                 self.assertAlmostEqual(self.app.canvas.coords(boundary)[0], 12 + inset)
                 self.assertAlmostEqual(self.app.canvas.coords(boundary)[1], 12 + inset)
-        self.app.options["margin"].set("100")
+        self.set_crop_margins("100")
         self.app.refresh_preview()
         self.assertFalse(self.app.canvas.find_withtag("crop_shade"))
         self.assertIsNone(self.app.preview_rect)
@@ -553,7 +626,9 @@ class CompactOptionsTests(unittest.TestCase):
         self.app.select_tool("crop")
         self.root.update()
         self.root.focus_force()
-        for key, value in (("pages", "2"), ("margin", "8.5")):
+        self.app.options["crop_scope"].set("지정 페이지")
+        self.root.update()
+        for key, value in (("pages", "2"), ("margin_left", "8.5")):
             with self.subTest(key=key):
                 self.app.canvas.focus_set()
                 field = self.app.option_widgets[key]
