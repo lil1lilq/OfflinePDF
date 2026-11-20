@@ -322,10 +322,6 @@ class PreviewController:
             return
         if not path:
             self.canvas.config(scrollregion=(0, 0, max(300, self.canvas.winfo_width()), 280))
-            text = "파일을 추가하면 여기에서 미리 볼 수 있습니다."
-            if self.file_drop and self.file_drop.enabled:
-                text = "파일을 여기에 끌어놓거나\n파일 추가 버튼으로 선택하세요."
-            self.canvas.create_text(15, 25, anchor="nw", text=text)
             self.page_label.config(text="미리보기")
             return
         try:

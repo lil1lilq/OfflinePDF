@@ -333,14 +333,6 @@ class PageOrganizer(ttk.Frame):
         total = max(120, ((count + self.columns - 1) // self.columns) * self.cellh)
         self.canvas.configure(scrollregion=(0, 0, w, total))
         if not self.model:
-            self.canvas.create_text(
-                24,
-                35,
-                anchor="nw",
-                text="PDF를 추가하면 페이지가 여기에 표시됩니다.",
-                fill=MUTED,
-                font=(FONT, 11),
-            )
             self.update_summary()
             return
         top = self.canvas.canvasy(0)
