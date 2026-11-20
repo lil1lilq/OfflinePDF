@@ -38,7 +38,7 @@ class PreviewController:
 
     def update_preview_controls(self):
         grid = self.active_thumbnail_view()
-        self.view_choice.set("전체 페이지 보기" if grid else "페이지별 보기")
+        self.view_toggle.set("전체 페이지" if grid else "페이지별")
         for widget in (self.single_page_controls, self.preview_nav):
             if grid:
                 widget.pack_forget()
@@ -49,11 +49,11 @@ class PreviewController:
                 state="normal" if self.selected_file() and not self.busy() else "disabled"
             )
 
-    def change_page_view(self, event=None):
+    def change_page_view(self, value):
         if self.busy():
             self.update_preview_controls()
             return
-        if self.view_choice.get() == "전체 페이지 보기":
+        if value == "전체 페이지":
             self.show_document_view()
         else:
             self.show_preview()
@@ -160,62 +160,6 @@ class PreviewController:
             if view.winfo_manager():
                 return view
         return None
-
-    def start_zoom_drag(self, event, grid=None):
-        if grid is not None or self.active_thumbnail_view():
-            return False
-        if not getattr(event, "state", 0) & 4:
-            self._zoom_drag = None
-            return False
-        if self.busy() or not self.selected_file():
-            return True
-        value = self.preview_scale
-        self._zoom_drag = (event.y, value, grid, getattr(event, "x", 0))
-        self._zoom_moved = False
-        (grid.canvas if grid else self.canvas).configure(cursor="sb_v_double_arrow")
-        return True
-
-    def move_zoom_drag(self, event):
-        drag = getattr(self, "_zoom_drag", None)
-        if drag is None:
-            return False
-        y, initial, grid, x = drag
-        if abs(event.y - y) + abs(getattr(event, "x", x) - x) <= 6 and not self._zoom_moved:
-            return True
-        self._zoom_moved = True
-        factor = math.exp(max(-4, min(4, (y - event.y) / 160)))
-        if grid:
-            grid.tile_width.set(round(max(160, min(640, initial * factor))))
-        else:
-            self.preview_mode = "custom"
-            self.preview_zoom = max(0.1, min(5.0, initial * factor))
-        if not getattr(self, "_zoom_timer", None):
-            self._zoom_timer = self.root.after(33, self.render_drag_zoom)
-        return True
-
-    def render_drag_zoom(self):
-        self._zoom_timer = None
-        drag = getattr(self, "_zoom_drag", None)
-        if drag is None:
-            return
-        grid = drag[2]
-        if grid:
-            grid.draw()
-        else:
-            self.refresh_preview()
-
-    def end_zoom_drag(self, event):
-        if getattr(self, "_zoom_drag", None) is None:
-            return False
-        self.move_zoom_drag(event)
-        if getattr(self, "_zoom_timer", None):
-            self.root.after_cancel(self._zoom_timer)
-            self._zoom_timer = None
-        self.render_drag_zoom()
-        grid = self._zoom_drag[2]
-        (grid.canvas if grid else self.canvas).configure(cursor="")
-        self._zoom_drag = None
-        return True
 
     def refresh_organizer(self):
         if self.tool != "extract":
@@ -463,9 +407,24 @@ class PreviewController:
         self.update_region_status()
 
     def preview_wheel(self, event):
-        step = (
-            (-1 if event.num == 4 else 1) if event.num in (4, 5) else (-1 if event.delta > 0 else 1)
-        )
+        number = getattr(event, "num", None)
+        delta = getattr(event, "delta", 0)
+        if number in (4, 5):
+            step = -1 if number == 4 else 1
+        elif delta:
+            step = -1 if delta > 0 else 1
+        else:
+            return "break"
+        if getattr(event, "state", 0) & 4:
+            # Consume modified wheels so zoom does not also scroll the page.
+            if (
+                not self.busy()
+                and self.preview_rect
+                and not self.drag_start
+                and not getattr(self, "_stamp_drag", None)
+            ):
+                self.zoom_preview(-step * 0.1)
+            return "break"
         self.canvas.yview_scroll(step * 3, "units")
         return "break"
 
@@ -484,7 +443,7 @@ class PreviewController:
         self.refresh_preview()
 
     def draw_start(self, event):
-        if self.start_zoom_drag(event):
+        if self.busy() or getattr(event, "state", 0) & 4:
             return
         if self.stamp_mode():
             self.stamp_drag_start(event)
@@ -508,8 +467,6 @@ class PreviewController:
         )
 
     def draw_move(self, event):
-        if self.move_zoom_drag(event):
-            return
         if self.stamp_mode():
             self.stamp_drag_move(event)
             return
@@ -525,8 +482,6 @@ class PreviewController:
             )
 
     def draw_end(self, event):
-        if self.end_zoom_drag(event):
-            return
         if self.stamp_mode():
             self.stamp_drag_end(event)
             return

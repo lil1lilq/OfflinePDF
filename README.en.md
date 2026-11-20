@@ -58,7 +58,7 @@ Word, Excel, PowerPoint and HWP conversion is not supported.
 3. Set the page range, the tool's options and the save folder, then run.
 4. Use **Open result folder** to see the saved files.
 
-Every tool offers **All pages** (a thumbnail grid that follows the window width) and **Single page** views. Double-click a thumbnail to open that page fitted to the width. Returning to the grid preserves scrolling and edits. Organize and split pages starts in the grid; other tools start in single-page view.
+Every tool offers an **All pages / Single page** two-button toggle. All pages displays a thumbnail grid that follows the window width. Double-click a thumbnail to open that page fitted to the width. Returning to the grid preserves scrolling and edits. Organize and split pages starts in the grid; other tools start in single-page view.
 
 **Fit width, Fit height, percentage input, −/＋ and Previous/Next** work in single-page view. Percentages use the actual PDF page dimensions; entering a percentage leaves the fit mode.
 
@@ -69,7 +69,7 @@ In **Organize and split pages**, drag thumbnails to reorder and use checkboxes, 
 
 Segments represent output files. Moving a page into another segment adds it to that file; empty segments disappear. **Split settings** accepts start positions or an interval of N pages (1 means one file per page). **Undo / Ctrl+Z** reverses splits, moves, deletions and rotations. Only the selected document is processed. Before saving, confirm the file count, destination and naming rule.
 
-Crop preview shades the edges that will be hidden. In single-page view, **Ctrl+drag up** zooms in and **Ctrl+drag down** zooms out. Zoom does not change the overview grid.
+Crop preview shades the edges that will be hidden. In single-page view, **Ctrl+mouse wheel up** zooms in and **Ctrl+mouse wheel down** zooms out. The wheel alone scrolls the page; Ctrl+drag does not zoom. Zoom does not change the overview grid.
 
 Leave the page field empty to process every page. `1-3,5` means pages 1 to 3 and page 5; `3-1` means reverse order.
 Images you add are converted to PDF automatically before the selected job.

@@ -95,7 +95,6 @@ class NavigationController:
         previous = self.tool
         self.tool = key
         self.preview_origin = None
-        self._zoom_drag = None
         self._overview_y = 0
         self.overview.close_document()
         self.overview.pack_forget()

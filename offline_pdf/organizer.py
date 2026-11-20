@@ -598,8 +598,6 @@ class PageOrganizer(ttk.Frame):
         self.draw()
 
     def motion(self, event):
-        if self.app.move_zoom_drag(event):
-            return
         if self.app.busy() or not self.drag:
             return
         x, y, uid, modified = self.drag
@@ -639,14 +637,6 @@ class PageOrganizer(ttk.Frame):
             if not self.app.busy() and self.hit_cut(event.x, event.y) == cut:
                 self.model.toggle_cut(cut)
                 self.draw()
-            return
-        if self.app.end_zoom_drag(event):
-            if not self.app._zoom_moved and self.model and not self.app.busy():
-                i = self.hit(event.x, event.y)
-                if i is not None:
-                    uid = self.model.items[i][0]
-                    self.model.selected.symmetric_difference_update({uid})
-                    self.draw()
             return
         if not self.drag:
             return

@@ -456,18 +456,16 @@ def build(app):
     previous_page = ttk.Button(app.preview_nav, text="‹", command=lambda: app.turn(-1), width=3)
     previous_page.pack(side="right")
     app.preview_controls.append(previous_page)
-    app.view_choice = ChoiceVar(
-        value="페이지별 보기", choices=["전체 페이지 보기", "페이지별 보기"]
-    )
-    view_picker = ttk.Combobox(
+    app.view_choice = ChoiceVar(value="페이지별", choices=["전체 페이지", "페이지별"])
+    app.view_toggle = ttk.SegmentedChoice(
         zoom,
-        textvariable=app.view_choice,
-        values=["전체 페이지 보기", "페이지별 보기"],
-        state="readonly",
-        width=13,
+        variable=app.view_choice,
+        values=["전체 페이지", "페이지별"],
+        command=app.change_page_view,
+        width=170,
+        dynamic_resizing=False,
     )
-    view_picker.pack(side="left", padx=(0, 6))
-    view_picker.bind("<<ComboboxSelected>>", app.change_page_view)
+    app.view_toggle.pack(side="left", padx=(0, 6))
     app.single_page_controls = ttk.Frame(zoom, style="Panel.TFrame")
     app.single_page_controls.pack(side="left")
     for text, command, width in [
@@ -481,6 +479,7 @@ def build(app):
         app.preview_controls.append(control)
     app.zoom_value = tk.StringVar(value="100%")
     app.zoom_entry = ttk.Entry(app.single_page_controls, textvariable=app.zoom_value, width=6)
+    app.zoom_entry.configure(width=70)
     app.zoom_entry.pack(side="left", padx=3)
     app.zoom_entry.bind("<Return>", app.set_preview_percent)
     app.zoom_entry.bind("<FocusOut>", app.set_preview_percent)
