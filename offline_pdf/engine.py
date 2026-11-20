@@ -105,6 +105,12 @@ def number(value, low, high, label, integer=False):
     return n
 
 
+def crop_page_rect(page, options):
+    from .crop import cropbox_rect
+
+    return cropbox_rect(page, options)
+
+
 def split_ranges(total, count, boundaries):
     """Boundary pages are one-based starts of the following output file."""
     try:
@@ -367,13 +373,20 @@ def _process(job, paths, stage, emit, cancel):
         try:
             prefix = f"{file_index + 1:03d}_{safe_stem(path)}"
             target = stage / (prefix + "_" + tool + ".pdf")
-            selected = (
-                list(range(doc.page_count))
-                if tool == "split" and opt.get("split_mode") == "N개 파일로 나누기"
-                else pages(
-                    opt.get("pages", ""), doc.page_count, duplicates=(tool in ("extract", "nup"))
+            if tool == "crop":
+                from .crop import crop_pages
+
+                selected = crop_pages(opt, doc.page_count)
+            else:
+                selected = (
+                    list(range(doc.page_count))
+                    if tool == "split" and opt.get("split_mode") == "N개 파일로 나누기"
+                    else pages(
+                        opt.get("pages", ""),
+                        doc.page_count,
+                        duplicates=(tool in ("extract", "nup")),
+                    )
                 )
-            )
             store_password = output_password or (password if encrypted else "")
             if tool == "unlock":
                 # Only an opening password needs the owner password to remove;
@@ -415,19 +428,38 @@ def _process(job, paths, stage, emit, cancel):
                             or entry["rotation"] not in (0, 90, 180, 270)
                         ):
                             raise UserError("페이지 순서나 회전 값이 올바르지 않습니다.")
-                    with pdf.open() as dst:
-                        for i, entry in enumerate(plan):
-                            _tick(emit, cancel, i, len(plan), f"{i + 1}/{len(plan)} 페이지 정리")
-                            dst.insert_pdf(doc, from_page=entry["page"], to_page=entry["page"])
-                            page = dst[-1]
-                            page.set_rotation((page.rotation + entry["rotation"]) % 360)
-                        metadata = {
-                            key: value
-                            for key, value in (doc.metadata or {}).items()
-                            if key not in ("format", "encryption")
-                        }
-                        dst.set_metadata(metadata)
-                        save_pdf(dst, target, store_password)
+                    cuts = opt.get("page_cuts", [])
+                    if (
+                        not isinstance(cuts, list)
+                        or any(type(n) is not int or not 0 < n < len(plan) for n in cuts)
+                        or cuts != sorted(set(cuts))
+                    ):
+                        raise UserError("분할 위치를 확인하세요.")
+                    boundaries = [0, *cuts, len(plan)]
+                    for segment, (first, last) in enumerate(zip(boundaries, boundaries[1:])):
+                        with pdf.open() as dst:
+                            for i in range(first, last):
+                                entry = plan[i]
+                                _tick(
+                                    emit,
+                                    cancel,
+                                    i,
+                                    len(plan),
+                                    f"{i + 1}/{len(plan)} 페이지 정리·분할",
+                                )
+                                dst.insert_pdf(doc, from_page=entry["page"], to_page=entry["page"])
+                                page = dst[-1]
+                                page.set_rotation((page.rotation + entry["rotation"]) % 360)
+                            metadata = {
+                                key: value
+                                for key, value in (doc.metadata or {}).items()
+                                if key not in ("format", "encryption")
+                            }
+                            dst.set_metadata(metadata)
+                            output = (
+                                stage / f"{prefix}_part_{segment + 1:03d}.pdf" if cuts else target
+                            )
+                            save_pdf(dst, output, store_password)
                     continue
                 chosen = (
                     selected
@@ -541,11 +573,7 @@ def _process(job, paths, stage, emit, cancel):
 
                         draw_number(page, index, opt)
                     elif tool == "crop":
-                        margin = number(opt.get("margin", "10"), 0, 100, "여백 자르기") * 72 / 25.4
-                        rect = page.cropbox + (margin, margin, -margin, -margin)
-                        if rect.is_empty:
-                            raise UserError("자를 여백이 페이지보다 큽니다.")
-                        page.set_cropbox(rect)
+                        page.set_cropbox(crop_page_rect(page, opt))
                     elif tool == "redact":
                         regions = opt.get("regions", {}).get(str(n), [])
                         for coords in regions:

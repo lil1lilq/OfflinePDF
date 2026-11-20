@@ -35,6 +35,11 @@ class FileList(tk.Canvas):
         self.drop_hover = 0.0
         self.bind("<Configure>", lambda e: self.draw())
         self.bind("<Button-1>", self.click)
+        self.drag_origin = None
+        self.drag_target = None
+        self.bind("<B1-Motion>", self.drag_file)
+        self.bind("<ButtonRelease-1>", self.drop_file)
+        self.bind("<Escape>", lambda event: self.cancel_drag())
         self.bind("<MouseWheel>", self.wheel)
         self.bind("<Button-4>", self.wheel)
         self.bind("<Button-5>", self.wheel)
@@ -47,6 +52,8 @@ class FileList(tk.Canvas):
         self.name_font = tkfont.Font(family=theme.BOLD_FAMILY, size=10, weight="bold")
 
     def show_filename(self, event):
+        if self.drag_target is not None:
+            return
         index = int(self.canvasy(event.y) // self.row_height)
         if index != self.tooltip_row:
             self.tooltip_row = index
@@ -145,11 +152,12 @@ class FileList(tk.Canvas):
             self.draw()
 
     def click(self, event):
-        if self.app.busy() or self.motion_rows:
+        self.cancel_drag()
+        if self.app.busy() or self.app.pending_results is not None or self.motion_rows:
             return
         self.focus_set()
         index = int(self.canvasy(event.y) // self.row_height)
-        if index >= len(self.rows):
+        if not 0 <= index < len(self.rows):
             return
         if event.state & 4:
             if index in self.selection:
@@ -164,8 +172,59 @@ class FileList(tk.Canvas):
             )
         else:
             self.selection = {index}
+            self.drag_origin = (self.rows[index][2], event.y)
         self.draw()
         self.event_generate("<<ListboxSelect>>")
+
+    def cancel_drag(self):
+        self.drag_origin = None
+        self.drag_target = None
+        tk.Canvas.delete(self, "reorder_marker")
+        self.configure(cursor="")
+
+    def drag_file(self, event):
+        if self.drag_origin is None or abs(event.y - self.drag_origin[1]) < 6:
+            return
+        if self.app.busy() or self.app.pending_results is not None:
+            self.cancel_drag()
+            return
+        self.name_tooltip.hide()
+        self.configure(cursor="hand2")
+        if event.y < 20:
+            self.yview_scroll(-1, "units")
+        elif event.y > self.winfo_height() - 20:
+            self.yview_scroll(1, "units")
+        self.drag_target = max(
+            0,
+            min(
+                len(self.rows),
+                int((self.canvasy(event.y) + self.row_height / 2) // self.row_height),
+            ),
+        )
+        tk.Canvas.delete(self, "reorder_marker")
+        y = self.drag_target * self.row_height
+        self.create_line(4, y, self.winfo_width() - 4, y, fill=BLUE, width=3, tags="reorder_marker")
+
+    def drop_file(self, event):
+        origin, target = self.drag_origin, self.drag_target
+        self.cancel_drag()
+        if origin is None or target is None:
+            return
+        if not (0 <= event.x < self.winfo_width() and 0 <= event.y < self.winfo_height()):
+            return
+        if self.app.busy() or self.app.pending_results is not None:
+            return
+        path = origin[0]
+        if path not in self.app.files:
+            return
+        source = self.app.files.index(path)
+        destination = target - (target > source)
+        if destination == source:
+            return
+        self.app.files.insert(destination, self.app.files.pop(source))
+        self.app.sync_list(animate=True)
+        self.app.file_selected()
+        self.app.status.set("파일 순서를 변경했습니다.")
 
     def key(self, delta):
         if self.app.busy() or self.motion_rows:

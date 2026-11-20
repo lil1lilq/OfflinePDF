@@ -8,6 +8,7 @@ import pymupdf as pdf
 
 from . import ctk_widgets as ttk
 from . import theme
+from .dialogs import dialog_parent, place_dialog
 from .engine import UserError, open_pdf
 from .ui import RED
 
@@ -25,9 +26,10 @@ def requested_tool(app):
 
 def ask_password(app, path=None, *, output=False, explanation=""):
     result = None
-    dialog = ctk.CTkToplevel(app.root)
+    owner = dialog_parent(app.root)
+    dialog = ctk.CTkToplevel(owner)
     dialog.title("결과 PDF 암호 설정" if output else "PDF 암호 입력")
-    dialog.transient(app.root)
+    dialog.transient(owner)
     dialog.resizable(False, False)
     body = ttk.Frame(dialog, padding=24)
     body.pack(fill="both", expand=True)
@@ -109,13 +111,15 @@ def ask_password(app, path=None, *, output=False, explanation=""):
     dialog.protocol("WM_DELETE_WINDOW", close)
     dialog.bind("<Return>", submit)
     dialog.bind("<Escape>", lambda e: close())
-    dialog.update_idletasks()
-    x = app.root.winfo_rootx() + max(0, (app.root.winfo_width() - dialog.winfo_reqwidth()) // 2)
-    y = app.root.winfo_rooty() + max(0, (app.root.winfo_height() - dialog.winfo_reqheight()) // 2)
-    dialog.geometry(f"+{x}+{y}")
+    place_dialog(dialog, owner)
+    previous = owner.grab_current()
     dialog.grab_set()
     entry.focus_set()
-    app.root.wait_window(dialog)
+    try:
+        app.root.wait_window(dialog)
+    finally:
+        if previous is not None and previous.winfo_exists():
+            previous.grab_set()
     return result
 
 

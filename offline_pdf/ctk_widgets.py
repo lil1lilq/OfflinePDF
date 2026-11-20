@@ -125,6 +125,26 @@ class Entry(ctk.CTkEntry):
         kwargs.setdefault("border_color", _pair("LINE"))
         kwargs.setdefault("text_color", _pair("INK"))
         super().__init__(master, **kwargs)
+        # CTk's rounded background extends beyond its native text entry. Treat
+        # clicks/drags on that padding as entry input as well.
+        for sequence in ("<ButtonPress-1>", "<B1-Motion>", "<ButtonRelease-1>"):
+            self._canvas.bind(
+                sequence,
+                lambda event, sequence=sequence: self._padding_mouse(event, sequence),
+                add="+",
+            )
+
+    def _padding_mouse(self, event, sequence):
+        if str(self.cget("state")) == "disabled":
+            return
+        if sequence == "<ButtonPress-1>":
+            self._entry.focus_set()
+        self._entry.event_generate(
+            sequence,
+            x=event.x + self._canvas.winfo_rootx() - self._entry.winfo_rootx(),
+            y=event.y + self._canvas.winfo_rooty() - self._entry.winfo_rooty(),
+            state=event.state,
+        )
 
     config = ctk.CTkEntry.configure
 
@@ -205,6 +225,7 @@ class SegmentedChoice(ctk.CTkSegmentedButton):
 
     def __init__(self, master, values, command=None, **kwargs):
         self._on_choose = command
+        self._canonical_values = tuple(values)
         kwargs.setdefault("font", (theme.FONT_FAMILY, BODY_SIZE))
         kwargs.setdefault("height", 36)
         kwargs.setdefault("corner_radius", 10)
@@ -215,15 +236,24 @@ class SegmentedChoice(ctk.CTkSegmentedButton):
         kwargs.setdefault("selected_color", _pair("BLUE"))
         kwargs.setdefault("selected_hover_color", ("#2948c3", "#c3d0ff"))
         kwargs.setdefault("text_color", _pair("INK"))
-        super().__init__(master, values=list(values), command=self._chosen, **kwargs)
+        super().__init__(master, values=[tr(v) for v in values], command=self._chosen, **kwargs)
+
+    def configure(self, **kwargs):
+        if "values" in kwargs:
+            self._canonical_values = tuple(kwargs["values"])
+            kwargs["values"] = [tr(v) for v in kwargs["values"]]
+        result = super().configure(**kwargs)
+        self._paint()
+        return result
 
     def _chosen(self, value):
         self._paint()
         if self._on_choose:
-            self._on_choose(value)
+            canonical = next((v for v in self._canonical_values if tr(v) == value), value)
+            self._on_choose(canonical)
 
     def set(self, value, *args, **kwargs):
-        super().set(value, *args, **kwargs)
+        super().set(tr(value), *args, **kwargs)
         self._paint()
 
     def _paint(self):
