@@ -6,6 +6,7 @@ work, never wheel events. No Tk objects or document handles cross processes.
 
 from __future__ import annotations
 
+import io
 import math
 import multiprocessing as mp
 import queue
@@ -118,7 +119,26 @@ class PreviewCache:
         else:
             doc = pdf.open()
             try:
-                doc.insert_pdf(self.source, from_page=index, to_page=index)
+                if self.source.get_ocgs():
+                    # insert_pdf does not preserve document-level layer visibility.
+                    # Snapshot only the displayed appearance; exports use the source.
+                    doc.close()
+                    data = io.BytesIO()
+                    writer = pdf.DocumentWriter(data)
+                    try:
+                        original = self.source[index]
+                        device = writer.begin_page(original.rect)
+                        # PyMuPDF 1.26.7's run() expects .device, but its
+                        # DeviceWrapper constructor stores the handle as .this.
+                        if not hasattr(device, "device"):
+                            device.device = device.this
+                        original.get_displaylist().run(device, pdf.Identity, original.rect)
+                        writer.end_page()
+                    finally:
+                        writer.close()
+                    doc = pdf.open(stream=data.getvalue(), filetype="pdf")
+                else:
+                    doc.insert_pdf(self.source, from_page=index, to_page=index)
                 if number_options is not None:
                     from .engine import pages
                     from .numbering import draw_number
@@ -129,7 +149,8 @@ class PreviewCache:
                 page = doc[0]
                 page.set_rotation((page.rotation + angle) % 360)
             except Exception:
-                doc.close()
+                if not doc.is_closed:
+                    doc.close()
                 raise
         self.serial += 1
         entry = PreparedPage(self.serial, doc)

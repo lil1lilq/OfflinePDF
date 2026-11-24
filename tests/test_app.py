@@ -114,6 +114,9 @@ class StartupTests(unittest.TestCase):
                 verify_ui_navigation(app, source)
                 self.assertEqual(app.screen, "home")
                 self.assertTrue(app.home.winfo_ismapped())
+                self.assertIsNone(app._viewport_renderer)
+                self.assertIsNone(app._preview_cache.source)
+                self.assertIsNone(app.preview_timer)
         finally:
             app.close()
 
@@ -158,8 +161,7 @@ class AppTests(unittest.TestCase):
             )
 
     def test_b_preview_and_page_navigation(self):
-        self.app.tool = "pdf_images"
-        self.app.configure_form()
+        self.app.select_tool("pdf_images")
         self.app.files = [str(self.source)]
         self.app.sync_list()
         self.app.refresh_preview(reset=True)

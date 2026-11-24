@@ -248,11 +248,19 @@ class PreviewController:
         if renderer is not None:
             renderer.invalidate()
         self._prepared_preview = None
+        self.preview_rect = None
+        self._crop_handles = {}
+        self._crop_drag = None
+        self._stamp_box = None
+        self._stamp_drag = None
         self._viewport_signature = None
         self._sharp_viewport_revision = None
 
     def close_preview_render(self):
         self.invalidate_preview_render()
+        if self.preview_timer:
+            self.root.after_cancel(self.preview_timer)
+            self.preview_timer = None
         if getattr(self, "_viewport_timer", None):
             self.root.after_cancel(self._viewport_timer)
             self._viewport_timer = None
@@ -401,6 +409,10 @@ class PreviewController:
         self._stamp_box = None
         self._stamp_drag = None
         self.canvas.config(cursor="")
+        if not self.work.winfo_manager():
+            self.close_preview_render()
+            self.preview_photo = None
+            return
         if reset:
             self.page_index = 0
             self.canvas.yview_moveto(0)

@@ -112,3 +112,19 @@ class PreviewRenderTests(unittest.TestCase):
         finally:
             renderer.close()
         self.assertFalse(renderer.process.is_alive())
+
+    def test_prepared_page_preserves_hidden_layers_and_cropped_rotated_appearance(self):
+        doc = self.cache.source
+        group = doc.add_ocg("Hidden", on=False)
+        page = doc[0]
+        page.insert_text((60, 180), "MUST STAY HIDDEN", fontsize=30, oc=group)
+        page.set_cropbox(pdf.Rect(20, 30, 380, 570))
+        page.set_rotation(90)
+        before = page.get_pixmap(matrix=pdf.Matrix(2, 2), alpha=False)
+        entry = self.cache.prepared(0)
+        after = entry.page.get_pixmap(matrix=pdf.Matrix(2, 2), alpha=False)
+        self.assertEqual(
+            (before.width, before.height, before.samples),
+            (after.width, after.height, after.samples),
+        )
+        self.assertNotIn("MUST STAY HIDDEN", entry.page.get_text())
