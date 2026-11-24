@@ -106,9 +106,15 @@ class App(
         self.update_back_state()
 
     def busy(self):
-        return self.process is not None or getattr(self, "_installing", False)
+        return (
+            self.process is not None
+            or getattr(self, "_installing", False)
+            or getattr(self, "_repairing", False)
+        )
 
     def close(self):
+        if getattr(self, "_repairing", False):
+            return
         if self.process:
             if not messagebox.askokcancel(
                 "종료", "실행 중인 작업을 취소하고 종료하시겠습니까?", parent=self.root

@@ -563,5 +563,21 @@
   "남길 영역은 가로·세로 1mm 이상이어야 합니다.": "The retained area must be at least 1 mm wide and high.",
   "여백 적용 범위를 확인하세요.": "Check the crop page scope.",
   "적용할 페이지 번호를 입력하세요.": "Enter the page numbers to crop.",
-  "선명한 미리보기를 표시하지 못했습니다. 페이지를 다시 선택해 주세요.": "Could not sharpen the preview. Select the page again."
+  "선명한 미리보기를 표시하지 못했습니다. 페이지를 다시 선택해 주세요.": "Could not sharpen the preview. Select the page again.",
+  "PDF 구조 복구": "Repair PDF structure",
+  "복구 PDF 저장": "Save recovered PDF",
+  "PDF 구조를 자동으로 복구할 수 없습니다.\n크롬에서 파일을 열어 인쇄 → PDF로 저장한 뒤 다시 추가하세요. 원본은 보관하세요.": "This PDF structure cannot be recovered automatically.\nOpen it in Chrome, choose Print → Save as PDF and add the new copy. Keep the original.",
+  "PDF 암호화 정보가 올바르지 않아 구조를 복구할 수 없습니다.\n크롬에서 파일을 열어 인쇄 → PDF로 저장한 뒤 다시 추가하세요. 원본은 보관하세요.": "Invalid PDF encryption information prevents structure recovery.\nOpen it in Chrome, choose Print → Save as PDF and add the new copy. Keep the original.",
+  "복구본은 .pdf 파일로 저장하세요.": "Save the recovered copy as a .pdf file.",
+  "이미 있는 파일은 덮어쓰지 않습니다. 다른 파일명을 선택하세요.": "Existing files are never overwritten. Choose a different filename.",
+  "암호화된 PDF는 구조 복구를 지원하지 않습니다. 원본은 변경하지 않았습니다.": "Encrypted PDFs do not support structure recovery. The original is unchanged.",
+  "전자서명 양식이 있는 PDF는 구조 복구를 지원하지 않습니다. 원본은 변경하지 않았습니다.": "PDFs with digital signature forms do not support structure recovery. The original is unchanged.",
+  "복구 전후의 페이지 내용이 달라 복구본을 저장하지 않았습니다.": "Page content changed during recovery. No recovered copy was saved.",
+  "복구본을 저장할 수 없습니다. 저장 위치와 읽기·쓰기 권한을 확인하세요.": "Cannot save the recovered copy. Check the destination and read/write permissions.",
+  "PDF 구조를 복구하고 모든 페이지를 확인하고 있습니다…": "Recovering the PDF structure and checking every page…",
+  "{0}\n\nPDF 구조에 문제가 있습니다. 복구본을 만들어 열까요?\n원본은 보존하며, 모든 페이지를 확인한 뒤 별도 파일로 저장합니다.\n암호화 정보 오류와 전자서명 문서는 복구하지 않습니다.": "{0}\n\nThis PDF has a structure problem. Create and open a recovered copy?\nThe original is preserved. A separate copy is saved after checking every page.\nInvalid encryption information and digital signature documents cannot be recovered.",
+  "복구본을 저장했습니다. 원본은 보존했습니다. 복구본의 내용을 확인하세요.": "The recovered copy was saved and the original preserved. Review the recovered content.",
+  "파일을 읽거나 저장할 수 없습니다. 파일 위치와 읽기·쓰기 권한을 확인하세요.": "Cannot read or save the file. Check its location and read/write permissions.",
+  "구조 복구본 {0}개 사용 (원본 보존)": "Using {0} recovered copies (originals preserved)",
+  "복구 취소·실패 {0}개 제외": "Skipped {0} files after recovery was cancelled or failed"
 }

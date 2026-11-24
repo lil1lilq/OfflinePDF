@@ -1,5 +1,6 @@
 """User flows for compact pickers, live options, split scope and file order."""
 
+import re
 import tempfile
 import time
 import tkinter as tk
@@ -119,6 +120,33 @@ class CompactOptionsTests(unittest.TestCase):
             apply_language(self.root, "ko")
             self.app.close()
             self.temp.cleanup()
+
+    def test_import_recovery_adds_verified_copy_and_opens_organizer(self):
+        source = Path(self.temp.name) / "broken.pdf"
+        destination = Path(self.temp.name) / "recovered.pdf"
+        original = re.sub(rb"startxref\s+\d+", b"startxref\n1", Path(self.files[0]).read_bytes())
+        source.write_bytes(original)
+        with (
+            patch("offline_pdf.repair_dialog.messagebox.askyesno", return_value=True),
+            patch(
+                "offline_pdf.repair_dialog.filedialog.asksaveasfilename",
+                return_value=str(destination),
+            ),
+            patch("offline_pdf.repair_dialog.messagebox.showinfo"),
+            patch(
+                "offline_pdf.repair_dialog.messagebox.showerror",
+                side_effect=AssertionError("Unexpected recovery error"),
+            ),
+        ):
+            self.app.add_paths([str(source)])
+        self.assertEqual(self.app.files[-1], str(destination))
+        self.assertNotIn(str(source), self.app.files)
+        self.assertEqual(source.read_bytes(), original)
+        self.assertIn("구조 복구본 1개", self.app.status.get())
+        self.app.select_tool("extract")
+        self.root.update()
+        self.assertEqual(len(self.app.organizer.model.items), 5)
+        self.assertFalse(self.app.busy())
 
     def test_position_picker_preserves_preview_space_and_canonical_values(self):
         self.app.select_tool("number")

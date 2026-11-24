@@ -58,6 +58,9 @@ Word, Excel, PowerPoint and HWP conversion is not supported.
 3. Set the page range, the tool's options and the save folder, then run.
 4. Use **Open result folder** to see the saved files.
 
+If a PDF structure problem is detected when adding a file, **Repair PDF structure** offers recovery. Choose a location to save a separate `_복구.pdf` copy; the original and existing files are never overwritten. Every page's dimensions, rotation, text and rendered appearance are compared before the verified copy is added to the work list. Recovery runs in a cancellable process.
+Recovery only rebuilds cross-reference tables and object structures that the existing PDF engine can read. It does not flatten pages into images. Encrypted PDFs and PDFs with digital signature forms are excluded; invalid encryption information and severely damaged files cannot be recovered. For these files, open them in Chrome and use **Print → Save as PDF**, then add the new copy. Review recovered content before use.
+
 Every tool offers an **All pages / Single page** two-button toggle. All pages displays a thumbnail grid that follows the window width. Double-click a thumbnail to open that page fitted to the width. Returning to the grid preserves scrolling and edits. Organize and split pages starts in the grid; other tools start in single-page view.
 
 **Fit width, Fit height, percentage input, −/＋ and Previous/Next** work in single-page view. Percentages use the actual PDF page dimensions; entering a percentage leaves the fit mode.

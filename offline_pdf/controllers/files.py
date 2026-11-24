@@ -11,6 +11,7 @@ from ..dialogs import filedialog, messagebox
 from ..engine import UserError, check_local_path
 from ..images import IMAGE_EXTENSIONS, IMAGE_LABEL, IMAGE_PATTERN
 from ..passwords import cached_password, ensure_password
+from ..repair_dialog import prepare_pdf_import
 from ..ui import CARD_TEXT
 
 
@@ -52,7 +53,7 @@ class FileController:
         extensions = IMAGE_EXTENSIONS | {".pdf"}
         expected = "PDF·" + IMAGE_LABEL
         known = {os.path.normcase(str(Path(path).resolve())) for path in self.files}
-        added = duplicates = unsupported = blocked = 0
+        added = duplicates = unsupported = blocked = skipped = repaired = 0
         for path in paths:
             candidate = Path(path)
             if candidate.suffix.lower() not in extensions:
@@ -70,6 +71,19 @@ class FileController:
             if key in known:
                 duplicates += 1
                 continue
+            if candidate.suffix.lower() == ".pdf":
+                imported = prepare_pdf_import(self, candidate)
+                if imported is None:
+                    skipped += 1
+                    continue
+                if imported != candidate:
+                    repaired += 1
+                candidate = Path(imported)
+                imported_key = os.path.normcase(str(candidate))
+                if imported_key in known:
+                    duplicates += 1
+                    continue
+                known.add(imported_key)
             known.add(key)
             self.files.append(str(candidate))
             added += 1
@@ -97,6 +111,10 @@ class FileController:
             details.append(f"지원하지 않는 항목 {unsupported}개 제외 ({expected} 파일만 추가 가능)")
         if blocked:
             details.append(f"접근 불가·동기화·네트워크 경로 {blocked}개 제외")
+        if repaired:
+            details.append(f"구조 복구본 {repaired}개 사용 (원본 보존)")
+        if skipped:
+            details.append(f"복구 취소·실패 {skipped}개 제외")
         if added and any(Path(p).suffix.lower() in IMAGE_EXTENSIONS for p in self.files[-added:]):
             details.append("이미지는 자동으로 PDF로 변경되어 작업이 수행됩니다.")
         self.status.set(" · ".join(details))
