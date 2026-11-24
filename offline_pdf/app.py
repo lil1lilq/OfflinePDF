@@ -130,6 +130,7 @@ class App(
         self.window_drop_hover.close()
         if self.card_resize_timer:
             self.root.after_cancel(self.card_resize_timer)
+        self.close_preview_render()
         self.organizer.close_document()
         self.overview.close_document()
         if self.preview_timer:

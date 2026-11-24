@@ -121,6 +121,7 @@ class NavigationController:
         if self.busy():
             return
         self.cancel_continue()
+        self.invalidate_preview_render()
         self.work.pack_forget()
         for card in self.cards.values():
             card.pressed = False

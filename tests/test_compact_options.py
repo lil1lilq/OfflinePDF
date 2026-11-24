@@ -565,7 +565,7 @@ class CompactOptionsTests(unittest.TestCase):
         scale = self.app.preview_scale
         self.app.canvas.event_generate("<MouseWheel>", delta=120, state=4)
         self.root.update()
-        self.assertAlmostEqual(self.app.preview_scale, scale + 0.1)
+        self.assertAlmostEqual(self.app.preview_scale, scale * 1.1)
         self.assertEqual(self.app.preview_mode, "custom")
         self.assertAlmostEqual(self.app.canvas.yview()[0], 0)
         self.assertEqual(self.app.regions, {})
@@ -573,7 +573,7 @@ class CompactOptionsTests(unittest.TestCase):
         self.root.update()
         self.assertAlmostEqual(self.app.preview_scale, scale)
         self.app.preview_wheel(SimpleNamespace(num=4, delta=0, state=4))
-        self.assertAlmostEqual(self.app.preview_scale, scale + 0.1)
+        self.assertAlmostEqual(self.app.preview_scale, scale * 1.1)
         self.app.preview_wheel(SimpleNamespace(num=5, delta=0, state=4))
         self.assertAlmostEqual(self.app.preview_scale, scale)
         self.app.preview_wheel(SimpleNamespace(delta=0, state=4))
@@ -621,6 +621,46 @@ class CompactOptionsTests(unittest.TestCase):
         view.press(click)
         view.release(click)
         self.assertEqual(view.model.selected, selected ^ {uid})
+
+    def test_each_wheel_event_updates_high_zoom_without_reopening_or_full_page_raster(self):
+        self.app.select_tool("redact")
+        self.pump()
+        self.app.zoom_value.set("300%")
+        self.app.set_preview_percent()
+        entry = self.app._prepared_preview
+        base = entry.thumbnail()
+        with (
+            patch("offline_pdf.engine.open_pdf", side_effect=AssertionError("Reopened PDF")),
+            patch.object(
+                pdf.Page, "get_pixmap", side_effect=AssertionError("Main-thread PDF raster")
+            ),
+        ):
+            expected = 3.0
+            for delta in [120] * 5 + [-120] * 5:
+                expected *= 1.1 if delta > 0 else 1 / 1.1
+                self.app.preview_wheel(SimpleNamespace(delta=delta, state=4))
+                self.assertAlmostEqual(self.app.preview_scale, expected)
+                self.assertEqual(self.app.zoom_value.get(), f"{round(expected * 100)}%")
+                self.assertIs(self.app._prepared_preview, entry)
+                self.assertIs(entry.thumbnail(), base)
+                self.assertLessEqual(
+                    self.app.preview_photo.width(), self.app.canvas.winfo_width() + 2
+                )
+                self.assertLessEqual(
+                    self.app.preview_photo.height(), self.app.canvas.winfo_height() + 2
+                )
+        self.pump(0.4)
+        self.app.canvas.xview_moveto(0.5)
+        self.app.canvas.yview_moveto(0.5)
+        self.pump(0.3)
+        self.assertGreater(self.app.canvas.coords("preview_raster")[0], 12)
+        self.assertGreater(self.app.canvas.coords("preview_raster")[1], 12)
+        renderer = self.app._viewport_renderer
+        self.app.clear_files()
+        self.app.refresh_preview()
+        self.assertIsNone(self.app._viewport_renderer)
+        self.assertIsNone(self.app.preview_photo)
+        self.assertFalse(renderer.process.is_alive())
 
     def test_crop_input_padding_focuses_and_edits_page_and_margin_fields(self):
         self.app.select_tool("crop")

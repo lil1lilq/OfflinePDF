@@ -562,5 +562,6 @@
   "미리보기 핸들을 드래그하거나 네 방향 여백을 입력해 자릅니다. 가려진 정보는 영구 삭제되지 않습니다.": "Drag preview handles or enter four margins to crop. Hidden content is not permanently deleted.",
   "남길 영역은 가로·세로 1mm 이상이어야 합니다.": "The retained area must be at least 1 mm wide and high.",
   "여백 적용 범위를 확인하세요.": "Check the crop page scope.",
-  "적용할 페이지 번호를 입력하세요.": "Enter the page numbers to crop."
+  "적용할 페이지 번호를 입력하세요.": "Enter the page numbers to crop.",
+  "선명한 미리보기를 표시하지 못했습니다. 페이지를 다시 선택해 주세요.": "Could not sharpen the preview. Select the page again."
 }

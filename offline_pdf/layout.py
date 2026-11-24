@@ -495,16 +495,23 @@ def build(app):
     area.pack(fill="both", expand=True, padx=8, pady=(0, 8))
     app.canvas = tk.Canvas(area, bg="#e9edf4", highlightthickness=0, height=180, takefocus=True)
     app.canvas.own_wheel = True
-    vs = ttk.Scrollbar(area, command=app.canvas.yview)
+    vs = ttk.Scrollbar(area, command=lambda *args: app.preview_scroll("y", *args))
+    app.preview_vscroll = vs
     vs.pack(side="right", fill="y")
-    app.canvas.configure(yscrollcommand=vs.set)
+    app.canvas.configure(
+        yscrollcommand=lambda first, last: app.preview_scroll_changed("y", first, last)
+    )
     app.canvas.pack(fill="both", expand=True)
     app.canvas.bind("<Configure>", lambda e: app.schedule_preview())
     for sequence in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
         app.canvas.bind(sequence, app.preview_wheel)
-    app.preview_hscroll = ttk.Scrollbar(preview, orient="horizontal", command=app.canvas.xview)
+    app.preview_hscroll = ttk.Scrollbar(
+        preview, orient="horizontal", command=lambda *args: app.preview_scroll("x", *args)
+    )
     app.preview_hscroll.pack(fill="x", padx=8, pady=(0, 5))
-    app.canvas.configure(xscrollcommand=app.preview_hscroll.set)
+    app.canvas.configure(
+        xscrollcommand=lambda first, last: app.preview_scroll_changed("x", first, last)
+    )
     app.canvas.bind("<Motion>", app.preview_hover)
     app.canvas.bind("<Leave>", lambda e: app.canvas.config(cursor=""))
     app.canvas.bind("<ButtonPress-1>", app.draw_start)

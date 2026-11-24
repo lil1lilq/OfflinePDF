@@ -58,6 +58,20 @@ def verify_ui_navigation(app, source):
     window.update()
     assert app.preview_panel.winfo_ismapped(), "Document preview must be visible initially"
     assert app.preview_mode == "width", "Initial preview must fit the page width"
+    app.zoom_value.set("400%")
+    app.set_preview_percent()
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        window.update()
+        revision = getattr(app, "_viewport_revision", None)
+        if revision is not None and getattr(app, "_sharp_viewport_revision", None) == revision:
+            break
+        time.sleep(0.01)
+    else:
+        raise AssertionError("Background viewport rendering did not complete")
+    assert app.preview_photo.width() <= app.canvas.winfo_width() + 2, (
+        "Preview must rasterize only the viewport"
+    )
     app.go_back()
     window.update()
     assert app.screen == "home", "Back must return directly to the tool list"
@@ -140,6 +154,7 @@ def self_test():
         try:
             verify_ui_navigation(app, source)
             checks.append("native-ui-tools-navigation")
+            checks.append("background-viewport-rendering")
         finally:
             app.close()
     return {"ok": True, "version": __version__, "checks": checks}
