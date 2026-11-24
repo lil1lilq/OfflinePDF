@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-from tkinter import messagebox
 
+from ..dialogs import messagebox
 from ..engine import UserError, check_local_path
 from ..images import IMAGE_EXTENSIONS
 from ..passwords import fingerprint
@@ -67,6 +67,8 @@ class NavigationController:
         self.arrange_cards(self.cards_frame.winfo_width(), force=True)
 
     def select_tool(self, key):
+        # Old Explorer/CLI links enter the unified page workspace.
+        key = "extract" if key == "split" else key
         if self.busy() or key not in TOOLS:
             return
         self.close_ai_comparison()
@@ -93,6 +95,10 @@ class NavigationController:
         previous = self.tool
         self.tool = key
         self.preview_origin = None
+        self._overview_y = 0
+        self.overview.close_document()
+        self.overview.pack_forget()
+        self.split_view.pack_forget()
         self.screen = "work"
         if previous != key:
             self.organizer.close_document()
@@ -115,6 +121,9 @@ class NavigationController:
         if self.busy():
             return
         self.cancel_continue()
+        self.close_preview_render()
+        self.canvas.delete("all")
+        self.preview_photo = None
         self.work.pack_forget()
         for card in self.cards.values():
             card.pressed = False
@@ -149,7 +158,7 @@ class NavigationController:
             self.update_back_state()
             return
         if self.screen == "preview":
-            self.hide_preview()
+            self.show_document_view()
         elif self.screen == "work":
             self.show_home()
 
@@ -166,7 +175,6 @@ class NavigationController:
             "organizer_model": organizer.model,
             "organizer_path": organizer.path,
             "organizer_fingerprint": organizer.fingerprint,
-            "overview_y": self.overview_canvas.yview()[0],
         }
 
     @staticmethod
@@ -175,7 +183,7 @@ class NavigationController:
             return set()
         extensions = {Path(path).suffix.lower() for path in paths}
         if extensions <= IMAGE_EXTENSIONS | {".pdf"}:
-            return set(TOOLS)
+            return set(CARD_TEXT)
         return set()
 
     def cancel_continue(self):

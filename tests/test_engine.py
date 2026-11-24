@@ -125,6 +125,43 @@ class EngineTests(unittest.TestCase):
             self.assertEqual(doc[0].rotation, 270)
             self.assertIn("SECOND", doc[0].get_text())
 
+    def test_organized_segments_keep_order_rotation_metadata_and_encryption(self):
+        source = self.output_pdf(self.run_tool("protect", output_password="secret"))
+        folder = self.run_tool(
+            "extract",
+            [str(source)],
+            input_password="secret",
+            page_plan=[
+                {"page": 2, "rotation": 90},
+                {"page": 0, "rotation": 0},
+                {"page": 1, "rotation": 270},
+            ],
+            page_cuts=[1],
+        )
+        paths = sorted(folder.glob("*.pdf"))
+        self.assertEqual(len(paths), 2)
+        for path, expected, rotation in zip(
+            paths, [("THIRD",), ("FIRST", "SECOND")], [(90,), (0, 270)]
+        ):
+            with pdf.open(path) as doc:
+                self.assertTrue(doc.needs_pass)
+                self.assertTrue(doc.authenticate("secret"))
+                self.assertEqual(doc.page_count, len(expected))
+                self.assertEqual(doc.metadata["author"], "SENSITIVE AUTHOR")
+                for page, text, angle in zip(doc, expected, rotation):
+                    self.assertIn(text, page.get_text())
+                    self.assertEqual(page.rotation, angle)
+
+    def test_invalid_organized_cuts_publish_nothing(self):
+        for cuts in ([0], [3], [2, 1], [1, 1], [True], "1"):
+            with self.subTest(cuts=cuts), self.assertRaises(UserError):
+                self.run_tool(
+                    "extract",
+                    page_plan=[{"page": n, "rotation": 0} for n in range(3)],
+                    page_cuts=cuts,
+                )
+            self.assertFalse(list(self.root.glob(".offline-pdf-*")))
+
     def test_split_and_delete(self):
         self.assertEqual(len(list(self.run_tool("split", pages="1,3").glob("*.pdf"))), 2)
         folder = self.run_tool("delete", pages="1,3")

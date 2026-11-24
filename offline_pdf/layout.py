@@ -349,6 +349,10 @@ def build(app):
     app.task_icon_label = ctk.CTkLabel(app.task_icon, text="", width=24, height=24)
     app.task_icon_label.place(relx=0.5, rely=0.5, anchor="center")
     title_text = ttk.Frame(title_row, style="Panel.TFrame")
+    # Wrapping a label must not resize the frame that supplies its wrap width.
+    # With adjacent tool actions this otherwise oscillates between two widths.
+    title_text.configure(width=1, height=54)
+    title_text.pack_propagate(False)
     title_text.pack(side="left", fill="x", expand=True)
     app.title = ttk.Label(
         title_text, text="", style="Panel.TLabel", font=(theme.BOLD_FAMILY, 16, "bold")
@@ -382,6 +386,7 @@ def build(app):
     ttk.Button(app.save_bar, text="저장 폴더", command=app.choose_output).pack(side="left")
     app.columns = ttk.Frame(app.body)
     settings = panel(app.columns)
+    app.tool_settings = settings
     settings.configure(padx=12, pady=8)
     settings.pack(fill="x")
     # Options, the merged file name and the redaction count share one row.
@@ -415,53 +420,25 @@ def build(app):
     workspace = ttk.Frame(app.body)
     app.document_host = workspace
     workspace.pack(fill="both", expand=True, pady=(8, 0))
-    app.file_overview = tk.Frame(workspace, bg=BG)
-    overview_header = ttk.Frame(app.file_overview)
-    overview_header.pack(fill="x", pady=(4, 6))
-    app.overview_title = ttk.Label(
-        overview_header, text="", font=(theme.BOLD_FAMILY, 16, "bold"), width=1, wraplength=450
-    )
-    app.overview_title.pack(side="left", fill="x", expand=True)
-    app.overview_title.bind(
-        "<Configure>", lambda e: app.overview_title.configure(wraplength=max(80, e.width))
-    )
-    app.overview_detail = ttk.Label(
-        app.file_overview, text="", style="Muted.TLabel", wraplength=700
-    )
-    app.overview_detail.pack(anchor="w", pady=(0, 12))
-    app.preview_button = ttk.Button(
-        overview_header, text="크게 미리보기", command=app.toggle_preview
-    )
-    app.preview_button.pack(side="right")
-    app.ai_preview_button = ttk.Button(
-        overview_header, text="AI 비교 미리보기", command=lambda: app.run(preview=True)
-    )
-    overview_area = ttk.Frame(app.file_overview)
-    overview_area.pack(fill="both", expand=True, pady=(10, 0))
-    app.overview_canvas = tk.Canvas(overview_area, bg=BG, highlightthickness=0, height=120)
-    app.overview_canvas.own_wheel = True
-    overview_scroll = ttk.Scrollbar(overview_area, command=app.overview_canvas.yview)
-    overview_scroll.pack(side="right", fill="y")
-    app.overview_canvas.configure(yscrollcommand=overview_scroll.set)
-    app.overview_canvas.pack(fill="both", expand=True)
-    app.overview_canvas.bind(
-        "<MouseWheel>",
-        lambda e: app.overview_canvas.yview_scroll(-2 if e.delta > 0 else 2, "units"),
-    )
-    app.overview_canvas.bind("<Configure>", lambda e: app.schedule_preview())
     from .organizer import PageOrganizer
 
     app.organizer = PageOrganizer(workspace, app)
+    # Compatibility alias for existing Explorer split entry points.
+    app.split_view = app.organizer
+    from .overview import ThumbnailOverview
+
+    app.overview = ThumbnailOverview(workspace, app)
     preview = panel(workspace)
     app.preview_panel = preview
     # One toolbar: zoom on the left, page turning (and redaction clearing) on the right.
-    zoom = ttk.Frame(preview, style="Panel.TFrame")
+    zoom = ttk.Frame(workspace, style="Panel.TFrame")
     app.preview_zoom_row = zoom
-    zoom.pack(fill="x", padx=10, pady=8)
+    zoom.pack(fill="x", pady=(0, 8))
+    app.preview_controls = []
     # Packed first so it keeps its room when DPI scaling crowds the toolbar.
-    app.preview_region_row = ttk.Frame(zoom, style="Panel.TFrame")
+    app.preview_region_row = ttk.Frame(app.task_title_row, style="Panel.TFrame")
     app.clear_preview_regions = ttk.Button(
-        app.preview_region_row, text="이 페이지 선택 초기화", command=app.clear_regions
+        app.preview_region_row, text="영역 초기화", command=app.clear_regions
     )
     app.clear_preview_regions.pack(side="right")
     # Redaction: how many regions are marked, beside the button that clears them.
@@ -471,42 +448,76 @@ def build(app):
     app.region_status.pack(side="right", padx=(0, 8))
     app.preview_nav = ttk.Frame(zoom, style="Panel.TFrame")
     app.preview_nav.pack(side="right")
-    ttk.Button(app.preview_nav, text="다음 ›", command=lambda: app.turn(1), width=7).pack(
-        side="right"
-    )
+    next_page = ttk.Button(app.preview_nav, text="›", command=lambda: app.turn(1), width=3)
+    next_page.pack(side="right")
+    app.preview_controls.append(next_page)
     app.page_label = ttk.Label(app.preview_nav, text="미리보기", style="PanelMuted.TLabel")
     app.page_label.pack(side="right", padx=8)
-    ttk.Button(app.preview_nav, text="‹ 이전", command=lambda: app.turn(-1), width=7).pack(
-        side="right"
+    previous_page = ttk.Button(app.preview_nav, text="‹", command=lambda: app.turn(-1), width=3)
+    previous_page.pack(side="right")
+    app.preview_controls.append(previous_page)
+    app.view_choice = ChoiceVar(value="페이지별", choices=["전체 페이지", "페이지별"])
+    app.view_toggle = ttk.SegmentedChoice(
+        zoom,
+        variable=app.view_choice,
+        values=["전체 페이지", "페이지별"],
+        command=app.change_page_view,
+        width=170,
+        dynamic_resizing=False,
     )
+    app.view_toggle.pack(side="left", padx=(0, 6))
+    app.single_page_controls = ttk.Frame(zoom, style="Panel.TFrame")
+    app.single_page_controls.pack(side="left")
     for text, command, width in [
-        ("폭 맞춤", lambda: app.set_preview_mode("width"), 8),
-        ("한 페이지", lambda: app.set_preview_mode("page"), 8),
-        ("－", lambda: app.zoom_preview(-0.25), 4),
-        ("＋", lambda: app.zoom_preview(0.25), 4),
+        ("폭맞춤", lambda: app.set_preview_mode("width"), 6),
+        ("높이맞춤", lambda: app.set_preview_mode("height"), 7),
+        ("－", lambda: app.zoom_preview(-0.1), 3),
+        ("＋", lambda: app.zoom_preview(0.1), 3),
     ]:
-        ttk.Button(zoom, text=text, command=command, width=width).pack(side="left", padx=(0, 4))
+        control = ttk.Button(app.single_page_controls, text=text, command=command, width=width)
+        control.pack(side="left", padx=(0, 3))
+        app.preview_controls.append(control)
+    app.zoom_value = tk.StringVar(value="100%")
+    app.zoom_entry = ttk.Entry(app.single_page_controls, textvariable=app.zoom_value, width=6)
+    app.zoom_entry.configure(width=70)
+    app.zoom_entry.pack(side="left", padx=3)
+    app.zoom_entry.bind("<Return>", app.set_preview_percent)
+    app.zoom_entry.bind("<FocusOut>", app.set_preview_percent)
+    app.preview_controls.append(app.zoom_entry)
+    for control, explanation in ((previous_page, "이전 페이지"), (next_page, "다음 페이지")):
+        tooltip = Tooltip(control, explanation)
+        control.bind("<Enter>", lambda e, tip=tooltip: tip.schedule())
+        control.bind("<Leave>", lambda e, tip=tooltip: tip.hide())
+        control.bind("<ButtonPress-1>", lambda e, tip=tooltip: tip.hide())
     app.zoom_label = ttk.Label(zoom, text="폭 맞춤", style="PanelMuted.TLabel")
-    app.zoom_label.pack(side="left", padx=4)
+    # Kept as an internal compatibility label; the editable field shows scale.
     area = tk.Frame(preview, bg=PANEL)
     area.pack(fill="both", expand=True, padx=8, pady=(0, 8))
     app.canvas = tk.Canvas(area, bg="#e9edf4", highlightthickness=0, height=180, takefocus=True)
     app.canvas.own_wheel = True
-    vs = ttk.Scrollbar(area, command=app.canvas.yview)
+    vs = ttk.Scrollbar(area, command=lambda *args: app.preview_scroll("y", *args))
+    app.preview_vscroll = vs
     vs.pack(side="right", fill="y")
-    app.canvas.configure(yscrollcommand=vs.set)
+    app.canvas.configure(
+        yscrollcommand=lambda first, last: app.preview_scroll_changed("y", first, last)
+    )
     app.canvas.pack(fill="both", expand=True)
     app.canvas.bind("<Configure>", lambda e: app.schedule_preview())
     for sequence in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
         app.canvas.bind(sequence, app.preview_wheel)
-    app.preview_hscroll = ttk.Scrollbar(preview, orient="horizontal", command=app.canvas.xview)
+    app.preview_hscroll = ttk.Scrollbar(
+        preview, orient="horizontal", command=lambda *args: app.preview_scroll("x", *args)
+    )
     app.preview_hscroll.pack(fill="x", padx=8, pady=(0, 5))
-    app.canvas.configure(xscrollcommand=app.preview_hscroll.set)
-    app.canvas.bind("<Motion>", app.stamp_hover)
+    app.canvas.configure(
+        xscrollcommand=lambda first, last: app.preview_scroll_changed("x", first, last)
+    )
+    app.canvas.bind("<Motion>", app.preview_hover)
     app.canvas.bind("<Leave>", lambda e: app.canvas.config(cursor=""))
     app.canvas.bind("<ButtonPress-1>", app.draw_start)
     app.canvas.bind("<B1-Motion>", app.draw_move)
     app.canvas.bind("<ButtonRelease-1>", app.draw_end)
+    root.bind("<Control-z>", app.undo_page_edit, add="+")
     app.preview_timer = None
     app.window_drop_hover = WindowDropHover(app)
     app.arrange_cards(950, force=True)

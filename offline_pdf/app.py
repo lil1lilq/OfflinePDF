@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 import tkinter as tk
-from tkinter import messagebox
 
 import customtkinter as ctk
 
+from .controllers.crop import CropController
 from .controllers.files import FileController
 from .controllers.forms import FormController
 from .controllers.jobs import JobController
 from .controllers.navigation import NavigationController
 from .controllers.preview import PreviewController
 from .controllers.stamp import StampController
+from .dialogs import messagebox
 from .engine import disable_network
 from .theme import avoid_native_titlebar_updates
 from .tools import TOOLS
@@ -22,6 +23,7 @@ avoid_native_titlebar_updates()  # Called before either application or test crea
 
 
 class App(
+    CropController,
     StampController,
     NavigationController,
     FileController,
@@ -58,7 +60,7 @@ class App(
         self.result_output = None
         self.result_tool = None
         self.pending_results = None
-        self.preview_mode = "width"
+        self.preview_mode = "page"
         self.preview_zoom = 1.0
         self.organizer_preview_uid = None
         self.metadata_cache = {}
@@ -104,9 +106,15 @@ class App(
         self.update_back_state()
 
     def busy(self):
-        return self.process is not None or getattr(self, "_installing", False)
+        return (
+            self.process is not None
+            or getattr(self, "_installing", False)
+            or getattr(self, "_repairing", False)
+        )
 
     def close(self):
+        if getattr(self, "_repairing", False):
+            return
         if self.process:
             if not messagebox.askokcancel(
                 "종료", "실행 중인 작업을 취소하고 종료하시겠습니까?", parent=self.root
@@ -128,7 +136,9 @@ class App(
         self.window_drop_hover.close()
         if self.card_resize_timer:
             self.root.after_cancel(self.card_resize_timer)
+        self.close_preview_render()
         self.organizer.close_document()
+        self.overview.close_document()
         if self.preview_timer:
             try:
                 self.root.after_cancel(self.preview_timer)

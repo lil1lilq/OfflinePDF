@@ -244,10 +244,29 @@ class StampController:
         if not self._stamp_box or not self._stamp_source:
             return
         box = [12 + value * self.preview_scale for value in self._stamp_box]
-        width, height = max(1, round(box[2] - box[0])), max(1, round(box[3] - box[1]))
-        with self._stamp_source.resize((width, height), Image.Resampling.LANCZOS) as image:
-            self._stamp_photo = ImageTk.PhotoImage(image, master=self.canvas)
-        self.canvas.create_image(box[0], box[1], anchor="nw", image=self._stamp_photo, tags="stamp")
+        # Only allocate the visible portion, even when the stamp spans a
+        # heavily zoomed page. Hit testing continues to use PDF coordinates.
+        left = max(box[0], self.canvas.canvasx(0))
+        top = max(box[1], self.canvas.canvasy(0))
+        right = min(box[2], self.canvas.canvasx(0) + self.canvas.winfo_width())
+        bottom = min(box[3], self.canvas.canvasy(0) + self.canvas.winfo_height())
+        if right > left and bottom > top:
+            source = self._stamp_source
+            width, height = box[2] - box[0], box[3] - box[1]
+            extent = (
+                (left - box[0]) / width * source.width,
+                (top - box[1]) / height * source.height,
+                (right - box[0]) / width * source.width,
+                (bottom - box[1]) / height * source.height,
+            )
+            with source.transform(
+                (max(1, round(right - left)), max(1, round(bottom - top))),
+                Image.Transform.EXTENT,
+                extent,
+                Image.Resampling.BILINEAR,
+            ) as image:
+                self._stamp_photo = ImageTk.PhotoImage(image, master=self.canvas)
+            self.canvas.create_image(left, top, anchor="nw", image=self._stamp_photo, tags="stamp")
         self.canvas.create_rectangle(*box, outline=BLUE, width=2, tags="stamp")
         for _, x, y in handle_points(box):
             self.canvas.create_rectangle(

@@ -40,6 +40,43 @@ def worker_result(job):
         events.close()
 
 
+def verify_ui_navigation(app, source):
+    """Check the same initial document view and Back behavior as the desktop UI."""
+    from .tools import TOOLS
+
+    window = app.root
+    window.geometry("900x650")
+    window.update()
+    assert str(app.home_button.cget("state")) == "disabled", (
+        "Home screen must keep Back disabled after startup"
+    )
+    for tool in TOOLS:
+        app.select_tool(tool)
+        window.update()
+        assert app.run_button.winfo_ismapped(), f"Run button must be visible for {tool}"
+    app.add_paths([str(source)])
+    window.update()
+    assert app.preview_panel.winfo_ismapped(), "Document preview must be visible initially"
+    assert app.preview_mode == "width", "Initial preview must fit the page width"
+    app.zoom_value.set("400%")
+    app.set_preview_percent()
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        window.update()
+        revision = getattr(app, "_viewport_revision", None)
+        if revision is not None and getattr(app, "_sharp_viewport_revision", None) == revision:
+            break
+        time.sleep(0.01)
+    else:
+        raise AssertionError("Background viewport rendering did not complete")
+    assert app.preview_photo.width() <= app.canvas.winfo_width() + 2, (
+        "Preview must rasterize only the viewport"
+    )
+    app.go_back()
+    window.update()
+    assert app.screen == "home", "Back must return directly to the tool list"
+
+
 def self_test():
     """Exercise the frozen executable, child workers, native UI and AI/OCR."""
     import socket
@@ -48,7 +85,7 @@ def self_test():
     from PIL import Image
 
     from . import __version__
-    from .app import TOOLS, App
+    from .app import App
     from .engine import disable_network
     from .enhance import model_folder
 
@@ -115,19 +152,9 @@ def self_test():
         app = App(window)
         app.auto_open.set(False)
         try:
-            window.geometry("900x650")
-            window.update()
-            assert str(app.home_button.cget("state")) == "disabled"
-            for tool in TOOLS:
-                app.select_tool(tool)
-                window.update()
-                assert app.run_button.winfo_ismapped()
-            app.add_paths([str(source)])
-            app.show_preview()
-            window.update()
-            app.go_back()
-            assert app.screen == "work"
+            verify_ui_navigation(app, source)
             checks.append("native-ui-tools-navigation")
+            checks.append("background-viewport-rendering")
         finally:
             app.close()
     return {"ok": True, "version": __version__, "checks": checks}
@@ -143,7 +170,9 @@ def run_diagnostic(command, report):
         return 0
     except Exception as exc:
         path.write_text(
-            json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False, indent=2),
+            json.dumps(
+                {"ok": False, "error": str(exc) or type(exc).__name__}, ensure_ascii=False, indent=2
+            ),
             encoding="utf-8",
         )
         return 1

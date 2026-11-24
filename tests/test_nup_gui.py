@@ -48,6 +48,12 @@ class NupGuiTests(unittest.TestCase):
         self.root.geometry("900x620")
         self.root.update()
         self.assertTrue(self.app.run_button.winfo_ismapped())
+        from offline_pdf.controllers.forms import TOOL_ADVANCED
+
+        for key, cell in self.app.form_cells:
+            self.assertEqual(bool(cell.winfo_ismapped()), key not in TOOL_ADVANCED["nup"])
+        self.app.toggle_advanced()
+        self.root.update()
         for _, cell in self.app.form_cells:
             self.assertTrue(cell.winfo_ismapped())
             self.assertLess(
@@ -65,7 +71,7 @@ class NupGuiTests(unittest.TestCase):
         self.assertEqual(self.app.page_label.cget("text"), "2 / 3쪽")
         self.app.turn(100)
         self.assertEqual(self.app.page_label.cget("text"), "3 / 3쪽")
-        self.app.hide_preview()
+        self.app.show_preview()
         self.app.options["nup_count"].set("3")
         self.app.options["nup_orientation"].set("가로")
         self.app.refresh_preview(reset=True)

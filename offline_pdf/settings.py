@@ -1,12 +1,11 @@
 """Display settings dialog. No document, path, or password history is persisted."""
 
-from tkinter import messagebox
-
 import customtkinter as ctk
 
 from . import ctk_widgets as ttk
 from . import theme
 from .appearance import apply_theme
+from .dialogs import dialog_parent, messagebox, place_dialog
 from .localization import apply_language, language, tr
 from .preferences import save_preferences
 
@@ -15,13 +14,14 @@ def show_settings(app):
     if app.busy():
         return
     if getattr(app, "settings_dialog", None) and app.settings_dialog.winfo_exists():
-        app.settings_dialog.lift()
-        return
-    dialog = ctk.CTkToplevel(app.root)
+        place_dialog(app.settings_dialog, app.root)
+        return app.settings_dialog
+    owner = dialog_parent(app.root)
+    dialog = ctk.CTkToplevel(owner)
     app.settings_dialog = dialog
     dialog.title("설정")
     dialog.resizable(False, False)
-    dialog.transient(app.root)
+    dialog.transient(owner)
     body = ttk.Frame(dialog)
     body.pack(fill="both", expand=True, padx=24, pady=22)
     font = (theme.FONT_FAMILY, 15)
@@ -75,9 +75,6 @@ def show_settings(app):
     actions.grid(row=2, column=0, columnspan=2, sticky="e", pady=(22, 0))
     ttk.Button(actions, text="취소", command=dialog.destroy).pack(side="left", padx=6)
     ttk.Button(actions, text="적용", command=apply, style="Run.TButton").pack(side="left")
-    dialog.update_idletasks()
-    x = app.root.winfo_rootx() + (app.root.winfo_width() - dialog.winfo_width()) // 2
-    y = app.root.winfo_rooty() + (app.root.winfo_height() - dialog.winfo_height()) // 2
-    dialog.geometry(f"+{x}+{y}")
+    place_dialog(dialog, owner)
     dialog.grab_set()
     return dialog

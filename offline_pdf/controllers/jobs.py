@@ -11,14 +11,23 @@ import sys
 import time
 import uuid
 from pathlib import Path
-from tkinter import messagebox
 
+from ..dialogs import messagebox
 from ..engine import UserError, check_local_path, open_pdf, split_ranges, worker
 from ..passwords import ask_password, cached_password, ensure_password
 
 
 class JobController:
     """Worker lifecycle, progress, cancellation and publication."""
+
+    def active_job_files(self, preview=False):
+        single = (
+            preview
+            or self.tool == "extract"
+            or (self.tool == "crop" and self.options["crop_scope"].get() != "전체 페이지")
+            or (self.tool == "split" and self.options["split_mode"].get() == "N개 파일로 나누기")
+        )
+        return [self.selected_file()] if single and self.files else list(self.files)
 
     def run(self, preview=False):
         if self.busy():
@@ -27,13 +36,7 @@ class JobController:
             messagebox.showinfo("파일 추가", "처리할 파일을 먼저 추가하세요.", parent=self.root)
             return
         actual_tool = self.effective_tool()
-        active_files = (
-            [self.selected_file()]
-            if preview
-            or self.tool == "extract"
-            or (self.tool == "split" and self.options["split_mode"].get() == "N개 파일로 나누기")
-            else list(self.files)
-        )
+        active_files = self.active_job_files(preview)
         if not all(path and self.accepted_path(path) for path in active_files):
             messagebox.showinfo(
                 "파일 형식",
@@ -74,6 +77,21 @@ class JobController:
         if not Path(self.output.get()).is_dir():
             messagebox.showinfo("저장 폴더", "결과를 저장할 폴더를 선택하세요.", parent=self.root)
             return
+        if self.tool == "extract" and not preview:
+            groups = self.organizer.model.segment_sizes()
+            detail = " · ".join(f"파일 {i + 1}: {group}쪽" for i, group in enumerate(groups[:12]))
+            if len(groups) > 12:
+                detail += f" · 외 {len(groups) - 12}개"
+            naming = (
+                "001_원본이름_part_001.pdf, …" if len(groups) > 1 else "001_원본이름_extract.pdf"
+            )
+            if not messagebox.askokcancel(
+                "페이지 정리·분할 저장",
+                f"PDF {len(groups)}개를 저장합니다.\n{detail}\n\n저장 위치: {self.output.get()}"
+                f"\n새 PDF결과 폴더에 저장됩니다.\n파일명: {naming}\n원본 파일은 유지됩니다.",
+                parent=self.root,
+            ):
+                return
         if actual_tool in ("redact", "unlock", "pdf_images", "text", "crop"):
             notes = {
                 "redact": "지정 영역을 실제 삭제하며 문서의 첨부파일·양식 필드·주석·링크·속성도 정리합니다. 잘린 페이지는 지원하지 않습니다. 지정 영역 밖의 정보는 남으므로 결과를 확인하세요.",
@@ -113,6 +131,8 @@ class JobController:
             "output": self.output.get(),
             "options": {k: v.get() for k, v in self.options.items() if k != "hint"},
         }
+        if self.tool == "crop":
+            job["options"]["crop_page"] = str(self.page_index + 1)
         job["options"]["remove_blank"] = self.blank_mode()
         job["passwords"] = {p: cached_password(self, p) for p in active_files}
         if actual_tool == "unlock":
@@ -149,6 +169,7 @@ class JobController:
                 }
         if self.tool == "extract":
             job["options"]["page_plan"] = self.organizer.model.plan()
+            job["options"]["page_cuts"] = sorted(self.organizer.model.cuts())
         if self.tool == "redact":
             job["options"]["regions"] = self.regions.get(self.files[0], {})
         if self.tool == "ocr":

@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from tkinter import filedialog, messagebox
 
 import pymupdf as pdf
 
+from ..dialogs import filedialog, messagebox
 from ..engine import UserError, check_local_path
 from ..images import IMAGE_EXTENSIONS, IMAGE_LABEL, IMAGE_PATTERN
 from ..passwords import cached_password, ensure_password
+from ..repair_dialog import prepare_pdf_import
+from ..ui import CARD_TEXT
 
 
 class FileController:
@@ -51,7 +53,7 @@ class FileController:
         extensions = IMAGE_EXTENSIONS | {".pdf"}
         expected = "PDF·" + IMAGE_LABEL
         known = {os.path.normcase(str(Path(path).resolve())) for path in self.files}
-        added = duplicates = unsupported = blocked = 0
+        added = duplicates = unsupported = blocked = skipped = repaired = 0
         for path in paths:
             candidate = Path(path)
             if candidate.suffix.lower() not in extensions:
@@ -69,6 +71,19 @@ class FileController:
             if key in known:
                 duplicates += 1
                 continue
+            if candidate.suffix.lower() == ".pdf":
+                imported = prepare_pdf_import(self, candidate)
+                if imported is None:
+                    skipped += 1
+                    continue
+                if imported != candidate:
+                    repaired += 1
+                candidate = Path(imported)
+                imported_key = os.path.normcase(str(candidate))
+                if imported_key in known:
+                    duplicates += 1
+                    continue
+                known.add(imported_key)
             known.add(key)
             self.files.append(str(candidate))
             added += 1
@@ -83,10 +98,11 @@ class FileController:
             if not home:
                 if self.tool == "extract":
                     self.refresh_organizer()
-                elif self.tool == "split":
-                    self.update_split_preview()
                 else:
-                    self.hide_preview(restore=False)
+                    if self.tool == "split":
+                        self.update_split_preview()
+                    if not self.preview_panel.winfo_manager():
+                        self.show_document_view(restore=False)
                 self.refresh_preview(reset=True)
         details = [f"{added}개 추가", f"전체 {len(self.files)}개"]
         if duplicates:
@@ -95,6 +111,10 @@ class FileController:
             details.append(f"지원하지 않는 항목 {unsupported}개 제외 ({expected} 파일만 추가 가능)")
         if blocked:
             details.append(f"접근 불가·동기화·네트워크 경로 {blocked}개 제외")
+        if repaired:
+            details.append(f"구조 복구본 {repaired}개 사용 (원본 보존)")
+        if skipped:
+            details.append(f"복구 취소·실패 {skipped}개 제외")
         if added and any(Path(p).suffix.lower() in IMAGE_EXTENSIONS for p in self.files[-added:]):
             details.append("이미지는 자동으로 PDF로 변경되어 작업이 수행됩니다.")
         self.status.set(" · ".join(details))
@@ -159,36 +179,49 @@ class FileController:
             self.update_split_preview()
         self.update_file_summary()
         self.refresh_preview(reset=True)
-        if self.file_overview.winfo_manager():
-            self.overview_title.config(
-                text=Path(self.selected_file()).name if self.selected_file() else ""
-            )
 
     def update_file_summary(self):
+        for control in self.preview_controls:
+            control.configure(state="normal" if self.selected_file() else "disabled")
+        self.update_preview_controls()
         self.file_count.config(text=f"작업 파일  {len(self.files)}개")
         self.summary.set(
             f"파일 {len(self.files)}개 선택됨" if self.files else "파일을 추가해 주세요."
         )
         if self.tool == "extract" and self.organizer.model:
-            self.summary.set(f"{len(self.organizer.model.items)}페이지를 저장합니다")
-        if self.tool == "split" and self.selected_file():
+            groups = self.organizer.model.segment_sizes()
+            detail = " · ".join(f"파일 {i + 1}: {group}쪽" for i, group in enumerate(groups[:6]))
+            self.summary.set(detail + (f" · 외 {len(groups) - 6}개" if len(groups) > 6 else ""))
+        single = (
+            self.tool == "extract"
+            or (self.tool == "split" and self.options["split_mode"].get() == "N개 파일로 나누기")
+            or (self.tool == "crop" and self.options["crop_scope"].get() != "전체 페이지")
+        )
+        if self.tool == "split" and single and self.selected_file():
             self.summary.set("왼쪽에서 선택한 PDF 한 개를 나눕니다.")
-        compatible = bool(self.files) and all(self.accepted_path(path) for path in self.files)
-        if self.tool in ("extract", "split"):
-            compatible = bool(self.selected_file() and self.accepted_path(self.selected_file()))
+        active = self.active_job_files()
+        compatible = bool(active) and all(path and self.accepted_path(path) for path in active)
+        action = CARD_TEXT[self.tool][0]
+        if self.tool == "protect":
+            action = (
+                "암호 제거" if self.options["password_mode"].get() == "암호 제거" else "암호 설정"
+            )
+        elif self.tool == "extract":
+            count = len(self.organizer.model.cuts()) + 1 if self.organizer.model else 1
+            action = f"PDF {count}개로 나눠 저장" if count > 1 else "PDF 저장"
+        elif self.tool == "redact":
+            action = "선택 영역 영구 삭제"
+        scope = "선택 파일" if single else f"전체 {len(active)}개"
+        self.run_button.config(text=f"{scope} · {action}  →")
         self.run_button.config(state="normal" if compatible and not self.busy() else "disabled")
         if self.files and not compatible:
             self.summary.set("지원하지 않는 파일이 있습니다. 왼쪽 목록을 확인하세요.")
+        if self.tool == "split" and single and not self.options["split_starts"].get().strip():
+            self.run_button.config(state="disabled")
         if self.tool == "extract" and not self.organizer.model:
             self.run_button.config(state="disabled")
         if self.files and self.save_mode.get() == "원본 파일과 같은 폴더":
-            self.output.set(
-                str(
-                    Path(
-                        self.selected_file() if self.tool in ("extract", "split") else self.files[0]
-                    ).parent
-                )
-            )
+            self.output.set(str(Path(self.selected_file() if single else self.files[0]).parent))
 
     def remove_files(self):
         if self.busy() or self.pending_results is not None:

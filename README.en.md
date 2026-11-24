@@ -11,13 +11,13 @@ Documents are processed on your PC. Files are never uploaded to an external conv
 | --- | --- |
 | OfflinePDF-Setup-Windows-x64.exe | Installer (recommended) |
 | OfflinePDF-Windows-x64-portable.zip | Portable version. Extract it and run `OfflinePDF.exe` inside the folder |
-| OfflinePDF-1.2.4-source.zip | Source code of the program and its components (AGPL-3.0). Not needed to run it |
+| OfflinePDF-1.3.0-source.zip | Source code of the program and its components (AGPL-3.0). Not needed to run it |
 | SHA256SUMS.txt | Hashes for verifying file integrity. Not needed to run the program |
 
 Two downloads are available: an installer, and a portable ZIP that needs no installation. Windows 10 and 11, 64-bit, are supported. Everything the program needs is included, so Python does not have to be installed.
 Keep the portable version's folder together with the executable.
 
-The current source version is **1.2.4**. Check the version shown on Releases for the downloaded files.
+The current source version is **1.3.0**. Check the version shown on Releases for the downloaded files.
 Features or fixes added to the source may not be in earlier releases.
 
 ## Program screenshots
@@ -32,8 +32,8 @@ Features or fixes added to the source may not be in earlier releases.
 
 | Feature | Description |
 | --- | --- |
-| Merge PDF · Split PDF | Merge several files, split per page, or split at chosen start pages |
-| Organize pages | Drag thumbnails to reorder; delete or rotate selected pages |
+| Merge PDF | Merge several files into one PDF |
+| Organize and split pages | Reorder, delete and rotate thumbnails; split using scissors, start positions or page intervals |
 | A4 handouts | Place 1 to 64 pages on one A4 sheet; set orientation, margins and gaps |
 | Compress PDF | Lossless, High quality, Recommended or Small, or a target size in MB per file |
 | PDF to images · Images to PDF | Save PDF pages as images, or turn images into A4 PDFs |
@@ -58,8 +58,21 @@ Word, Excel, PowerPoint and HWP conversion is not supported.
 3. Set the page range, the tool's options and the save folder, then run.
 4. Use **Open result folder** to see the saved files.
 
+If a PDF structure problem is detected when adding a file, **Repair PDF structure** offers recovery. Choose a location to save a separate `_복구.pdf` copy; the original and existing files are never overwritten. Every page's dimensions, rotation, text and rendered appearance are compared before the verified copy is added to the work list. Recovery runs in a cancellable process.
+Recovery only rebuilds cross-reference tables and object structures that the existing PDF engine can read. It does not flatten pages into images. Encrypted PDFs and PDFs with digital signature forms are excluded; invalid encryption information and severely damaged files cannot be recovered. For these files, open them in Chrome and use **Print → Save as PDF**, then add the new copy. Review recovered content before use.
+
+Every tool offers an **All pages / Single page** two-button toggle. All pages displays a thumbnail grid that follows the window width. Double-click a thumbnail to open that page fitted to the width. Returning to the grid preserves scrolling and edits. Organize and split pages starts in the grid; other tools start in single-page view.
+
+**Fit width, Fit height, percentage input, −/＋ and Previous/Next** work in single-page view. Percentages use the actual PDF page dimensions; entering a percentage leaves the fit mode.
+
 Original files are never overwritten. Results are saved in a `PDF결과_…` folder under the chosen location.
 After a job, **Use results for next operation** continues with the result files in another tool.
+
+In **Organize and split pages**, drag thumbnails to reorder and use checkboxes, Ctrl or Shift to select pages for deletion or rotation. Click **+** between pages to add scissors and a split boundary; click again to remove it. Double-clicking a scissors or checkbox area does not open a page.
+
+Segments represent output files. Moving a page into another segment adds it to that file; empty segments disappear. **Split settings** accepts start positions or an interval of N pages (1 means one file per page). **Undo / Ctrl+Z** reverses splits, moves, deletions and rotations. Only the selected document is processed. Before saving, confirm the file count, destination and naming rule.
+
+Crop margins by dragging **eight edge/corner handles** or entering independent **left, top, right and bottom mm** values. Shading marks hidden areas; **Reset margins** restores all four margins to zero. Current/specified pages apply to the selected file; all pages applies to every listed file. The same mm margins apply to differently sized pages, with a minimum retained area of 1 mm in each dimension. Cropped content remains inside the PDF. In single-page view, **Ctrl+mouse wheel up** zooms in and **Ctrl+mouse wheel down** zooms out. The wheel alone scrolls the page; Ctrl+drag does not zoom. Zoom does not change the overview grid. Ctrl+wheel uses proportional steps and applies every input immediately. At high zoom, cached images appear first and a separate process sharpens only the visible area. Saved output quality is unchanged.
 
 Leave the page field empty to process every page. `1-3,5` means pages 1 to 3 and page 5; `3-1` means reverse order.
 Images you add are converted to PDF automatically before the selected job.

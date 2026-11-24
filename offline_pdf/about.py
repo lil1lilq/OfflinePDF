@@ -14,6 +14,7 @@ import customtkinter as ctk
 
 from . import __version__, theme
 from . import ctk_widgets as ttk
+from .dialogs import dialog_parent, place_dialog
 
 # Replace with the copyright holder (for example the organization) before release.
 COPYRIGHT = "Copyright © 2026 OfflinePDF 개발자"
@@ -52,13 +53,14 @@ def open_path(path):
 
 def show_about(app):
     if getattr(app, "about_dialog", None) and app.about_dialog.winfo_exists():
-        app.about_dialog.lift()
+        place_dialog(app.about_dialog, app.root)
         return app.about_dialog
-    dialog = ctk.CTkToplevel(app.root)
+    owner = dialog_parent(app.root)
+    dialog = ctk.CTkToplevel(owner)
     app.about_dialog = dialog
     dialog.title("OfflinePDF 정보")
     dialog.resizable(False, False)
-    dialog.transient(app.root)
+    dialog.transient(owner)
     body = ttk.Frame(dialog)
     body.pack(fill="both", expand=True, padx=24, pady=22)
     ttk.Label(body, text="OfflinePDF", font=(theme.BOLD_FAMILY, 20, "bold")).pack(anchor="w")
@@ -90,8 +92,5 @@ def show_about(app):
         side="right"
     )
     dialog.bind("<Escape>", lambda e: dialog.destroy())
-    dialog.update_idletasks()
-    x = app.root.winfo_rootx() + (app.root.winfo_width() - dialog.winfo_width()) // 2
-    y = app.root.winfo_rooty() + (app.root.winfo_height() - dialog.winfo_height()) // 2
-    dialog.geometry(f"+{max(0, x)}+{max(0, y)}")
+    place_dialog(dialog, owner)
     return dialog

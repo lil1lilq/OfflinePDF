@@ -2,119 +2,162 @@
 
 from __future__ import annotations
 
-import base64
 import math
 import shutil
 import tkinter as tk
 from pathlib import Path
 
-import pymupdf as pdf
-
 from .. import ctk_widgets as ttk
 from .. import theme
-from ..engine import UserError, check_local_path, open_pdf, pages, split_ranges
-from ..images import open_image_document
+from ..engine import UserError, check_local_path, pages
 from ..overlays import OverlayError
 from ..passwords import cached_password
-from ..ui import BLUE, MUTED, PANEL
+from ..ui import PANEL
 
 
 class PreviewController:
     """Width-fit document preview, organizer and actual AI comparison."""
 
-    def toggle_preview(self):
-        if self.preview_panel.winfo_manager():
-            self.hide_preview()
+    def show_preview_toolbar(self):
+        if not self.preview_zoom_row.winfo_manager():
+            visible = self.document_host.pack_slaves()
+            options = {"before": visible[0]} if visible else {}
+            self.preview_zoom_row.pack(fill="x", pady=(0, 8), **options)
+
+    def ensure_preview_visible(self):
+        if not self.selected_file() or self.screen == "comparison":
+            return False
+        if self.work.winfo_manager() and not self.preview_panel.winfo_manager():
+            self.show_preview()
+            self.root.update_idletasks()
+        return True
+
+    def update_preview_controls(self):
+        grid = self.active_thumbnail_view()
+        self.view_toggle.set("전체 페이지" if grid else "페이지별")
+        for widget in (self.single_page_controls, self.preview_nav):
+            if grid:
+                widget.pack_forget()
+            elif not widget.winfo_manager():
+                widget.pack(side="right" if widget is self.preview_nav else "left", padx=4)
+        for control in self.preview_controls:
+            control.configure(
+                state="normal" if self.selected_file() and not self.busy() else "disabled"
+            )
+
+    def change_page_view(self, value):
+        if self.busy():
+            self.update_preview_controls()
+            return
+        if value == "전체 페이지":
+            self.show_document_view()
         else:
             self.show_preview()
 
+    def undo_page_edit(self, event=None):
+        focus = self.root.focus_get()
+        if focus is not None and focus.winfo_class() in ("Entry", "TEntry", "Text"):
+            return None
+        if self.tool == "extract":
+            self.organizer.undo()
+            return "break"
+
     def show_preview(self):
-        # Redaction is drawn on the preview itself, so that preview is the tool's
-        # main work screen: keep its settings visible and let "back" go home.
-        inline = self.tool == "redact" or self.stamp_mode()
-        if self.screen != "preview" and not inline:
-            self.preview_origin = self.capture_preview_origin()
-        self.preview_mode = "width"
-        self.preview_zoom = 1.0
-        self.canvas.xview_moveto(0)
+        self.invalidate_preview_render()
+        grid = self.active_thumbnail_view()
+        if grid:
+            self._overview_y = grid.canvas.yview()[0]
+            self._overview_path = grid.path
+            if grid is self.organizer and grid.model:
+                item = next(
+                    (p for p in grid.model.items if p[0] in grid.model.selected),
+                    grid.model.items[0],
+                )
+                self.organizer_preview_uid = item[0]
         self.organizer.pack_forget()
-        self.file_overview.pack_forget()
-        if inline and self.settings_panel_needed():
+        self.overview.pack_forget()
+        self.split_view.pack_forget()
+        self.show_preview_toolbar()
+        if self.tool == "extract" or self.settings_panel_needed():
             self.columns.pack(fill="x", before=self.document_host)
         else:
             self.columns.pack_forget()
         self.preview_panel.pack(fill="both", expand=True, pady=(8, 0))
-        self.preview_button.config(text="미리보기 접기")
-        self.schedule_preview()
+        self.preview_mode = "width"
+        self.preview_zoom = 1.0
+        self.canvas.xview_moveto(0)
+        self.canvas.yview_moveto(0)
         if self.work.winfo_manager():
-            self.screen = "work" if inline else "preview"
+            self.screen = "preview" if self.tool == "extract" else "work"
+        self.update_preview_controls()
+        self.schedule_preview()
         self.update_back_state()
 
-    def hide_preview(self, restore=True):
-        if (self.tool == "redact" or self.stamp_mode()) and self.work.winfo_manager():
-            # Redaction always works on the preview; never swap it for the overview.
-            self.preview_origin = None
-            self.show_preview()
-            return
-        origin = self.preview_origin if restore else None
-        self.preview_origin = None
-        if origin:
-            self.file_list.selection_clear(0, "end")
-            for i, path in enumerate(self.files):
-                if path in origin["selected_paths"]:
-                    self.file_list.selection_set(i)
-            if self.files and not self.file_list.curselection():
-                self.file_list.selection_set(0)
-            self.page_index = origin["page"]
-            self.organizer_preview_uid = origin["organizer_uid"]
-            self.file_list.yview_moveto(origin["file_y"])
-            if self.tool == "extract" and origin["organizer_path"]:
-                self.organizer.load(
-                    self.selected_file(), cached_password(self, self.selected_file())
-                )
-                if (
-                    self.organizer.path == origin["organizer_path"]
-                    and self.organizer.fingerprint == origin["organizer_fingerprint"]
-                ):
-                    self.organizer.model = origin["organizer_model"]
+    def show_document_view(self, restore=True):
+        self.invalidate_preview_render()
+        self.show_preview_toolbar()
         self.preview_panel.pack_forget()
-        self.preview_button.config(text="크게 미리보기")
         self.organizer.pack_forget()
-        self.file_overview.pack_forget()
-        self.columns.pack_forget()
-        if self.tool == "extract":
-            self.organizer.pack(fill="both", expand=True)
+        self.overview.pack_forget()
+        self.split_view.pack_forget()
+        if self.tool == "extract" or self.settings_panel_needed():
+            self.columns.pack(fill="x", before=self.document_host)
         else:
-            if self.settings_panel_needed():
-                self.columns.pack(fill="x", before=self.document_host)
-            if self.files:
-                self.file_overview.pack(fill="both", expand=True)
-                self.overview_title.config(
-                    text=Path(self.selected_file()).name if self.selected_file() else ""
-                )
-                self.overview_detail.config(
-                    text=f"{len(self.files)}개 파일이 준비되었습니다. 왼쪽 목록에서 순서와 선택 항목을 확인하세요."
-                )
+            self.columns.pack_forget()
+        grid = self.organizer if self.tool == "extract" else self.overview
+        try:
+            grid.load(self.selected_file(), cached_password(self, self.selected_file()))
+        except (UserError, OverlayError) as exc:
+            self.status.set(str(exc))
+        if grid is self.overview and grid.model and self.page_index < len(grid.model.items):
+            grid.model.selected = {grid.model.items[self.page_index][0]}
+        grid.pack(fill="both", expand=True)
+        grid.draw()
+        if restore and grid.path == getattr(self, "_overview_path", None):
+            self.root.after_idle(lambda: grid.scroll_to("moveto", getattr(self, "_overview_y", 0)))
         if self.work.winfo_manager():
             self.screen = "work"
-        if origin:
-            self.overview_canvas.yview_moveto(origin["overview_y"])
-            if self.tool == "extract":
-                self.root.after_idle(
-                    lambda: self.organizer.scroll_to("moveto", origin["organizer_y"])
-                )
-            self.schedule_preview()
+        self.update_preview_controls()
         self.update_back_state()
 
     def set_preview_mode(self, mode):
+        if self.active_thumbnail_view() or not self.ensure_preview_visible():
+            return
         self.preview_mode = mode
         self.preview_zoom = 1.0
         self.canvas.xview_moveto(0)
+        self.canvas.yview_moveto(0)
         self.refresh_preview()
 
-    def zoom_preview(self, delta):
-        self.preview_zoom = max(0.25, min(3.0, self.preview_zoom + delta))
+    def set_preview_percent(self, event=None):
+        if self.active_thumbnail_view():
+            return "break"
+        try:
+            value = float(self.zoom_value.get().strip().rstrip("%")) / 100
+            if abs(value - self.preview_scale) < 0.0051:
+                return "break"
+            if not math.isfinite(value) or not 0.1 <= value <= 5:
+                raise ValueError()
+        except ValueError:
+            self.zoom_value.set(f"{round(self.preview_scale * 100)}%")
+            return "break"
+        self.preview_mode = "custom"
+        self.preview_zoom = value
         self.refresh_preview()
+        return "break"
+
+    def zoom_preview(self, delta):
+        if self.active_thumbnail_view() or not self.ensure_preview_visible():
+            return
+        self.preview_zoom = max(0.1, min(5.0, self.preview_scale + delta))
+        self.preview_mode = "custom"
+        self.refresh_preview()
+
+    def active_thumbnail_view(self):
+        for view in (self.organizer, self.overview):
+            if view.winfo_manager():
+                return view
+        return None
 
     def refresh_organizer(self):
         if self.tool != "extract":
@@ -122,11 +165,12 @@ class PreviewController:
         path = self.selected_file()
         self.organizer.load(path, cached_password(self, path))
         if not self.preview_panel.winfo_manager():
-            self.hide_preview()
+            self.show_document_view()
         self.update_file_summary()
         self.organizer.update_summary()
 
     def show_ai_comparison(self, folder):
+        self.invalidate_preview_render()
         # Keep one back control. The comparison is another navigation level.
         self.comparison_origin = self.screen
         self.comparison_folder = folder
@@ -186,11 +230,12 @@ class PreviewController:
         shutil.rmtree(self.comparison_folder, ignore_errors=True)
         self.comparison_folder = None
         self.screen = self.comparison_origin
+        self.show_preview_toolbar()
         if self.screen == "preview":
             self.preview_panel.pack(fill="both", expand=True, pady=(8, 0))
             self.schedule_preview()
         else:
-            self.hide_preview(restore=False)
+            self.show_document_view(restore=False)
         self.update_back_state()
 
     def schedule_preview(self):
@@ -198,178 +243,303 @@ class PreviewController:
             self.root.after_cancel(self.preview_timer)
         self.preview_timer = self.root.after(250, self.refresh_preview)
 
+    def invalidate_preview_render(self):
+        renderer = getattr(self, "_viewport_renderer", None)
+        if renderer is not None:
+            renderer.invalidate()
+        self._prepared_preview = None
+        self.preview_rect = None
+        self._crop_handles = {}
+        self._crop_drag = None
+        self._stamp_box = None
+        self._stamp_drag = None
+        self._viewport_signature = None
+        self._sharp_viewport_revision = None
+
+    def close_preview_render(self):
+        self.invalidate_preview_render()
+        if self.preview_timer:
+            self.root.after_cancel(self.preview_timer)
+            self.preview_timer = None
+        if getattr(self, "_viewport_timer", None):
+            self.root.after_cancel(self._viewport_timer)
+            self._viewport_timer = None
+        if getattr(self, "_viewport_renderer", None):
+            self._viewport_renderer.close()
+            self._viewport_renderer = None
+        if getattr(self, "_preview_cache", None):
+            self._preview_cache.close()
+
+    def preview_scroll_changed(self, axis, first, last):
+        bar = self.preview_vscroll if axis == "y" else self.preview_hscroll
+        bar.set(first, last)
+        if not getattr(self, "_preview_refreshing", False):
+            self.paint_preview_viewport()
+
+    def preview_scroll(self, axis, *args):
+        (self.canvas.yview if axis == "y" else self.canvas.xview)(*args)
+        self.paint_preview_viewport()
+
+    def paint_preview_viewport(self):
+        from PIL import Image, ImageTk
+
+        from ..preview_render import ViewportRenderer, visible_pixels
+
+        entry = getattr(self, "_prepared_preview", None)
+        if (
+            entry is None
+            or self.active_thumbnail_view()
+            or not self.preview_panel.winfo_manager()
+            or getattr(self, "_painting_viewport", False)
+        ):
+            return
+        width, height = self.preview_rect
+        pixels = visible_pixels(
+            (width * self.preview_scale, height * self.preview_scale),
+            (self.canvas.canvasx(0), self.canvas.canvasy(0)),
+            (self.canvas.winfo_width(), self.canvas.winfo_height()),
+        )
+        signature = (entry.token, self.preview_scale, pixels)
+        if signature == getattr(self, "_viewport_signature", None):
+            return
+        self._painting_viewport = True
+        try:
+            self._viewport_signature = signature
+            base = entry.thumbnail()
+            x0, y0, x1, y1 = pixels
+            source_rect = (
+                x0 / (width * self.preview_scale) * base.width,
+                y0 / (height * self.preview_scale) * base.height,
+                x1 / (width * self.preview_scale) * base.width,
+                y1 / (height * self.preview_scale) * base.height,
+            )
+            picture = base.transform(
+                (x1 - x0, y1 - y0),
+                Image.Transform.EXTENT,
+                source_rect,
+                Image.Resampling.BILINEAR,
+                fillcolor=(255, 255, 255),
+            )
+            try:
+                photo = ImageTk.PhotoImage(picture, master=self.root)
+            finally:
+                picture.close()
+            self.canvas.delete("preview_raster")
+            self.preview_photo = photo
+            self.canvas.create_image(
+                12 + x0, 12 + y0, anchor="nw", image=photo, tags="preview_raster"
+            )
+            self.canvas.tag_lower("preview_raster")
+            renderer = getattr(self, "_viewport_renderer", None)
+            if (
+                renderer is not None
+                and renderer.process.pid is not None
+                and not renderer.process.is_alive()
+            ):
+                renderer.close()
+                renderer = None
+            if renderer is None:
+                renderer = self._viewport_renderer = ViewportRenderer()
+            try:
+                self._viewport_revision = renderer.submit(entry, self.preview_scale, pixels)
+            except (OSError, RuntimeError):
+                renderer.close()
+                self._viewport_renderer = None
+                self.status.set(
+                    "선명한 미리보기를 표시하지 못했습니다. 페이지를 다시 선택해 주세요."
+                )
+                return
+            if not getattr(self, "_viewport_timer", None):
+                self._viewport_timer = self.root.after(16, self.poll_preview_raster)
+            if self.stamp_mode() and getattr(self, "_stamp_box", None):
+                self.draw_stamp_layer()
+        finally:
+            self._painting_viewport = False
+
+    def poll_preview_raster(self):
+        from PIL import Image, ImageTk
+
+        self._viewport_timer = None
+        renderer = getattr(self, "_viewport_renderer", None)
+        if renderer is None:
+            return
+        result = renderer.poll()
+        if result is not None and result[0] == getattr(self, "_viewport_revision", None):
+            raster = result[1]
+            if (
+                raster is not None
+                and self._prepared_preview is not None
+                and self.preview_panel.winfo_manager()
+                and self.work.winfo_manager()
+            ):
+                x, y, width, height, samples = raster
+                with Image.frombytes("RGB", (width, height), samples) as picture:
+                    photo = ImageTk.PhotoImage(picture, master=self.root)
+                self.canvas.delete("preview_raster")
+                self.preview_photo = photo
+                self.canvas.create_image(
+                    12 + x, 12 + y, anchor="nw", image=photo, tags="preview_raster"
+                )
+                self.canvas.tag_lower("preview_raster")
+                self._sharp_viewport_revision = result[0]
+            elif raster is None and self.preview_panel.winfo_manager():
+                self.status.set(
+                    "선명한 미리보기를 표시하지 못했습니다. 페이지를 다시 선택해 주세요."
+                )
+        if renderer.pending:
+            self._viewport_timer = self.root.after(16, self.poll_preview_raster)
+
     def refresh_preview(self, reset=False):
+        self._preview_refreshing = True
+        try:
+            self._refresh_preview(reset)
+        finally:
+            self._preview_refreshing = False
+
+    def _refresh_preview(self, reset=False):
+        if self.preview_timer:
+            self.root.after_cancel(self.preview_timer)
         self.preview_timer = None
+        self.invalidate_preview_render()
         self.canvas.delete("all")
         self.preview_rect = None
+        self._crop_box = None
+        self._crop_drag = None
+        self._crop_handles = {}
         self._stamp_box = None
         self._stamp_drag = None
         self.canvas.config(cursor="")
-        self.overview_canvas.delete("all")
+        if not self.work.winfo_manager():
+            self.close_preview_render()
+            self.preview_photo = None
+            return
         if reset:
             self.page_index = 0
             self.canvas.yview_moveto(0)
         path = self.selected_file()
         if not path:
+            self.close_preview_render()
+            self.preview_photo = None
+        grid = self.active_thumbnail_view()
+        if grid:
+            try:
+                grid.load(path, cached_password(self, path))
+            except (UserError, OverlayError) as exc:
+                self.status.set(str(exc))
+            grid.cache.clear()
+            grid.draw()
+            return
+        if not path:
+            if getattr(self, "_preview_cache", None):
+                self._preview_cache.close()
             self.canvas.config(scrollregion=(0, 0, max(300, self.canvas.winfo_width()), 280))
-            text = "파일을 추가하면 여기에서 미리 볼 수 있습니다."
-            if self.file_drop and self.file_drop.enabled:
-                text = "파일을 여기에 끌어놓거나\n파일 추가 버튼으로 선택하세요."
-            self.canvas.create_text(15, 25, anchor="nw", text=text)
             self.page_label.config(text="미리보기")
             return
         try:
             check_local_path(path)
             password = cached_password(self, path)
-            if Path(path).suffix.lower() == ".pdf":
-                doc, _ = open_pdf(path, password, extraction=True)
-            else:
-                doc = open_image_document(path)
+            from ..preview_render import PreviewCache
+
+            if not getattr(self, "_preview_cache", None):
+                self._preview_cache = PreviewCache()
+            doc = self._preview_cache.document(path, password)
             nup_doc = None
-            try:
-                preview_total = doc.page_count
-                preview_index = None
-                if self.tool == "nup":
-                    from ..nup import NupLayout, make_nup
+            preview_total = doc.page_count
+            preview_index = None
+            if self.tool == "nup":
+                from ..nup import NupLayout
 
-                    options = {key: value.get() for key, value in self.options.items()}
-                    selected = pages(options.get("pages", ""), doc.page_count, duplicates=True)
-                    layout = NupLayout.from_options(options, doc[selected[0]].rect)
-                    preview_total = math.ceil(len(selected) / layout.count)
-                    self.page_index = max(0, min(self.page_index, preview_total - 1))
-                    preview_index = self.page_index
-                    nup_doc = make_nup(doc, selected, options, sheet=preview_index)
-                angle = 0
-                if self.tool == "extract" and self.organizer.model:
-                    item = next(
-                        (
-                            p
-                            for p in self.organizer.model.items
-                            if p[0] == self.organizer_preview_uid
-                        ),
-                        self.organizer.model.items[0],
-                    )
-                    self.organizer_preview_uid = item[0]
-                    self.page_index = item[1]
-                    angle = item[2]
-                if nup_doc is None:
-                    self.page_index = max(0, min(self.page_index, doc.page_count - 1))
-                page = nup_doc[0] if nup_doc is not None else doc[self.page_index]
-                if self.tool == "number":
-                    from ..numbering import draw_number
+                options = {key: value.get() for key, value in self.options.items()}
+                selected = pages(options.get("pages", ""), doc.page_count, duplicates=True)
+                layout = NupLayout.from_options(options, doc[selected[0]].rect)
+                preview_total = math.ceil(len(selected) / layout.count)
+                self.page_index = max(0, min(self.page_index, preview_total - 1))
+                preview_index = self.page_index
+                entry = self._preview_cache.prepared(
+                    preview_index, nup_options=options, selected=selected
+                )
+                nup_doc = entry.document
+            angle = 0
+            if self.tool == "extract" and self.organizer.model:
+                item = next(
+                    (p for p in self.organizer.model.items if p[0] == self.organizer_preview_uid),
+                    self.organizer.model.items[0],
+                )
+                self.organizer_preview_uid = item[0]
+                self.page_index = item[1]
+                angle = item[2]
+            if nup_doc is None:
+                self.page_index = max(0, min(self.page_index, doc.page_count - 1))
+            if nup_doc is None:
+                number_options = (
+                    {key: value.get() for key, value in self.options.items()}
+                    if self.tool == "number"
+                    else None
+                )
+                entry = self._preview_cache.prepared(
+                    self.page_index, angle, number_options=number_options
+                )
+            page = entry.page
+            crop_rect = None
+            if self.tool == "crop":
+                options = {key: value.get() for key, value in self.options.items()}
+                from ..crop import crop_pages, visible_crop_rect
 
-                    options = {key: value.get() for key, value in self.options.items()}
-                    chosen = pages(options.get("pages", ""), doc.page_count)
-                    if self.page_index in chosen:
-                        draw_number(page, chosen.index(self.page_index), options)
-                if self.file_overview.winfo_ismapped():
-                    ow = max(150, self.overview_canvas.winfo_width())
-                    if (
-                        self.tool == "split"
-                        and self.options.get("split_mode")
-                        and self.options["split_mode"].get() == "N개 파일로 나누기"
-                    ):
-                        try:
-                            ranges = split_ranges(
-                                doc.page_count,
-                                self.options["split_count"].get(),
-                                self.options["split_starts"].get(),
-                            )
-                            for i, (first, last) in enumerate(ranges):
-                                cols = max(1, min(6, int(ow / 180)))
-                                cw = ow / cols
-                                x = (i % cols) * cw
-                                y = (i // cols) * 80
-                                self.overview_canvas.create_rectangle(
-                                    x + 3, y + 3, x + cw - 8, y + 70, fill=PANEL, outline="#e2e7ef"
-                                )
-                                self.overview_canvas.create_text(
-                                    x + 15, y + 20, anchor="w", text=f"파일 {i + 1:02d}", fill=MUTED
-                                )
-                                self.overview_canvas.create_text(
-                                    x + 15,
-                                    y + 47,
-                                    anchor="w",
-                                    text=f"{first + 1}–{last + 1}쪽",
-                                    fill=BLUE,
-                                    font=(theme.BOLD_FAMILY, 12, "bold"),
-                                )
-                            self.overview_canvas.configure(
-                                scrollregion=(0, 0, ow, ((len(ranges) + cols - 1) // cols) * 80)
-                            )
-                        except UserError:
-                            pass
-                    else:
-                        scale = min(
-                            (ow - 30) / page.rect.width,
-                            math.sqrt(12_000_000 / (page.rect.width * page.rect.height)),
-                        )
-                        scale = max(0.05, scale)
-                        thumb = page.get_pixmap(
-                            matrix=pdf.Matrix(scale, scale), alpha=False, colorspace=pdf.csRGB
-                        )
-                        self.overview_photo = tk.PhotoImage(
-                            data=base64.b64encode(thumb.tobytes("png"))
-                        )
-                        self.overview_canvas.create_image(
-                            ow / 2, 5, anchor="n", image=self.overview_photo
-                        )
-                        self.overview_canvas.configure(scrollregion=(0, 0, ow, thumb.height + 15))
-                rw, rh = (
-                    (page.rect.height, page.rect.width)
-                    if angle % 180
-                    else (page.rect.width, page.rect.height)
+                options["crop_page"] = self.page_index + 1
+                chosen = crop_pages(options, doc.page_count)
+                if self.page_index in chosen:
+                    crop_rect = visible_crop_rect(page, options)
+            rw, rh = page.rect.width, page.rect.height
+            w = max(self.canvas.winfo_width() - 24, 150)
+            h = max(100, self.canvas.winfo_height() - 24)
+            fit = (
+                min(w / rw, h / rh)
+                if self.preview_mode == "page"
+                else h / rh
+                if self.preview_mode == "height"
+                else w / rw
+            )
+            requested = self.preview_zoom if self.preview_mode == "custom" else fit
+            self.preview_scale = min(requested, 20_000 / rh)
+            self.preview_rect = (rw, rh)
+            self.canvas.configure(
+                scrollregion=(
+                    0,
+                    0,
+                    math.ceil(rw * self.preview_scale) + 24,
+                    math.ceil(rh * self.preview_scale) + 24,
                 )
-                w = max(self.canvas.winfo_width() - 24, 150)
-                h = max(100, self.canvas.winfo_height() - 24)
-                fit = min(w / rw, h / rh) if self.preview_mode == "page" else w / rw
-                self.preview_scale = min(
-                    fit * self.preview_zoom, math.sqrt(16_000_000 / (rw * rh)), 20_000 / rh
+            )
+            self._prepared_preview = entry
+            self.paint_preview_viewport()
+            if crop_rect is not None:
+                self._crop_box = tuple(crop_rect)
+                self.draw_crop_overlay()
+            self.zoom_value.set(f"{round(self.preview_scale * 100)}%")
+            self.page_label.config(text=f"{self.page_index + 1} / {preview_total}쪽")
+            if self.tool == "extract" and self.organizer.model:
+                position = next(
+                    (
+                        i
+                        for i, p in enumerate(self.organizer.model.items)
+                        if p[0] == self.organizer_preview_uid
+                    ),
+                    0,
                 )
-                pix = page.get_pixmap(
-                    matrix=pdf.Matrix(self.preview_scale, self.preview_scale).prerotate(angle),
-                    alpha=False,
-                    colorspace=pdf.csRGB,
-                )
-                self.preview_photo = tk.PhotoImage(data=base64.b64encode(pix.tobytes("png")))
-                self.canvas.create_image(12, 12, anchor="nw", image=self.preview_photo)
-                self.preview_rect = (page.rect.width, page.rect.height)
-                self.canvas.configure(scrollregion=(0, 0, pix.width + 24, pix.height + 24))
-                self.zoom_label.config(
-                    text=("폭 맞춤" if self.preview_mode == "width" else "한 페이지")
-                    + f" · {round(self.preview_zoom * 100)}%"
-                )
-                self.page_label.config(text=f"{self.page_index + 1} / {preview_total}쪽")
-                if self.tool == "extract" and self.organizer.model:
-                    position = next(
-                        (
-                            i
-                            for i, p in enumerate(self.organizer.model.items)
-                            if p[0] == self.organizer_preview_uid
-                        ),
-                        0,
+                self.page_label.config(text=f"{position + 1} / {len(self.organizer.model.items)}쪽")
+            if self.stamp_mode():
+                self.preview_stamp(page, doc.page_count)
+            if self.tool == "redact":
+                for coords in self.regions.get(path, {}).get(str(self.page_index), []):
+                    self.canvas.create_rectangle(
+                        *[12 + c * self.preview_scale for c in coords],
+                        outline="#d32f2f",
+                        width=2,
+                        stipple="gray50",
+                        fill="#d32f2f",
                     )
-                    self.page_label.config(
-                        text=f"원본 {self.page_index + 1}쪽 · 정리 후 {position + 1}/{len(self.organizer.model.items)}"
-                    )
-                if self.stamp_mode():
-                    self.preview_stamp(page, doc.page_count)
-                if self.tool == "redact":
-                    for coords in self.regions.get(path, {}).get(str(self.page_index), []):
-                        self.canvas.create_rectangle(
-                            *[12 + c * self.preview_scale for c in coords],
-                            outline="#d32f2f",
-                            width=2,
-                            stipple="gray50",
-                            fill="#d32f2f",
-                        )
-            finally:
-                if nup_doc is not None:
-                    nup_doc.close()
-                doc.close()
         except (UserError, OverlayError) as exc:
             self.canvas.create_text(15, 25, anchor="nw", width=420, text=str(exc))
-            self.overview_canvas.create_text(15, 25, anchor="nw", width=420, text=str(exc))
             self.page_label.config(text="설정을 확인하세요")
         except Exception:
             self.canvas.create_text(
@@ -382,13 +552,35 @@ class PreviewController:
         self.update_region_status()
 
     def preview_wheel(self, event):
-        step = (
-            (-1 if event.num == 4 else 1) if event.num in (4, 5) else (-1 if event.delta > 0 else 1)
-        )
+        number = getattr(event, "num", None)
+        delta = getattr(event, "delta", 0)
+        if number in (4, 5):
+            step = -1 if number == 4 else 1
+        elif delta:
+            step = -1 if delta > 0 else 1
+        else:
+            return "break"
+        if getattr(event, "state", 0) & 4:
+            # Consume modified wheels so zoom does not also scroll the page.
+            if (
+                not self.busy()
+                and self.preview_rect
+                and not self.drag_start
+                and not getattr(self, "_stamp_drag", None)
+                and not getattr(self, "_crop_drag", None)
+            ):
+                factor = 1.1 if step < 0 else 1 / 1.1
+                self.zoom_preview(self.preview_scale * (factor - 1))
+            return "break"
         self.canvas.yview_scroll(step * 3, "units")
+        self.paint_preview_viewport()
         return "break"
 
     def turn(self, delta):
+        if self.active_thumbnail_view():
+            return
+        if not self.ensure_preview_visible():
+            return
         if self.tool == "extract" and self.organizer.model:
             items = self.organizer.model.items
             i = next((j for j, p in enumerate(items) if p[0] == self.organizer_preview_uid), 0)
@@ -399,6 +591,11 @@ class PreviewController:
         self.refresh_preview()
 
     def draw_start(self, event):
+        if self.busy() or getattr(event, "state", 0) & 4:
+            return
+        if self.tool == "crop":
+            self.crop_drag_start(event)
+            return
         if self.stamp_mode():
             self.stamp_drag_start(event)
             return
@@ -421,6 +618,9 @@ class PreviewController:
         )
 
     def draw_move(self, event):
+        if self.tool == "crop":
+            self.crop_drag_move(event)
+            return
         if self.stamp_mode():
             self.stamp_drag_move(event)
             return
@@ -436,6 +636,9 @@ class PreviewController:
             )
 
     def draw_end(self, event):
+        if self.tool == "crop":
+            self.crop_drag_end(event)
+            return
         if self.stamp_mode():
             self.stamp_drag_end(event)
             return
