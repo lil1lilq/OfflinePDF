@@ -214,9 +214,11 @@ class RepairTests(unittest.TestCase):
                 patch("offline_pdf.repair_dialog.messagebox.showerror") as error,
                 patch("offline_pdf.repair_dialog.messagebox.showinfo"),
             ):
-                self.assertEqual(
-                    prepare_pdf_import(app, self.source), self.output if success else None
-                )
+                result = prepare_pdf_import(app, self.source)
+                if success:
+                    self.assertTrue(result.samefile(self.output))
+                else:
+                    self.assertIsNone(result)
                 self.assertEqual(error.call_count, 0 if success else 1)
                 self.assertFalse(app._repairing)
 
@@ -247,7 +249,9 @@ class RepairDialogTests(unittest.TestCase):
     def test_real_modal_worker_saves_recovery_without_blocking_events(self):
         ticks = []
         self.root.after(10, lambda: ticks.append("responsive"))
-        self.assertEqual(_run_repair(self.root, self.source, self.destination), self.destination)
+        # Compare file identity: Windows can expand RUNNER~1 into runneradmin.
+        result = _run_repair(self.root, self.source, self.destination)
+        self.assertTrue(result.samefile(self.destination))
         self.assertEqual(ticks, ["responsive"])
         self.assertFalse(needs_repair(self.destination))
         self.assertFalse(list(self.folder.glob(".offlinepdf-*")))

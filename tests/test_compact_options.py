@@ -139,7 +139,8 @@ class CompactOptionsTests(unittest.TestCase):
             ),
         ):
             self.app.add_paths([str(source)])
-        self.assertEqual(self.app.files[-1], str(destination))
+        # Windows TEMP can use an 8.3 alias; imports resolve it to the long path.
+        self.assertTrue(Path(self.app.files[-1]).samefile(destination))
         self.assertNotIn(str(source), self.app.files)
         self.assertEqual(source.read_bytes(), original)
         self.assertIn("구조 복구본 1개", self.app.status.get())
