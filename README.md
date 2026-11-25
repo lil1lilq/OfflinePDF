@@ -27,6 +27,7 @@ Windows에서 PDF를 병합·분할·편집하는 데스크톱 프로그램입�
 | **메인 화면** | <img width="900" alt="OfflinePDF 메인 화면" src="https://github.com/user-attachments/assets/35c46ec9-970c-49ee-a867-6230f96e3f31" /> |
 | **Windows 탐색기 우클릭 메뉴** | <img width="650" alt="Windows 탐색기 우클릭 메뉴" src="https://github.com/user-attachments/assets/3d4e7733-67ce-4f52-9772-8d189e6aac42" /> |
 | **PDF 영역 삭제 기능** | <img width="1000" alt="PDF 개인정보 삭제 전후 비교" src="https://github.com/user-attachments/assets/af76e58a-3bc9-4315-8c75-2a9cdf5f2f43" /><br><sub>**삭제 전(좌)** → **삭제 후(우)** : 선택 영역의 개인정보 삭제</sub> |
+| **문구·이미지 삽입** | <img width="1274" height="825" alt="image" src="https://github.com/user-attachments/assets/f2ce063d-2269-4df2-a11c-d412ea32126e" /> <br><sub>직인 또는 서명 이미지 업로드 시 **배경 자동삭제** 및 삽입 기능</sub> |
 
 
 ## 주요 기능
