@@ -22,6 +22,9 @@ for name in [
     "pyinstaller-hooks-contrib",
     "customtkinter",
     "darkdetect",
+    "cryptography",
+    "cffi",
+    "pycparser",
 ]:
     dist = metadata.distribution(name)
     target = out / name

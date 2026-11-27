@@ -11,13 +11,13 @@ Documents are processed on your PC. Files are never uploaded to an external conv
 | --- | --- |
 | OfflinePDF-Setup-Windows-x64.exe | Installer (recommended) |
 | OfflinePDF-Windows-x64-portable.zip | Portable version. Extract it and run `OfflinePDF.exe` inside the folder |
-| OfflinePDF-1.3.0-source.zip | Source code of the program and its components (AGPL-3.0). Not needed to run it |
+| OfflinePDF-1.3.1-source.zip | Source code of the program and its components (AGPL-3.0). Not needed to run it |
 | SHA256SUMS.txt | Hashes for verifying file integrity. Not needed to run the program |
 
 Two downloads are available: an installer, and a portable ZIP that needs no installation. Windows 10 and 11, 64-bit, are supported. Everything the program needs is included, so Python does not have to be installed.
 Keep the portable version's folder together with the executable.
 
-The current source version is **1.3.0**. Check the version shown on Releases for the downloaded files.
+The current source version is **1.3.1**. Check the version shown on Releases for the downloaded files.
 Features or fixes added to the source may not be in earlier releases.
 
 ## Program screenshots
@@ -96,10 +96,10 @@ Page numbers support a starting number, nine positions and font sizes from 8 to 
 ### Check for updates
 
 Click **Check for updates** beside **About** in the bottom bar to query the latest stable GitHub release. No update requests are made at startup.
-For a registered installed copy, **Update** downloads the installer and verifies its SHA256. **Install update** closes the program and starts the installer at the existing location after PDF processing has finished. You can relaunch from the installer’s completion screen.
-Portable/source copies and releases without an installer or checksum are directed to the official download page.
+For a registered installed copy, **Update** verifies the publisher’s Ed25519 signature on the release manifest and checks the installer’s SHA-256. **Install update** repeats both checks, closes the program and launches the installer for the existing location once PDF processing has finished.
+Portable and source copies, builds without an enrolled public key, and releases missing the installer or signature files link to the official download page for manual installation.
 Document processing remains offline. A separate process connects to GitHub only when you request an update check or download. Documents, file names and passwords are not sent; ordinary connection information such as your IP address is visible to the server.
-SHA256 checks file integrity and does not replace code signing. Windows or company security policies can still block installation.
+OfflinePDF verifies this signature in its updater. Windows SmartScreen and company installation policies may separately require Windows code signing.
 
 ## Before you rely on the results
 
