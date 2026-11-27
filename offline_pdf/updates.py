@@ -15,7 +15,7 @@ import customtkinter as ctk
 from . import __version__, theme
 from . import ctk_widgets as ttk
 from .dialogs import messagebox, place_dialog
-from .update_service import RELEASES, UpdateError, verify_file, worker
+from .update_service import RELEASES, SETUP, UpdateError, signed_installer_hash, verify_file, worker
 
 UNINSTALL = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\{9DC9CDFB-9463-416E-B5AB-E5E49805C3A7}_is1"
 
@@ -135,9 +135,13 @@ class UpdateDialog:
                             )
                             if event["available"]:
                                 self.button.config(state="normal")
-                                if not installed_location() or not event["installable"]:
+                                if not event["installable"]:
                                     self.status.config(
-                                        text=f"새 버전 {event['version']}이 있습니다. 자동 설치는 등록된 설치형에서 지원합니다. 공식 다운로드 페이지를 엽니다."
+                                        text=f"새 버전 {event['version']}이 있습니다. 서명 검증을 사용할 수 없어 공식 다운로드 페이지를 엽니다."
+                                    )
+                                elif not installed_location():
+                                    self.status.config(
+                                        text=f"새 버전 {event['version']}이 있습니다. 공식 다운로드 페이지에서 직접 설치하세요."
                                     )
                         elif kind == "downloaded":
                             self.downloaded = event
@@ -206,11 +210,23 @@ class UpdateDialog:
         if self.app.busy():
             self.status.config(text="PDF 작업을 완료하거나 취소한 뒤 업데이트를 설치하세요.")
             return
+        if not self.folder or not self.release or not self.downloaded:
+            return
         try:
-            verify_file(self.downloaded["path"], self.downloaded["sha256"])
+            expected = signed_installer_hash(
+                self.downloaded["manifest"],
+                self.downloaded["signature"],
+                self.release["tag"],
+                __version__,
+            )
+            installer = Path(self.folder) / SETUP
+            verify_file(installer, expected)
             folder, mode = location
-            subprocess.Popen([self.downloaded["path"], mode, f"/DIR={folder}", "/NORESTART"])
-        except (OSError, UpdateError):
+            subprocess.Popen([str(installer), mode, f"/DIR={folder}", "/NORESTART"])
+        except UpdateError as exc:
+            self.status.config(text=str(exc))
+            return
+        except OSError:
             self.status.config(
                 text="설치파일을 실행하지 못했습니다. 보안 정책 또는 파일 검증 상태를 확인하세요."
             )

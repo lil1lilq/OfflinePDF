@@ -126,6 +126,27 @@ OfflinePDF-Setup-Windows-x64.exe /VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS
 
 현재 워크플로는 GitHub Release를 자동 게시하지 않습니다.
 공개 배포 시 검증을 마친 버전의 태그로 Release를 만들고 포터블 ZIP, 설치 파일, 대응 소스 묶음과 SHA256 파일을 첨부합니다.
+
+### 자동 업데이트 릴리즈에 서명하기
+
+OfflinePDF 업데이터는 앱에 등록한 Ed25519 공개 키로 업데이트 목록을 검증합니다. 키는 무료로 만들 수 있습니다. 배포 담당자의 PC에서 아래 명령을 실행하세요. 예시는 저장소 밖에 개인 키를 저장합니다.
+
+```powershell
+.\.venv\Scripts\python.exe -m offline_pdf.sign_update keygen "$env:USERPROFILE\OfflinePDF-update-private.pem"
+```
+
+암호로 보호된 개인 키 파일과 암호는 담당자가 안전하게 보관하고 백업하세요. 둘 다 GitHub, GitHub Actions, 소스 ZIP과 배포파일에 넣지 않습니다. 명령이 출력한 **공개 키**만 `offline_pdf/update_keys.py`의 `TRUSTED_PUBLIC_KEYS`에 등록해 빌드합니다. 키를 등록한 최초 버전은 사내 배포 등 신뢰할 수 있는 경로로 수동 설치하세요.
+
+후속 릴리즈에서는 태그와 버전이 일치하는 소스로 빌드한 최종 설치파일을 배포 담당자 PC에서 서명합니다.
+
+```powershell
+.\.venv\Scripts\python.exe -m offline_pdf.sign_update sign release\OfflinePDF-Setup-Windows-x64.exe "$env:USERPROFILE\OfflinePDF-update-private.pem"
+```
+
+이 명령은 현재 소스 버전과 설치파일의 SHA-256을 담은 `update.json` 및 서명 파일 `update.sig`를 설치파일 옆에 생성합니다. 세 파일을 같은 `v<버전>` 릴리즈에 올리세요. 설치파일이나 목록이 바뀌면 다시 서명해야 합니다. `SHA256SUMS.txt`는 계속 일반 다운로드 검증용으로 제공합니다.
+
+키를 교체할 때는 기존 키로 서명한 전환 버전에 새 공개 키를 함께 등록하세요. 이전 버전에서 전환 버전을 건너뛴 PC에는 전환 버전 또는 새 공개 키를 신뢰할 수 있는 경로로 수동 배포해야 합니다. 기존 키를 분실했거나 유출된 경우 새 공개 키를 포함한 복구 버전을 신뢰할 수 있는 경로로 수동 배포해야 합니다.
+
 소스의 버전과 사용자가 내려받는 Release의 버전은 별도로 확인해야 합니다.
 
 ## 오프라인 빌드

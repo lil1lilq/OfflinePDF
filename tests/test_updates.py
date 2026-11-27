@@ -12,16 +12,36 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+from offline_pdf import sign_update, update_service
 from offline_pdf.update_service import (
+    MANIFEST,
     SETUP,
+    SIGNATURE,
     UpdateError,
     download,
-    expected_hash,
     release_info,
+    signed_installer_hash,
     validate_url,
     version_tuple,
     worker,
 )
+
+
+def signed_release(payload, tag="v1.3.2", **overrides):
+    key = Ed25519PrivateKey.generate()
+    record = {
+        "schema": 1,
+        "project": "lil1lilq/OfflinePDF",
+        "tag": tag,
+        "asset": SETUP,
+        "sha256": hashlib.sha256(payload).hexdigest(),
+        **overrides,
+    }
+    manifest = json.dumps(record).encode()
+    public_key = key.public_key().public_bytes_raw().hex()
+    return public_key, {"manifest": manifest, "signature": key.sign(manifest)}
 
 
 def socket_probe(events):
@@ -95,10 +115,13 @@ class UpdateServiceTests(unittest.TestCase):
                 winreg.DeleteKey(winreg.HKEY_CURRENT_USER, key)
 
     def test_release_comparison_and_official_urls(self):
-        info = release_info(
-            {"tag_name": "v1.2.3.1", "assets": [{"name": SETUP}, {"name": "SHA256SUMS.txt"}]},
-            "1.2.3",
-        )
+        release = {"tag_name": "v1.2.3.1", "assets": [{"name": SETUP}, {"name": "SHA256SUMS.txt"}]}
+        with patch.object(update_service, "TRUSTED_PUBLIC_KEYS", ("test-key",)):
+            self.assertFalse(release_info(release, "1.2.3")["installable"])
+            release["assets"].extend([{"name": MANIFEST}, {"name": SIGNATURE}])
+            info = release_info(release, "1.2.3")
+        with patch.object(update_service, "TRUSTED_PUBLIC_KEYS", ()):
+            self.assertFalse(release_info(release, "1.2.3")["installable"])
         self.assertTrue(info["available"])
         self.assertTrue(info["installable"])
         self.assertFalse(release_info({"tag_name": "v1.2.3"}, "1.2.4")["available"])
@@ -118,31 +141,73 @@ class UpdateServiceTests(unittest.TestCase):
 
     def test_download_verifies_hash_and_rolls_back_partial_files(self):
         payload = b"synthetic installer, never executed"
-        digest = hashlib.sha256(payload).hexdigest()
-        manifest = (digest + "  " + SETUP).encode()
+        key, signed = signed_release(payload)
 
         class Response(io.BytesIO):
             headers = {"Content-Length": str(len(payload))}
 
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch.object(update_service, "TRUSTED_PUBLIC_KEYS", (key,)),
+            patch.object(update_service, "read_small", side_effect=list(signed.values()) * 3),
+            patch.object(
+                update_service, "open_url", side_effect=[Response(payload), Response(b"changed")]
+            ) as open_url,
+        ):
+            result = download("v1.3.2", "1.3.1", temporary, Mock())
+            self.assertEqual(Path(temporary, SETUP).read_bytes(), payload)
+            self.assertEqual(result["signature"], signed["signature"])
+            Path(temporary, SETUP).unlink()
+            with self.assertRaises(UpdateError):
+                download("v1.3.2", "1.3.1", temporary, Mock())
+            self.assertEqual(list(Path(temporary).iterdir()), [])
+            with self.assertRaises(UpdateError):
+                download("v1.3.3", "1.3.1", temporary, Mock())
+            self.assertEqual(open_url.call_count, 2)
+
+    def test_signed_manifest_rejects_mismatch_and_rollback(self):
+        key, signed = signed_release(b"installer")
+        manifest, signature = signed.values()
+        for bad_manifest, bad_signature, tag, current in (
+            (manifest + b" ", signature, "v1.3.2", "1.3.1"),
+            (manifest, b"0" * 64, "v1.3.2", "1.3.1"),
+            (manifest, signature, "v1.3.3", "1.3.1"),
+            (manifest, signature, "v1.3.2", "1.3.2"),
+        ):
+            with patch.object(update_service, "TRUSTED_PUBLIC_KEYS", (key,)):
+                with self.assertRaises(UpdateError):
+                    signed_installer_hash(bad_manifest, bad_signature, tag, current)
+        for override in ({"asset": "other.exe"}, {"project": "other"}, {"sha256": "invalid"}):
+            wrong_key, wrong = signed_release(b"installer", **override)
+            with patch.object(update_service, "TRUSTED_PUBLIC_KEYS", (wrong_key,)):
+                with self.assertRaises(UpdateError):
+                    signed_installer_hash(*wrong.values(), "v1.3.2", "1.3.1")
+        with patch.object(update_service, "TRUSTED_PUBLIC_KEYS", ("00" * 32,)):
+            with self.assertRaises(UpdateError):
+                signed_installer_hash(manifest, signature, "v1.3.2", "1.3.1")
+
+    def test_release_signing_tool_round_trip(self):
         with tempfile.TemporaryDirectory() as temporary:
-            for expected, success in (
-                (manifest, True),
-                (b"0" * 64 + b"  " + SETUP.encode(), False),
+            installer = Path(temporary, SETUP)
+            installer.write_bytes(b"installer")
+            private_key = Path(temporary, "test.pem")
+            with (
+                patch.object(sign_update.getpass, "getpass", return_value="test-passphrase"),
+                patch("builtins.print") as output,
             ):
-                with (
-                    patch("offline_pdf.update_service.read_small", return_value=expected),
-                    patch("offline_pdf.update_service.open_url", return_value=Response(payload)),
-                ):
-                    if success:
-                        result = download("v1.2.4", temporary, Mock())
-                        self.assertEqual(Path(result["path"]).read_bytes(), payload)
-                        Path(result["path"]).unlink()
-                    else:
-                        with self.assertRaises(UpdateError):
-                            download("v1.2.4", temporary, Mock())
-                        self.assertEqual(list(Path(temporary).iterdir()), [])
-        with self.assertRaises(UpdateError):
-            expected_hash(manifest + b"\n" + manifest)
+                sign_update.generate_key(private_key)
+                self.assertIn(b"BEGIN ENCRYPTED PRIVATE KEY", private_key.read_bytes())
+                key = output.call_args.args[0]
+                with patch.object(sign_update, "TRUSTED_PUBLIC_KEYS", (key,)):
+                    sign_update.sign_release(installer, private_key)
+            with patch.object(update_service, "TRUSTED_PUBLIC_KEYS", (key,)):
+                result = signed_installer_hash(
+                    Path(temporary, MANIFEST).read_bytes(),
+                    Path(temporary, SIGNATURE).read_bytes(),
+                    "v" + sign_update.__version__,
+                    "0.0.0",
+                )
+            self.assertEqual(result, hashlib.sha256(b"installer").hexdigest())
 
     def test_worker_emits_no_document_details_on_network_failure(self):
         events = Mock()
@@ -186,7 +251,8 @@ class UpdateGuiTests(unittest.TestCase):
 
         self.assertIsNone(installed_location())
         self.app.busy.return_value = True
-        self.window.downloaded = {"path": "missing.exe", "sha256": "0" * 64}
+        key, self.window.downloaded = signed_release(b"missing")
+        self.window.release = {"tag": "v1.3.2"}
         with patch("offline_pdf.updates.subprocess.Popen") as popen:
             self.window.install()
             popen.assert_not_called()
@@ -197,6 +263,7 @@ class UpdateGuiTests(unittest.TestCase):
                 return_value=(Path("C:/OfflinePDF"), "/CURRENTUSER"),
             ),
             patch("offline_pdf.updates.messagebox.askokcancel", return_value=True),
+            patch.object(update_service, "TRUSTED_PUBLIC_KEYS", (key,)),
             patch("offline_pdf.updates.subprocess.Popen") as popen,
         ):
             self.window.install()
@@ -207,18 +274,22 @@ class UpdateGuiTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / SETUP
             path.write_bytes(b"test")
-            self.window.downloaded = {
-                "path": str(path),
-                "sha256": hashlib.sha256(b"test").hexdigest(),
-            }
+            key, self.window.downloaded = signed_release(b"test")
+            self.window.release = {"tag": "v1.3.2"}
+            self.window.folder = temporary
             with (
                 patch(
                     "offline_pdf.updates.installed_location",
                     return_value=(Path("C:/OfflinePDF"), "/CURRENTUSER"),
                 ),
                 patch("offline_pdf.updates.messagebox.askokcancel", return_value=True),
+                patch.object(update_service, "TRUSTED_PUBLIC_KEYS", (key,)),
                 patch("offline_pdf.updates.subprocess.Popen") as popen,
             ):
+                path.write_bytes(b"changed after download")
+                self.window.install()
+                popen.assert_not_called()
+                path.write_bytes(b"test")
                 self.window.install()
                 self.assertIn("/CURRENTUSER", popen.call_args.args[0])
                 self.app.close.assert_called_once()
